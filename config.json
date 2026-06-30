@@ -1,0 +1,280 @@
+{
+  "carpeta_excels": "datos/entrada",
+  "archivos_fuente": [
+    {
+      "id": "bd1",
+      "titulo": "Archivo 1 — Matriculados activos",
+      "tipo": "bd1",
+      "nombre_guardado": "bd1.xlsx",
+      "categoria": "base"
+    },
+    {
+      "id": "bd12",
+      "titulo": "Archivo 2 — Matriculados activos (entrenamiento)",
+      "tipo": "bd12",
+      "nombre_guardado": "bd12.xlsx",
+      "categoria": "base"
+    },
+    {
+      "id": "bd2",
+      "titulo": "Archivo 3 — Grupos priorizados",
+      "tipo": "bd2",
+      "nombre_guardado": "bd2.xlsx",
+      "categoria": "priorizado"
+    },
+    {
+      "id": "bd_prio_psi",
+      "categoria": "priorizado",
+      "titulo": "Priorizado Psicología enriquecido",
+      "tipo": "bd_prio_psi",
+      "nombre_guardado": "bd_prio_psi.xlsx",
+      "hoja": "PRIORIZADOS GENERAL"
+    },
+    {
+      "id": "bd_prio_lic",
+      "categoria": "priorizado",
+      "titulo": "Priorizados Lic. Comun. y Entrenamiento",
+      "tipo": "bd_prio_lic",
+      "nombre_guardado": "bd_prio_lic.xlsx",
+      "hoja": "GRUPOS_PRIORIZADOS"
+    },
+    {
+      "id": "bd3",
+      "titulo": "Archivo 4 — Becados y con crédito",
+      "tipo": "bd3",
+      "nombre_guardado": "bd3.xlsx",
+      "hoja": "ESTUDIANTES",
+      "categoria": "rendimiento"
+    },
+    {
+      "id": "bd_rep",
+      "titulo": "Archivo 5 — Asignaturas repetidas",
+      "tipo": "bd_rep",
+      "nombre_guardado": "bd_rep.xlsx",
+      "hoja": "Hoja1",
+      "categoria": "rendimiento"
+    },
+    {
+      "id": "bd_alertas_com_1",
+      "titulo": "Alertas — Comunicación y Entrenamiento",
+      "tipo": "bd_alertas_com",
+      "nombre_guardado": "bd_alertas_com.xlsx",
+      "categoria": "alertas",
+      "fase": "inicial"
+    },
+    {
+      "id": "bd_alertas_com_2",
+      "categoria": "alertas",
+      "titulo": "Alertas Comunicación — final",
+      "tipo": "bd_alertas_com",
+      "fase": "final",
+      "nombre_guardado": "bd_alertas_com_2.xlsx",
+      "requerido": false
+    },
+    {
+      "id": "bd_alertas_psi_1",
+      "titulo": "Alertas — Psicología",
+      "tipo": "bd_alertas_psi",
+      "nombre_guardado": "bd_alertas_psi.xlsx",
+      "categoria": "alertas",
+      "fase": "inicial"
+    },
+    {
+      "id": "bd_alertas_psi_2",
+      "categoria": "alertas",
+      "titulo": "Alertas Psicología — final",
+      "tipo": "bd_alertas_psi",
+      "fase": "final",
+      "nombre_guardado": "bd_alertas_psi_2.xlsx",
+      "requerido": false
+    }
+  ],
+  "documentos_adicionales": [],
+  "aliases": {
+    "identificacion": [
+      "documento",
+      "num identificacion",
+      "identificacion",
+      "identificación",
+      "identificacin",
+      "id",
+      "cedula",
+      "cc",
+      "numero documento",
+      "documento identidad"
+    ],
+    "nombre_estudiante": [
+      "nombres y apellidos",
+      "nombres",
+      "nombre de estudiante",
+      "nombre estudiante",
+      "nombre completo",
+      "alumno",
+      "apellidos y nombres"
+    ],
+    "fecha_nacimiento": [
+      "fecha nacimiento",
+      "fecha de nacimiento",
+      "fec nacimiento"
+    ],
+    "telefono_celular": [
+      "tel. celular",
+      "celular"
+    ],
+    "programa": [
+      "programa",
+      "nom unidad"
+    ],
+    "correo_institucional": [
+      "correo electronico institucional",
+      "correo institucional",
+      "email institucional",
+      "correo u"
+    ],
+    "correo_personal": [
+      "correo electronico personal",
+      "correo personal",
+      "email personal",
+      "e mail personal",
+      "e-mail personal"
+    ],
+    "periodo_ingreso": [
+      "periodo de ingreso",
+      "periodo ingreso",
+      "cohorte de ingreso",
+      "cohorte",
+      "año ingreso",
+      "ano ingreso"
+    ],
+    "periodo_ultima_matricula": [
+      "periodo ultima matricula"
+    ],
+    "reintegros": [
+      "reintegros"
+    ],
+    "lugar_nacimiento": [
+      "lugar de nacimiento",
+      "lugar nacimiento"
+    ],
+    "lugar_residencia": [
+      "lugar de residencia",
+      "lugar residencia"
+    ],
+    "direccion_residencia": [
+      "direccion de residencia",
+      "direccion residencia",
+      "dir residencia"
+    ],
+    "tipo_beca_credito": [
+      "total",
+      "nom concepto",
+      "tipo de beca o credito",
+      "tipo de beca o crédito",
+      "tipo beca credito",
+      "tipo beca",
+      "modalidad beca"
+    ],
+    "funcionario_beca": [
+      "funcionario",
+      "responsable",
+      "funcionario que tiene a cargo la beca",
+      "funcionario beca",
+      "encargado beca",
+      "funcionario"
+    ]
+  },
+  "programas_permitidos": [
+    "COMUNICACION SOCIAL Y MEDIOS DIGITALES",
+    "PSICOLOGIA",
+    "LICENCIATURA EN EDUCACION BASICA PRIMARIA"
+  ],
+  "programas_excluidos": [
+    "PSICOLOGIA VILLAVICENCIO"
+  ],
+  "columnas_motivo_priorizado": [
+    "DISCAPACIDAD",
+    "MINORIA RACIAL",
+    "LGTBI+",
+    "VICTIMA DE CONFLICTO ARMADO",
+    "ZONA DE DIFICIL ACCESO",
+    "AJUSTES RAZONABLES",
+    "N.A."
+  ],
+  "colores_prioridad": {
+    "nivel_1": "FFF2CC",
+    "nivel_2": "C6EFCE",
+    "nivel_3": "BDD7EE",
+    "nivel_4": "F8CBAD",
+    "nivel_5": "FFC7CE",
+    "alerta": "FFEB9C",
+    "call_center": "D9D9D9"
+  },
+  "categorias_fuente": {
+    "base": "Base",
+    "priorizado": "Priorizado",
+    "rendimiento": "Rendimiento",
+    "alertas": "Alertas"
+  },
+  "grupos_salida": [
+    {
+      "nombre": "Datos",
+      "columnas": [
+        "Identificación",
+        "Nombre y apellidos",
+        "Fecha de nacimiento",
+        "Teléfono celular",
+        "Programa",
+        "Correo institucional",
+        "Correo personal",
+        "Periodo ingreso",
+        "Reintegros",
+        "Lugar de nacimiento",
+        "Lugar de residencia"
+      ]
+    },
+    {
+      "nombre": "Priorizados",
+      "columnas": [
+        "Priorizado",
+        "Motivo Prio.",
+        "Detalle GPrio.",
+        "Ajuste razonable",
+        "Fecha ajuste razonable",
+        "Activacion de ruta",
+        "Fecha activacion de ruta"
+      ]
+    },
+    {
+      "nombre": "Prioridad",
+      "columnas": [
+        "Puntaje prioridad",
+        "Nivel prioridad",
+        "Detalle prioridad"
+      ]
+    },
+    {
+      "nombre": "Becas",
+      "columnas": [
+        "Tipo de beca o crédito",
+        "Funcionario que tiene a cargo la beca"
+      ]
+    },
+    {
+      "nombre": "Alertas",
+      "columnas": [
+        "Num Alerta inicial",
+        "Tipo Alerta inicial",
+        "Num Alerta final",
+        "Tipo Alerta final"
+      ]
+    }
+  ],
+  "grupo_materias": "Materias",
+  "interfaz": {
+    "modo_apariencia": "dark"
+  },
+  "salida": {
+    "hoja": "Listado",
+    "ruta": "salida/estudiantes_consolidado.xlsx"
+  }
+}
