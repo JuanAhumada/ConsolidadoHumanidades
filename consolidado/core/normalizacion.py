@@ -224,6 +224,46 @@ def combinar_valores(valores: list, separador: str = " | ") -> str:
         return vals[0]
     return separador.join(vals)
 
+
+def parsear_monto_beca(val) -> float | None:
+    """Convierte un valor de beca (número o texto con $ y separadores) a float."""
+    if _es_nulo(val):
+        return None
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        return float(val)
+    texto = re.sub(r"[^\d.,]", "", str(val).strip())
+    if not texto:
+        return None
+    if "," in texto and "." in texto:
+        if texto.rfind(",") > texto.rfind("."):
+            texto = texto.replace(".", "").replace(",", ".")
+        else:
+            texto = texto.replace(",", "")
+    elif "," in texto:
+        partes = texto.split(",")
+        texto = partes[0].replace(".", "") + "." + partes[-1] if len(partes) > 1 else texto.replace(",", ".")
+    else:
+        texto = texto.replace(".", "") if texto.count(".") > 1 else texto
+    try:
+        return float(texto)
+    except ValueError:
+        return None
+
+
+def sumar_montos_beca(valores: list) -> int | float | None:
+    """Suma los montos de varias becas del mismo estudiante."""
+    total = 0.0
+    encontrado = False
+    for v in valores:
+        monto = parsear_monto_beca(v)
+        if monto is None:
+            continue
+        total += monto
+        encontrado = True
+    if not encontrado:
+        return None
+    return int(total) if total == int(total) else total
+
 def _digitos_a_entero_str(digits: str) -> str | None:
     if not digits:
         return None
@@ -294,4 +334,37 @@ def _es_funcionario_call_center(val) -> bool:
     if _es_nulo(val):
         return False
     return "call center" in str(val).strip().lower()
+
+
+def es_responsable_beca_especial(val) -> bool:
+    """Indica NO, 0 o Call Center (sin funcionario asignado con nombre propio)."""
+    if _es_nulo(val):
+        return False
+    texto = str(val).strip().upper()
+    if texto in ("0", "NO"):
+        return True
+    return _es_funcionario_call_center(val)
+
+
+def combinar_funcionario_beca(valores: list) -> str | None:
+    """
+    Unifica responsables de varias becas del mismo estudiante.
+    Si hay un nombre real, se conserva; si solo hay NO/0/Call Center y hay varios, queda CALL CENTER.
+    """
+    presentes: list[str] = []
+    for v in valores:
+        if _es_nulo(v):
+            continue
+        s = str(v).strip()
+        if not s or s in presentes:
+            continue
+        presentes.append(s)
+    if not presentes:
+        return None
+    for v in presentes:
+        if not es_responsable_beca_especial(v):
+            return v
+    if len(presentes) > 1:
+        return "CALL CENTER"
+    return presentes[0]
 

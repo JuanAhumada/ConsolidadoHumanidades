@@ -1,4 +1,4 @@
-"""Procesamiento de archivos de priorizado enriquecido (ajustes y activación de ruta)."""
+"""Procesamiento de archivos de priorizado enriquecido (adaptación y activación de ruta)."""
 
 from __future__ import annotations
 
@@ -23,6 +23,9 @@ from consolidado.core.normalizacion import (
     normalizar_encabezado,
     normalizar_id,
 )
+
+VALOR_AJUSTE_RAZONABLE = "Ajuste Razonable"
+VALOR_RECOMENDACION = "Recomendacion"
 
 
 def _col_por_palabras(columns: list[str], *palabras: str) -> str | None:
@@ -72,8 +75,19 @@ def _tiene_ajuste_razonable(val) -> bool:
         return val
     if _es_valor_true(val):
         return True
-    s = str(val).strip().upper()
-    return "AJUSTE" in s and "RAZONABLE" in s.replace("Ó", "O")
+    s = str(val).strip().upper().replace("Ó", "O")
+    return "AJUSTE" in s and "RAZONABLE" in s
+
+
+def _es_recomendacion(val) -> bool:
+    if _es_nulo(val):
+        return False
+    if isinstance(val, bool):
+        return val
+    if _es_si_o_verdadero(val):
+        return True
+    s = str(val).strip().upper().replace("Ó", "O")
+    return "RECOMEND" in s
 
 
 def _tiene_activacion_ruta(val) -> bool:
@@ -87,12 +101,15 @@ def _tiene_activacion_ruta(val) -> bool:
     return "RUTA" in s and ("ACTIV" in s or "ATENCION" in s or "ATENCIÓN" in s)
 
 
-def _combinar_bool(valores: list) -> bool | None:
-    if any(_es_si_o_verdadero(v) or v is True for v in valores if not _es_nulo(v)):
-        return True
-    if any(not _es_nulo(v) for v in valores):
-        return False
-    return None
+def _combinar_adaptacion(valores_ajuste: list, valores_recom: list) -> str | None:
+    tiene_ajuste = any(_tiene_ajuste_razonable(v) for v in valores_ajuste if not _es_nulo(v))
+    tiene_recom = any(_es_recomendacion(v) for v in valores_recom if not _es_nulo(v))
+    partes: list[str] = []
+    if tiene_ajuste:
+        partes.append(VALOR_AJUSTE_RAZONABLE)
+    if tiene_recom:
+        partes.append(VALOR_RECOMENDACION)
+    return " | ".join(partes) if partes else None
 
 
 def _combinar_fecha(valores: list) -> str | None:
@@ -101,11 +118,20 @@ def _combinar_fecha(valores: list) -> str | None:
     return fechas[0] if fechas else None
 
 
+def _combinar_bool(valores: list) -> bool | None:
+    if any(_es_si_o_verdadero(v) or v is True for v in valores if not _es_nulo(v)):
+        return True
+    if any(not _es_nulo(v) for v in valores):
+        return False
+    return None
+
+
 def _agregar_registro(
     mapa: dict[str, dict],
     id_key: str,
     *,
-    ajuste: bool | None = None,
+    ajuste_val=None,
+    recom_val=None,
     fecha_ajuste: str | None = None,
     activacion: bool | None = None,
     fecha_activacion: str | None = None,
@@ -115,18 +141,17 @@ def _agregar_registro(
     if id_key not in mapa:
         mapa[id_key] = {
             "_id_key": id_key,
-            COL_AJUSTE_RAZONABLE: None,
-            COL_FECHA_AJUSTE: None,
-            COL_ACTIVACION_RUTA: None,
-            COL_FECHA_ACTIVACION_RUTA: None,
             "_ajustes": [],
+            "_recomendaciones": [],
             "_fechas_ajuste": [],
             "_activaciones": [],
             "_fechas_act": [],
         }
     fila = mapa[id_key]
-    if ajuste is not None:
-        fila["_ajustes"].append(ajuste)
+    if ajuste_val is not None:
+        fila["_ajustes"].append(ajuste_val)
+    if recom_val is not None:
+        fila["_recomendaciones"].append(recom_val)
     if fecha_ajuste:
         fila["_fechas_ajuste"].append(fecha_ajuste)
     if activacion is not None:
@@ -140,7 +165,7 @@ def _finalizar_mapa(mapa: dict[str, dict]) -> pl.DataFrame:
         return pl.DataFrame(
             schema={
                 "_id_key": pl.Utf8,
-                COL_AJUSTE_RAZONABLE: pl.Boolean,
+                COL_AJUSTE_RAZONABLE: pl.Utf8,
                 COL_FECHA_AJUSTE: pl.Utf8,
                 COL_ACTIVACION_RUTA: pl.Boolean,
                 COL_FECHA_ACTIVACION_RUTA: pl.Utf8,
@@ -151,13 +176,24 @@ def _finalizar_mapa(mapa: dict[str, dict]) -> pl.DataFrame:
         filas.append(
             {
                 "_id_key": fila["_id_key"],
-                COL_AJUSTE_RAZONABLE: _combinar_bool(fila["_ajustes"]),
+                COL_AJUSTE_RAZONABLE: _combinar_adaptacion(
+                    fila["_ajustes"], fila["_recomendaciones"]
+                ),
                 COL_FECHA_AJUSTE: _combinar_fecha(fila["_fechas_ajuste"]),
                 COL_ACTIVACION_RUTA: _combinar_bool(fila["_activaciones"]),
                 COL_FECHA_ACTIVACION_RUTA: _combinar_fecha(fila["_fechas_act"]),
             }
         )
-    return pl.DataFrame(filas)
+    return pl.DataFrame(
+        filas,
+        schema={
+            "_id_key": pl.Utf8,
+            COL_AJUSTE_RAZONABLE: pl.Utf8,
+            COL_FECHA_AJUSTE: pl.Utf8,
+            COL_ACTIVACION_RUTA: pl.Boolean,
+            COL_FECHA_ACTIVACION_RUTA: pl.Utf8,
+        },
+    )
 
 
 def procesar_archivo_prio_psi(ruta: Path, *, hoja: str | None = None) -> pl.DataFrame:
@@ -166,9 +202,12 @@ def procesar_archivo_prio_psi(ruta: Path, *, hoja: str | None = None) -> pl.Data
     col_id = _buscar_columna_por_aliases(
         cols, ["num identificacion", "identificacion", "identificación", "documento"]
     )
-    col_ajuste = _col_por_palabras(cols, "ajuste", "razonable") or _col_por_palabras(
-        cols, "ajuste", "recomendacion"
+    col_ajuste = _col_por_palabras(cols, "ajuste", "razonable")
+    col_recom = _col_por_palabras(cols, "ajuste", "recomendacion") or _col_por_palabras(
+        cols, "recomendacion"
     )
+    if col_recom == col_ajuste:
+        col_recom = None
     col_fecha_ajuste = _col_por_palabras(cols, "fecha", "solicitud") or _col_por_palabras(
         cols, "fecha", "ajuste"
     )
@@ -187,7 +226,8 @@ def procesar_archivo_prio_psi(ruta: Path, *, hoja: str | None = None) -> pl.Data
         _agregar_registro(
             mapa,
             id_key,
-            ajuste=_tiene_ajuste_razonable(row[col_ajuste]) if col_ajuste else None,
+            ajuste_val=row[col_ajuste] if col_ajuste else None,
+            recom_val=row[col_recom] if col_recom else None,
             fecha_ajuste=formatear_fecha_dd_mm_aa(row[col_fecha_ajuste])
             if col_fecha_ajuste
             else None,
@@ -208,6 +248,11 @@ def procesar_archivo_prio_lic(ruta: Path, *, hoja: str | None = None) -> pl.Data
     col_ajuste = _col_por_palabras(cols, "ajustes", "razonables") or _col_por_palabras(
         cols, "ajuste", "razonable"
     )
+    col_recom = _col_por_palabras(cols, "recomendacion") or _col_por_palabras(
+        cols, "recomendaciones"
+    )
+    if col_recom == col_ajuste:
+        col_recom = None
     col_activacion = _col_por_palabras(cols, "ruta", "atencion") or _col_por_palabras(
         cols, "ruta", "vida"
     )
@@ -217,15 +262,23 @@ def procesar_archivo_prio_lic(ruta: Path, *, hoja: str | None = None) -> pl.Data
     mapa: dict[str, dict] = {}
     for row in df.iter_rows(named=True):
         id_key = normalizar_id(row[col_id])
-        ajuste = None
-        if col_ajuste:
-            ajuste = _tiene_ajuste_razonable(row[col_ajuste]) or _es_si_o_verdadero(row[col_ajuste])
+        ajuste_val = row[col_ajuste] if col_ajuste else None
+        recom_val = row[col_recom] if col_recom else None
+        if col_ajuste and not col_recom and _es_recomendacion(ajuste_val):
+            recom_val = ajuste_val
+            ajuste_val = None
         activacion = None
         if col_activacion:
             activacion = _es_si_o_verdadero(row[col_activacion]) or _tiene_activacion_ruta(
                 row[col_activacion]
             )
-        _agregar_registro(mapa, id_key, ajuste=ajuste, activacion=activacion)
+        _agregar_registro(
+            mapa,
+            id_key,
+            ajuste_val=ajuste_val,
+            recom_val=recom_val,
+            activacion=activacion,
+        )
     return _finalizar_mapa(mapa)
 
 
@@ -238,10 +291,17 @@ def _fusionar_enriquecidos(dataframes: list[pl.DataFrame]) -> pl.DataFrame:
             continue
         for row in df.iter_rows(named=True):
             id_key = row["_id_key"]
+            adaptacion = row.get(COL_AJUSTE_RAZONABLE)
+            if adaptacion:
+                for parte in str(adaptacion).split(" | "):
+                    parte = parte.strip()
+                    if parte == VALOR_AJUSTE_RAZONABLE:
+                        _agregar_registro(mapa, id_key, ajuste_val=True)
+                    elif parte == VALOR_RECOMENDACION:
+                        _agregar_registro(mapa, id_key, recom_val=True)
             _agregar_registro(
                 mapa,
                 id_key,
-                ajuste=row.get(COL_AJUSTE_RAZONABLE),
                 fecha_ajuste=row.get(COL_FECHA_AJUSTE),
                 activacion=row.get(COL_ACTIVACION_RUTA),
                 fecha_activacion=row.get(COL_FECHA_ACTIVACION_RUTA),
@@ -289,4 +349,9 @@ def aplicar_priorizado_enriquecido(consolidado: pl.DataFrame, enriquecido: pl.Da
     for col in COLUMNAS_PRIORIZADO_ENRIQUECIDO:
         if col not in resultado.columns:
             resultado = resultado.with_columns(pl.lit(None).alias(col))
-    return resultado
+    return resultado.with_columns(
+        pl.col(COL_AJUSTE_RAZONABLE).cast(pl.Utf8),
+        pl.col(COL_FECHA_AJUSTE).cast(pl.Utf8),
+        pl.col(COL_ACTIVACION_RUTA).cast(pl.Boolean),
+        pl.col(COL_FECHA_ACTIVACION_RUTA).cast(pl.Utf8),
+    )

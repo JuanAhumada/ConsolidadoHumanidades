@@ -19,7 +19,9 @@ from consolidado.config.settings import (
 )
 from consolidado.core.excel_io import elegir_guardar_consolidado
 from consolidado.gui.dialogs import (
+    DialogoAlertaPropia,
     DialogoCambiarDatos,
+    DialogoConsultaEstudiante,
     DialogoDocumento,
     DialogoInfoPrioridad,
     DialogoPriorizadoPropio,
@@ -27,6 +29,7 @@ from consolidado.gui.dialogs import (
 )
 from consolidado.gui.icons import icono
 from consolidado.gui.theme import (
+    COLOR_ACENTO,
     FONT_PEQUENA,
     FONT_SUBTITULO,
     FONT_TEXTO,
@@ -34,16 +37,26 @@ from consolidado.gui.theme import (
     alternar_modo_apariencia,
     configurar_apariencia,
     configurar_treeview,
+    estilo_boton_secundario,
+    estilo_seccion,
+    estilo_tarjeta_paso,
     modo_apariencia_actual,
 )
 from consolidado.gui.widgets import (
+    BarraEstado,
+    BotonIconoTexto,
+    ContenidoRetractil,
     IconButton,
+    MarcoDesplazable,
+    PanelPasos,
     Seccion,
+    TablaAlertasPropias,
     TablaPriorizados,
     fila_archivo,
     limpiar_marco,
 )
 from consolidado.paths import PROJECT_ROOT
+from consolidado.storage.alertas_propias import quitar_alerta_propia
 from consolidado.storage.priorizados import quitar_priorizado_propio
 
 
@@ -57,16 +70,17 @@ class AppConsolidado(ctk.CTk):
         merge.aplicar_config(self.cfg, self.base)
         self._icon_refs: list[ctk.CTkImage] = []
 
-        self.title("Gestion de Humanidades")
-        self.geometry("900x720")
-        self.minsize(720, 600)
+        self.title("Consolidado de Humanidades")
+        self.geometry("980x800")
+        self.minsize(760, 640)
 
         self._construir_ui()
         self._actualizar_lista_archivos()
         self._actualizar_tabla_priorizados()
+        self._actualizar_tabla_alertas()
         self._actualizar_ruta_salida()
 
-    def _ico(self, nombre: str, size: int = 22) -> ctk.CTkImage:
+    def _ico(self, nombre: str, size: int = 20) -> ctk.CTkImage:
         img = icono(nombre, size=size)
         self._icon_refs.append(img)
         return img
@@ -76,146 +90,238 @@ class AppConsolidado(ctk.CTk):
         contenedor.pack(fill="both", expand=True, padx=16, pady=16)
 
         encabezado = ctk.CTkFrame(contenedor, fg_color="transparent")
-        encabezado.pack(fill="x", pady=(0, 12))
+        encabezado.pack(fill="x", pady=(0, 8))
 
+        titulos = ctk.CTkFrame(encabezado, fg_color="transparent")
+        titulos.pack(side="left", fill="x", expand=True)
         ctk.CTkLabel(
-            encabezado,
+            titulos,
             text="Consolidado de Humanidades",
             font=FONT_TITULO,
-        ).pack(side="left")
+            anchor="w",
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            titulos,
+            text="Una sola herramienta para unir matrículas, priorizados, becas y alertas en un Excel final.",
+            font=FONT_TEXTO,
+            text_color=("gray45", "gray60"),
+            anchor="w",
+            wraplength=520,
+            justify="left",
+        ).pack(anchor="w", pady=(2, 0))
 
         acciones = ctk.CTkFrame(encabezado, fg_color="transparent")
         acciones.pack(side="right")
 
-        IconButton(
+        BotonIconoTexto(
             acciones,
             icon=self._ico("save"),
-            tooltip="Elegir ruta del archivo final",
+            texto="Ruta de salida",
+            fg_color="transparent",
+            border_width=1,
             command=self._elegir_ruta_salida,
         ).pack(side="left", padx=(0, 6))
 
         self.btn_tema = IconButton(
             acciones,
             icon=self._ico_tema(),
-            tooltip="Alternar modo claro / oscuro",
+            tooltip="Modo claro / oscuro",
             command=self._toggle_tema,
         )
-        self.btn_tema.pack(side="left", padx=(0, 6))
+        self.btn_tema.pack(side="left", padx=(0, 8))
 
-        IconButton(
+        self.btn_generar = BotonIconoTexto(
             acciones,
-            icon=self._ico("generate", size=24),
-            tooltip="Generar consolidado",
-            width=40,
+            icon=self._ico("generate", size=22),
+            texto="Generar consolidado",
+            height=40,
+            width=200,
+            font=("Segoe UI", 14, "bold"),
+            fg_color=COLOR_ACENTO,
+            hover_color="#36719f",
             command=self.generar,
-        ).pack(side="left")
-
-        ctk.CTkLabel(
-            contenedor,
-            text="Cada archivo se guarda por separado. Use «Cargar» o «Cambiar» solo en el que necesite actualizar.",
-            font=FONT_TEXTO,
-            wraplength=700,
-            justify="left",
-        ).pack(anchor="w", pady=(0, 6))
-
-        self.lbl_ruta_salida = ctk.CTkLabel(
-            contenedor,
-            text="",
-            font=FONT_PEQUENA,
-            text_color=("gray45", "gray55"),
-            anchor="w",
-            wraplength=860,
-            justify="left",
         )
-        self.lbl_ruta_salida.pack(anchor="w", pady=(0, 10))
+        self.btn_generar.pack(side="left")
 
-        barra_fuentes = ctk.CTkFrame(contenedor, fg_color="transparent")
-        barra_fuentes.pack(fill="x", pady=(0, 4))
+        self.panel_pasos = PanelPasos(contenedor)
+        self.panel_pasos.pack(fill="x", pady=(0, 10))
 
-        self.btn_toggle_fuentes = IconButton(
-            barra_fuentes,
-            icon=self._ico("folder"),
-            tooltip="Mostrar archivos fuente",
-            fg_color="transparent",
-            border_width=1,
-            command=self._toggle_fuentes,
+        self.barra_estado = BarraEstado(contenedor)
+        self.barra_estado.pack(fill="x", pady=(0, 10))
+
+        self.marco_principal = ctk.CTkFrame(contenedor, fg_color="transparent")
+        self.marco_principal.pack(fill="both", expand=True, pady=(0, 8))
+
+        self.marco_fuentes = Seccion(
+            self.marco_principal,
+            titulo="Paso 1 · Archivos fuente",
+            ayuda=(
+                "Cada Excel se guarda por separado en datos/entrada. "
+                "Use «Cargar» la primera vez y «Cambiar» cuando reciba una versión nueva. "
+                "Los marcados como obligatorio deben estar listos antes de generar."
+            ),
         )
-        self.btn_toggle_fuentes.pack(side="left")
-        ctk.CTkLabel(
-            barra_fuentes,
-            text="Archivos fuente y documentos adicionales",
-            font=FONT_PEQUENA,
-            text_color=("gray50", "gray60"),
-        ).pack(side="left", padx=(8, 0))
+        self.marco_fuentes.pack(fill="x", pady=(0, 8))
 
-        self.area_scroll = ctk.CTkScrollableFrame(contenedor, fg_color="transparent")
-        self.area_scroll.pack(fill="both", expand=True, pady=(0, 8))
+        self.retractil_fuentes = ContenidoRetractil(
+            self.marco_fuentes.body,
+            texto_abierto="Ocultar lista de archivos",
+            texto_cerrado="Mostrar lista de archivos",
+            icono_abierto=self._ico("folder_open"),
+            icono_cerrado=self._ico("folder"),
+        )
+        self.retractil_fuentes.pack(fill="x")
 
-        self.marco_fuentes = Seccion(self.area_scroll, titulo="Archivos fuente")
-        self.marco_filas_fuentes = ctk.CTkFrame(self.marco_fuentes.body, fg_color="transparent")
+        self.scroll_fuentes = MarcoDesplazable(self.retractil_fuentes.contenido, altura=340)
+        self.scroll_fuentes.pack(fill="x", pady=(0, 4))
+
+        self.marco_filas_fuentes = ctk.CTkFrame(self.scroll_fuentes.inner, fg_color="transparent")
         self.marco_filas_fuentes.pack(fill="x")
         self.marco_filas_fuentes.grid_columnconfigure(1, weight=1)
 
-        self.marco_docs = Seccion(self.marco_fuentes.body, titulo="Documentos adicionales")
-        self.marco_docs.pack(fill="x", pady=(12, 0))
+        self.marco_docs = Seccion(
+            self.retractil_fuentes.contenido,
+            titulo="Documentos adicionales",
+            ayuda="Opcional: otras hojas Excel que se añaden como columnas extra al consolidado.",
+        )
+        self.marco_docs.pack(fill="x", pady=(8, 0))
         self.marco_filas_docs = ctk.CTkFrame(self.marco_docs.body, fg_color="transparent")
         self.marco_filas_docs.pack(fill="x")
 
         barra_docs = ctk.CTkFrame(self.marco_docs.body, fg_color="transparent")
         barra_docs.pack(fill="x", pady=(8, 0))
-        IconButton(
+        BotonIconoTexto(
             barra_docs,
             icon=self._ico("add"),
-            tooltip="Añadir documento",
+            texto="Añadir documento",
             command=self.anadir_documento,
         ).pack(side="left")
 
-        self.marco_prio = Seccion(self.area_scroll, titulo="Priorizados")
+        self.marco_prio = Seccion(
+            self.marco_principal,
+            titulo="Paso 2 · Priorizados",
+            ayuda=(
+                "Vista de todos los estudiantes marcados como priorizados. "
+                "Algunos vienen de los Excels (grupos, Psicología internos); "
+                "otros los puede añadir usted con «Añadir priorizado propio»."
+            ),
+        )
         self.marco_prio.pack(fill="x", pady=(0, 8))
 
-        barra_prio = ctk.CTkFrame(self.marco_prio.body, fg_color="transparent")
+        self.retractil_prio = ContenidoRetractil(
+            self.marco_prio.body,
+            texto_abierto="Ocultar priorizados",
+            texto_cerrado="Mostrar priorizados",
+            icono_abierto=self._ico("folder_open"),
+            icono_cerrado=self._ico("folder"),
+            expandido=False,
+        )
+        self.retractil_prio.pack(fill="x")
+
+        barra_prio = ctk.CTkFrame(self.retractil_prio.contenido, fg_color="transparent")
         barra_prio.pack(fill="x", pady=(0, 6))
-        IconButton(
+        BotonIconoTexto(
             barra_prio,
             icon=self._ico("refresh"),
-            tooltip="Actualizar lista",
+            texto="Actualizar",
+            fg_color="transparent",
+            border_width=1,
             command=self._actualizar_tabla_priorizados,
         ).pack(side="left", padx=(0, 6))
-        IconButton(
+        BotonIconoTexto(
             barra_prio,
             icon=self._ico("add_user"),
-            tooltip="Priorizado propio",
+            texto="Añadir priorizado propio",
             command=self._abrir_priorizado_propio,
         ).pack(side="left", padx=(0, 6))
-        IconButton(
+        BotonIconoTexto(
             barra_prio,
             icon=self._ico("remove"),
-            tooltip="Quitar priorizado propio",
+            texto="Quitar propio",
+            fg_color="transparent",
+            border_width=1,
             command=self._quitar_priorizado_propio_seleccionado,
-        ).pack(side="left")
-
-        IconButton(
+        ).pack(side="left", padx=(0, 6))
+        BotonIconoTexto(
             barra_prio,
             icon=self._ico("info"),
-            tooltip="Información: cálculo de prioridad y colores",
+            texto="Cómo se calcula la prioridad",
+            fg_color="transparent",
+            border_width=1,
             command=self._abrir_info_prioridad,
         ).pack(side="right")
 
-        self.tabla_priorizados = TablaPriorizados(self.marco_prio.body)
+        self.tabla_priorizados = TablaPriorizados(self.retractil_prio.contenido)
         self.tabla_priorizados.pack(fill="x", expand=False)
+
+        self.marco_alertas = Seccion(
+            self.marco_principal,
+            titulo="Alertas propias",
+            ayuda=(
+                "Marcaciones manuales que se suman al consolidado "
+                "(columnas Alerta Propia y Detalle Propio). "
+                "No sustituyen las alertas que vienen de los Excels de alertas."
+            ),
+        )
+        self.marco_alertas.pack(fill="x", pady=(0, 8))
+
+        self.retractil_alertas = ContenidoRetractil(
+            self.marco_alertas.body,
+            texto_abierto="Ocultar alertas propias",
+            texto_cerrado="Mostrar alertas propias",
+            icono_abierto=self._ico("folder_open"),
+            icono_cerrado=self._ico("folder"),
+            expandido=False,
+        )
+        self.retractil_alertas.pack(fill="x")
+
+        barra_alertas = ctk.CTkFrame(self.retractil_alertas.contenido, fg_color="transparent")
+        barra_alertas.pack(fill="x", pady=(0, 6))
+        BotonIconoTexto(
+            barra_alertas,
+            icon=self._ico("refresh"),
+            texto="Actualizar",
+            fg_color="transparent",
+            border_width=1,
+            command=self._actualizar_tabla_alertas,
+        ).pack(side="left", padx=(0, 6))
+        BotonIconoTexto(
+            barra_alertas,
+            icon=self._ico("add"),
+            texto="Añadir alerta",
+            command=self._abrir_alerta_propia,
+        ).pack(side="left", padx=(0, 6))
+        BotonIconoTexto(
+            barra_alertas,
+            icon=self._ico("remove"),
+            texto="Quitar alerta",
+            fg_color="transparent",
+            border_width=1,
+            command=self._quitar_alerta_propia_seleccionada,
+        ).pack(side="left")
+
+        self.tabla_alertas = TablaAlertasPropias(self.retractil_alertas.contenido)
+        self.tabla_alertas.pack(fill="x", expand=False)
 
         pie = ctk.CTkFrame(contenedor, fg_color="transparent")
         pie.pack(fill="x")
-        IconButton(
+        BotonIconoTexto(
+            pie,
+            icon=self._ico("add_user"),
+            texto="Consultar estudiante",
+            command=self._abrir_consulta_estudiante,
+        ).pack(side="left", padx=(0, 8))
+        BotonIconoTexto(
             pie,
             icon=self._ico("settings"),
-            tooltip="Cambiar datos de columnas",
+            texto="Configurar columnas y aliases",
             command=self.cambiar_datos,
+            **estilo_boton_secundario(),
         ).pack(side="left")
         self.lbl_resumen = ctk.CTkLabel(
             pie,
             text="",
-            font=FONT_TEXTO,
+            font=FONT_PEQUENA,
             text_color=("gray50", "gray60"),
         )
         self.lbl_resumen.pack(side="right")
@@ -224,9 +330,53 @@ class AppConsolidado(ctk.CTk):
         rel = self.cfg.get("salida", {}).get("ruta", "salida/estudiantes_consolidado.xlsx")
         return (self.base / rel).resolve()
 
-    def _actualizar_ruta_salida(self) -> None:
+    def _conteo_archivos(self) -> tuple[int, int, int, int, list[str]]:
+        slots = self.cfg.get("archivos_fuente", [])
+        obligatorios = [s for s in slots if slot_es_requerido(s)]
+        cargados_oblig = sum(
+            1
+            for s in obligatorios
+            if self._ruta_guardada(s.get("nombre_guardado", "")).is_file()
+        )
+        cargados_total = sum(
+            1
+            for s in slots
+            if self._ruta_guardada(s.get("nombre_guardado", "")).is_file()
+        )
+        faltantes = [
+            s.get("titulo", s.get("id", ""))
+            for s in obligatorios
+            if not self._ruta_guardada(s.get("nombre_guardado", "")).is_file()
+        ]
+        return cargados_oblig, len(obligatorios), cargados_total, len(slots), faltantes
+
+    def _actualizar_estado_general(self) -> None:
+        cargados_oblig, total_oblig, cargados_all, total_all, faltantes = self._conteo_archivos()
+        listo = cargados_oblig == total_oblig and total_oblig > 0
         ruta = self._ruta_salida_actual()
-        self.lbl_ruta_salida.configure(text=f"Archivo final: {ruta}")
+        ruta_corta = ruta.name if len(str(ruta)) > 48 else str(ruta)
+
+        texto_oblig = f"{cargados_oblig}/{total_oblig} obligatorios listos"
+        if faltantes:
+            texto_oblig += f" · faltan {len(faltantes)}"
+
+        self.barra_estado.actualizar(
+            archivos=texto_oblig,
+            ruta=ruta_corta,
+            listo=listo,
+        )
+        self.panel_pasos.actualizar(
+            archivos_obligatorios=texto_oblig,
+            listo_generar=listo,
+            ruta_salida=ruta.name,
+            paso1_listo=cargados_oblig == total_oblig and total_oblig > 0,
+        )
+        self.lbl_resumen.configure(
+            text=f"{cargados_all}/{total_all} archivos fuente cargados (incluye opcionales)"
+        )
+
+    def _actualizar_ruta_salida(self) -> None:
+        self._actualizar_estado_general()
 
     def _elegir_ruta_salida(self) -> None:
         elegida = elegir_guardar_consolidado(self._ruta_salida_actual())
@@ -242,15 +392,24 @@ class AppConsolidado(ctk.CTk):
         self._actualizar_ruta_salida()
         messagebox.showinfo("Ruta guardada", f"El consolidado se guardará en:\n{elegida}")
 
-    def _toggle_fuentes(self) -> None:
-        if self.marco_fuentes.winfo_ismapped():
-            self.marco_fuentes.pack_forget()
-            self.btn_toggle_fuentes.configure(image=self._ico("folder"))
-            self.btn_toggle_fuentes.set_tooltip("Mostrar archivos fuente")
-        else:
-            self.marco_fuentes.pack(fill="x", pady=(0, 8), before=self.marco_prio)
-            self.btn_toggle_fuentes.configure(image=self._ico("folder_open"))
-            self.btn_toggle_fuentes.set_tooltip("Ocultar archivos fuente")
+    def _toggle_tema(self) -> None:
+        nuevo = alternar_modo_apariencia()
+        self.cfg.setdefault("interfaz", {})["modo_apariencia"] = nuevo
+        guardar_config(self.cfg, self.base)
+        self.btn_tema.configure(image=self._ico_tema())
+        configurar_treeview(self.tabla_priorizados.tree)
+        configurar_treeview(self.tabla_alertas.tree)
+        self.scroll_fuentes.actualizar_fondo()
+        estilo = estilo_seccion()
+        for marco in (
+            self.marco_fuentes,
+            self.marco_prio,
+            self.marco_alertas,
+            self.marco_docs,
+        ):
+            marco.configure(**estilo)
+        for tarjeta in self.panel_pasos._tarjetas:
+            tarjeta.configure(**estilo_tarjeta_paso())
 
     def _ruta_guardada(self, nombre: str) -> Path:
         return carpeta_excels(self.cfg, self.base) / nombre
@@ -260,13 +419,6 @@ class AppConsolidado(ctk.CTk):
 
     def _ico_tema(self) -> ctk.CTkImage:
         return self._ico("sun" if modo_apariencia_actual() == "dark" else "moon")
-
-    def _toggle_tema(self) -> None:
-        nuevo = alternar_modo_apariencia()
-        self.cfg.setdefault("interfaz", {})["modo_apariencia"] = nuevo
-        guardar_config(self.cfg, self.base)
-        self.btn_tema.configure(image=self._ico_tema())
-        configurar_treeview(self.tabla_priorizados.tree)
 
     def _actualizar_lista_archivos(self) -> None:
         carpeta = self._carpeta_excels()
@@ -310,7 +462,7 @@ class AppConsolidado(ctk.CTk):
         if not docs:
             ctk.CTkLabel(
                 self.marco_filas_docs,
-                text="No hay documentos adicionales. Use el botón + para añadir uno.",
+                text="No hay documentos adicionales. Use «Añadir documento» para agregar uno.",
                 text_color=("gray50", "gray60"),
             ).pack(anchor="w")
         else:
@@ -327,13 +479,8 @@ class AppConsolidado(ctk.CTk):
                     extra_btn="Editar columnas",
                 )
 
-        cargados = sum(
-            1
-            for s in self.cfg.get("archivos_fuente", [])
-            if self._ruta_guardada(s.get("nombre_guardado", "")).is_file()
-        )
-        total = len(self.cfg.get("archivos_fuente", []))
-        self.lbl_resumen.configure(text=f"{cargados}/{total} archivos fuente listos")
+        self._actualizar_estado_general()
+        self.scroll_fuentes.enlazar_rueda_recursivo()
 
     def _abrir_info_prioridad(self) -> None:
         DialogoInfoPrioridad(self, self.cfg, self.base, self._on_config_guardada)
@@ -398,6 +545,37 @@ class AppConsolidado(ctk.CTk):
         for f in filas:
             self.tabla_priorizados.insertar_fila(f)
 
+    def _actualizar_tabla_alertas(self) -> None:
+        merge.aplicar_config(self.cfg, self.base)
+        self.tabla_alertas.limpiar()
+        try:
+            filas = merge.obtener_lista_alertas_propias_vista(self.cfg, self.base)
+        except Exception as exc:
+            messagebox.showerror("Alertas propias", f"No se pudo cargar la lista:\n{exc}")
+            return
+        for f in filas:
+            self.tabla_alertas.insertar_fila(f)
+
+    def _abrir_alerta_propia(self) -> None:
+        DialogoAlertaPropia(self, self.cfg, self.base, self._actualizar_tabla_alertas)
+
+    def _quitar_alerta_propia_seleccionada(self) -> None:
+        fila = self.tabla_alertas.fila_seleccionada()
+        if not fila:
+            messagebox.showwarning(
+                "Quitar alerta",
+                "Seleccione un estudiante en la tabla de alertas propias.",
+            )
+            return
+        if not messagebox.askyesno(
+            "Confirmar",
+            f"¿Quitar la alerta propia de {fila.get('nombre') or fila['identificacion']}?",
+        ):
+            return
+        quitar_alerta_propia(fila["identificacion"], self.base)
+        self._actualizar_tabla_alertas()
+        messagebox.showinfo("Listo", "Alerta propia eliminada.")
+
     def _abrir_priorizado_propio(self) -> None:
         DialogoPriorizadoPropio(self, self.cfg, self.base, self._actualizar_tabla_priorizados)
 
@@ -413,8 +591,9 @@ class AppConsolidado(ctk.CTk):
         if "Priorizado propio" not in origen:
             messagebox.showwarning(
                 "Quitar priorizado",
-                "Solo puede quitar entradas marcadas como «Priorizado propio».\n"
-                "Los de Grupos priorizados provienen del Excel y no se eliminan aquí.",
+                "Solo puede quitar entradas marcadas como «Priorizado propio».\n\n"
+                "Los que vienen de Excels (grupos priorizados, Psicología internos, etc.) "
+                "no se eliminan desde aquí; actualice el archivo fuente correspondiente.",
             )
             return
         if not messagebox.askyesno(
@@ -427,23 +606,19 @@ class AppConsolidado(ctk.CTk):
         messagebox.showinfo("Listo", "Priorizado propio eliminado.")
 
     def generar(self) -> None:
-        faltantes = [
-            s.get("titulo", s.get("id", ""))
-            for s in self.cfg.get("archivos_fuente", [])
-            if slot_es_requerido(s)
-            and not self._ruta_guardada(s.get("nombre_guardado", "")).is_file()
-        ]
+        _, _, _, _, faltantes = self._conteo_archivos()
         if faltantes:
             messagebox.showwarning(
-                "Faltan archivos",
-                "Aún no están cargados:\n• " + "\n• ".join(faltantes),
+                "Faltan archivos obligatorios",
+                "Antes de generar, cargue estos archivos en el Paso 1:\n\n• "
+                + "\n• ".join(faltantes),
             )
             return
         try:
             _, destino = merge.ejecutar_consolidado(
                 self.cfg,
                 base=self.base,
-                abrir=True,
+                abrir=False,
                 preguntar_sobrescribir=True,
                 parent=self,
             )
@@ -453,7 +628,14 @@ class AppConsolidado(ctk.CTk):
             messagebox.showerror("Error", str(exc))
             return
         self._actualizar_ruta_salida()
-        messagebox.showinfo("Listo", f"Consolidado generado:\n{destino}")
+        messagebox.showinfo(
+            "Consolidado generado",
+            f"El archivo se guardó correctamente:\n{destino}\n\nSe abrirá en Excel.",
+        )
+        merge.abrir_archivo_en_sistema(destino, parent=self)
+
+    def _abrir_consulta_estudiante(self) -> None:
+        DialogoConsultaEstudiante(self, self.cfg, self.base)
 
     def cambiar_datos(self) -> None:
         DialogoCambiarDatos(self, self.cfg, self.base, self._on_config_guardada)

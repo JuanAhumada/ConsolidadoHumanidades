@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import tkinter as tk
 from tkinter import ttk
 from tkinter import Label as TkLabel
 from tkinter import Toplevel as TkToplevel
@@ -11,7 +12,92 @@ from typing import Callable
 
 import customtkinter as ctk
 
-from consolidado.gui.theme import FONT_PEQUENA, FONT_SUBTITULO, FONT_TEXTO, configurar_treeview
+from consolidado.gui.theme import (
+    COLOR_ACENTO,
+    COLOR_FALTA,
+    COLOR_OK,
+    COLOR_OPCIONAL,
+    FONT_GUIA,
+    FONT_PEQUENA,
+    FONT_SUBTITULO,
+    FONT_TEXTO,
+    color_fondo_app,
+    configurar_treeview,
+    estilo_boton_secundario,
+    estilo_seccion,
+    estilo_tarjeta_paso,
+    normalizar_kwargs_boton,
+)
+
+
+class MarcoDesplazable(ctk.CTkFrame):
+    """
+    Área con scroll mediante Canvas nativo.
+    Evita el difuminado/ghosting de CTkScrollableFrame al desplazarse rápido.
+    """
+
+    def __init__(self, master, *, altura: int | None = None, **kwargs) -> None:
+        super().__init__(master, fg_color="transparent", **kwargs)
+        if altura is not None:
+            self.configure(height=altura)
+            self.pack_propagate(False)
+        self._bg = color_fondo_app()
+        self._canvas = tk.Canvas(
+            self,
+            highlightthickness=0,
+            borderwidth=0,
+            bg=self._bg,
+        )
+        self._scrollbar = ctk.CTkScrollbar(
+            self,
+            orientation="vertical",
+            command=self._canvas.yview,
+        )
+        self.inner = ctk.CTkFrame(self._canvas, fg_color="transparent")
+        self._inner_id = self._canvas.create_window((0, 0), window=self.inner, anchor="nw")
+
+        self.inner.bind("<Configure>", self._on_inner_configure)
+        self._canvas.bind("<Configure>", self._on_canvas_configure)
+        self._canvas.configure(yscrollcommand=self._scrollbar.set)
+
+        self._canvas.pack(side="left", fill="both", expand=True)
+        self._scrollbar.pack(side="right", fill="y")
+
+        self._enlazar_rueda(self)
+        self._enlazar_rueda(self._canvas)
+        self._enlazar_rueda(self.inner)
+
+    def _on_inner_configure(self, _event=None) -> None:
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+    def _on_canvas_configure(self, event) -> None:
+        self._canvas.itemconfigure(self._inner_id, width=event.width)
+
+    def _enlazar_rueda(self, widget) -> None:
+        widget.bind("<MouseWheel>", self._on_rueda, add="+")
+        widget.bind("<Button-4>", self._on_rueda_linux, add="+")
+        widget.bind("<Button-5>", self._on_rueda_linux, add="+")
+
+    def enlazar_rueda_recursivo(self) -> None:
+        """Vuelve a enlazar la rueda tras añadir widgets dinámicos."""
+        self._enlazar_rueda(self.inner)
+        for hijo in self.inner.winfo_children():
+            self._enlazar_rueda(hijo)
+            for nieto in hijo.winfo_children():
+                self._enlazar_rueda(nieto)
+
+    def _on_rueda(self, event) -> None:
+        self._canvas.yview_scroll(int(-event.delta / 120), "units")
+
+    def _on_rueda_linux(self, event) -> None:
+        if event.num == 4:
+            self._canvas.yview_scroll(-3, "units")
+        elif event.num == 5:
+            self._canvas.yview_scroll(3, "units")
+
+    def actualizar_fondo(self) -> None:
+        self._bg = color_fondo_app()
+        self._canvas.configure(bg=self._bg)
 
 
 class IconButton(ctk.CTkButton):
@@ -84,17 +170,228 @@ class IconButton(ctk.CTkButton):
             pass
 
 
-class Seccion(ctk.CTkFrame):
-    """Marco con título, equivalente a LabelFrame."""
+class TextoAyuda(ctk.CTkLabel):
+    """Texto explicativo bajo títulos de sección."""
 
-    def __init__(self, master, titulo: str, **kwargs) -> None:
+    def __init__(self, master, texto: str, **kwargs) -> None:
+        super().__init__(
+            master,
+            text=texto,
+            font=FONT_GUIA,
+            text_color=("gray45", "gray60"),
+            anchor="w",
+            justify="left",
+            wraplength=820,
+            **kwargs,
+        )
+
+
+class BotonIconoTexto(ctk.CTkButton):
+    """Botón con icono y etiqueta visible."""
+
+    def __init__(
+        self,
+        master,
+        *,
+        icon: ctk.CTkImage | None = None,
+        texto: str,
+        command: Callable[[], None] | None = None,
+        width: int | None = None,
+        height: int = 32,
+        **kwargs,
+    ) -> None:
+        kwargs = normalizar_kwargs_boton(kwargs)
+        super().__init__(
+            master,
+            text=f"  {texto}" if icon else texto,
+            image=icon,
+            compound="left" if icon else "center",
+            command=command,
+            width=width or max(120, len(texto) * 9 + (36 if icon else 0)),
+            height=height,
+            **kwargs,
+        )
+
+
+class ContenidoRetractil(ctk.CTkFrame):
+    """Bloque con botón para mostrar u ocultar su contenido."""
+
+    def __init__(
+        self,
+        master,
+        *,
+        texto_abierto: str,
+        texto_cerrado: str,
+        icono_abierto: ctk.CTkImage | None = None,
+        icono_cerrado: ctk.CTkImage | None = None,
+        expandido: bool = True,
+        **kwargs,
+    ) -> None:
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self._texto_abierto = texto_abierto
+        self._texto_cerrado = texto_cerrado
+        self._icono_abierto = icono_abierto
+        self._icono_cerrado = icono_cerrado
+        self._expandido = expandido
+
+        self.barra = ctk.CTkFrame(self, fg_color="transparent")
+        self.barra.pack(fill="x", pady=(0, 6))
+
+        self.btn_toggle = BotonIconoTexto(
+            self.barra,
+            icon=icono_abierto if expandido else icono_cerrado,
+            texto=texto_abierto if expandido else texto_cerrado,
+            command=self.alternar,
+            **estilo_boton_secundario(),
+        )
+        self.btn_toggle.pack(side="left")
+
+        self.contenido = ctk.CTkFrame(self, fg_color="transparent")
+        if expandido:
+            self.contenido.pack(fill="x")
+
+    def alternar(self) -> None:
+        self._expandido = not self._expandido
+        if self._expandido:
+            self.contenido.pack(fill="x")
+            self.btn_toggle.configure(
+                image=self._icono_abierto,
+                text=f"  {self._texto_abierto}",
+            )
+        else:
+            self.contenido.pack_forget()
+            self.btn_toggle.configure(
+                image=self._icono_cerrado,
+                text=f"  {self._texto_cerrado}",
+            )
+
+    @property
+    def expandido(self) -> bool:
+        return self._expandido
+
+
+class PanelPasos(ctk.CTkFrame):
+    """Guía visual de los tres pasos del flujo de trabajo."""
+
+    def __init__(self, master, **kwargs) -> None:
+        super().__init__(master, **kwargs)
+        self._tarjetas: list[ctk.CTkFrame] = []
+        self._labels_estado: list[ctk.CTkLabel] = []
+        pasos = (
+            ("1", "Cargar Excels", "Suba o actualice los archivos fuente."),
+            ("2", "Ajustes opcionales", "Priorizados y alertas propias manuales."),
+            ("3", "Generar consolidado", "Cree el Excel final con un clic."),
+        )
+        for i, (num, titulo, desc) in enumerate(pasos):
+            tarjeta = ctk.CTkFrame(self, **estilo_tarjeta_paso())
+            tarjeta.grid(row=0, column=i, padx=4, pady=4, sticky="nsew")
+            self.grid_columnconfigure(i, weight=1)
+            self._tarjetas.append(tarjeta)
+
+            cab = ctk.CTkFrame(tarjeta, fg_color="transparent")
+            cab.pack(fill="x", padx=10, pady=(8, 2))
+            ctk.CTkLabel(
+                cab,
+                text=num,
+                width=22,
+                height=22,
+                corner_radius=11,
+                fg_color=COLOR_ACENTO,
+                text_color="white",
+                font=("Segoe UI", 11, "bold"),
+            ).pack(side="left")
+            ctk.CTkLabel(cab, text=titulo, font=FONT_SUBTITULO).pack(side="left", padx=(8, 0))
+
+            ctk.CTkLabel(
+                tarjeta,
+                text=desc,
+                font=FONT_GUIA,
+                text_color=("gray45", "gray60"),
+                anchor="w",
+                justify="left",
+                wraplength=240,
+            ).pack(anchor="w", padx=10, pady=(0, 4))
+
+            lbl_estado = ctk.CTkLabel(
+                tarjeta,
+                text="",
+                font=FONT_PEQUENA,
+                anchor="w",
+            )
+            lbl_estado.pack(anchor="w", padx=10, pady=(0, 8))
+            self._labels_estado.append(lbl_estado)
+
+    def actualizar(
+        self,
+        *,
+        archivos_obligatorios: str,
+        listo_generar: bool,
+        ruta_salida: str,
+        paso1_listo: bool = False,
+    ) -> None:
+        self._labels_estado[0].configure(
+            text=archivos_obligatorios,
+            text_color=COLOR_OK if paso1_listo else COLOR_FALTA,
+        )
+        self._labels_estado[1].configure(
+            text="Puede añadir o quitar entradas manuales",
+            text_color=("gray45", "gray60"),
+        )
+        texto_gen = "Listo para generar" if listo_generar else "Complete los archivos obligatorios"
+        self._labels_estado[2].configure(
+            text=f"{texto_gen}\n{ruta_salida}",
+            text_color=COLOR_OK if listo_generar else COLOR_FALTA,
+        )
+        borde_listo = COLOR_OK if listo_generar else COLOR_ACENTO
+        borde_ok = COLOR_OK
+        borde_neutro = ("#b8b8b8", "#4a4a4a")
+        for i, tarjeta in enumerate(self._tarjetas):
+            if i == 2 and listo_generar:
+                tarjeta.configure(border_color=borde_listo)
+            elif i == 0 and paso1_listo:
+                tarjeta.configure(border_color=borde_ok)
+            else:
+                tarjeta.configure(border_color=borde_neutro)
+
+
+class BarraEstado(ctk.CTkFrame):
+    """Resumen compacto del estado de carga."""
+
+    def __init__(self, master, **kwargs) -> None:
+        super().__init__(master, corner_radius=8, **kwargs)
+        self.lbl_archivos = ctk.CTkLabel(self, text="", font=FONT_TEXTO, anchor="w")
+        self.lbl_archivos.pack(side="left", padx=12, pady=8)
+        self.lbl_ruta = ctk.CTkLabel(
+            self,
+            text="",
+            font=FONT_PEQUENA,
+            text_color=("gray45", "gray60"),
+            anchor="e",
+        )
+        self.lbl_ruta.pack(side="right", padx=12, pady=8)
+
+    def actualizar(self, *, archivos: str, ruta: str, listo: bool) -> None:
+        self.lbl_archivos.configure(
+            text=archivos,
+            text_color=COLOR_OK if listo else COLOR_FALTA,
+        )
+        self.lbl_ruta.configure(text=f"Salida: {ruta}")
+
+
+class Seccion(ctk.CTkFrame):
+    """Marco con título y texto de ayuda opcional."""
+
+    def __init__(self, master, titulo: str, ayuda: str | None = None, **kwargs) -> None:
+        kwargs = {**estilo_seccion(), **kwargs}
         super().__init__(master, **kwargs)
         ctk.CTkLabel(
             self,
             text=titulo,
             font=FONT_SUBTITULO,
             anchor="w",
-        ).pack(fill="x", padx=12, pady=(10, 4))
+        ).pack(fill="x", padx=12, pady=(10, 2))
+        if ayuda:
+            TextoAyuda(self, ayuda).pack(fill="x", padx=12, pady=(0, 4))
         self.body = ctk.CTkFrame(self, fg_color="transparent")
         self.body.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
@@ -161,11 +458,67 @@ class TablaPriorizados(ctk.CTkFrame):
         }
 
 
-def texto_estado_archivo(ruta: Path) -> tuple[str, str]:
+class TablaAlertasPropias(ctk.CTkFrame):
+    """Treeview de alertas propias."""
+
+    COLUMNAS = ("identificacion", "nombre", "detalle")
+
+    def __init__(self, master, **kwargs) -> None:
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self.tree = ttk.Treeview(
+            self,
+            columns=self.COLUMNAS,
+            show="headings",
+            height=6,
+        )
+        self.tree.heading("identificacion", text="Identificación")
+        self.tree.heading("nombre", text="Nombre")
+        self.tree.heading("detalle", text="Detalle Propio")
+        self.tree.column("identificacion", width=110, anchor="w")
+        self.tree.column("nombre", width=200, anchor="w")
+        self.tree.column("detalle", width=280, anchor="w")
+        scroll = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scroll.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        scroll.pack(side="right", fill="y")
+        configurar_treeview(self.tree)
+
+    def limpiar(self) -> None:
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+    def insertar_fila(self, fila: dict) -> None:
+        self.tree.insert(
+            "",
+            "end",
+            values=(
+                fila.get("identificacion", ""),
+                fila.get("nombre", ""),
+                fila.get("detalle", ""),
+            ),
+        )
+
+    def fila_seleccionada(self) -> dict | None:
+        sel = self.tree.selection()
+        if not sel:
+            return None
+        valores = self.tree.item(sel[0], "values")
+        if not valores:
+            return None
+        return {
+            "identificacion": valores[0],
+            "nombre": valores[1],
+            "detalle": valores[2],
+        }
+
+
+def texto_estado_archivo(ruta: Path, *, requerido: bool = True) -> tuple[str, str, str]:
     if ruta.is_file():
         fecha = datetime.fromtimestamp(ruta.stat().st_mtime).strftime("%d/%m/%Y %H:%M")
-        return ("cargado", f"Cargado · {fecha}")
-    return ("pendiente", "Sin cargar")
+        return ("cargado", f"Cargado · {fecha}", COLOR_OK)
+    if requerido:
+        return ("falta", "Falta cargar · obligatorio", COLOR_FALTA)
+    return ("pendiente", "Sin cargar · opcional", COLOR_OPCIONAL)
 
 
 def limpiar_marco(marco: ctk.CTkFrame) -> None:
@@ -185,47 +538,60 @@ def fila_archivo(
     on_vista_previa: Callable[[], None] | None = None,
     opcional: bool = False,
 ) -> None:
-    estado, texto_estado = texto_estado_archivo(carpeta / nombre_guardado)
-    color = "#2ecc71" if estado == "cargado" else "#888888"
-    titulo_mostrar = f"{titulo} (opcional)" if opcional else titulo
+    requerido = not opcional
+    estado, texto_estado, color = texto_estado_archivo(
+        carpeta / nombre_guardado, requerido=requerido
+    )
+    titulo_mostrar = titulo
+    if opcional:
+        sufijo = " · opcional"
+    else:
+        sufijo = " · obligatorio"
 
     ctk.CTkLabel(marco, text="●", text_color=color, font=FONT_TEXTO).grid(
         row=fila, column=0, padx=(0, 8), pady=6, sticky="w"
     )
     info = ctk.CTkFrame(marco, fg_color="transparent")
     info.grid(row=fila, column=1, sticky="ew", pady=6)
-    ctk.CTkLabel(info, text=titulo_mostrar, font=FONT_TEXTO, anchor="w").pack(anchor="w")
+    ctk.CTkLabel(
+        info,
+        text=f"{titulo_mostrar}{sufijo}",
+        font=FONT_TEXTO,
+        anchor="w",
+    ).pack(anchor="w")
     ctk.CTkLabel(
         info,
         text=texto_estado,
         font=FONT_PEQUENA,
-        text_color=("gray50", "gray60"),
+        text_color=color if estado != "cargado" else ("gray50", "gray60"),
         anchor="w",
     ).pack(anchor="w")
 
     acciones = ctk.CTkFrame(marco, fg_color="transparent")
     acciones.grid(row=fila, column=2, padx=(12, 0), pady=6, sticky="e")
     etiqueta_btn = "Cambiar" if estado == "cargado" else "Cargar"
-    ctk.CTkButton(acciones, text=etiqueta_btn, width=90, command=on_cargar).pack(
-        side="left", padx=4
-    )
+    ctk.CTkButton(
+        acciones,
+        text=etiqueta_btn,
+        width=90,
+        command=on_cargar,
+        **estilo_boton_secundario(),
+    ).pack(side="left", padx=4)
     if on_vista_previa:
         ctk.CTkButton(
             acciones,
             text="Vista previa",
             width=100,
-            fg_color="transparent",
-            border_width=1,
             command=on_vista_previa,
+            **estilo_boton_secundario(),
         ).pack(side="left", padx=4)
     if on_editar and extra_btn:
         ctk.CTkButton(
             acciones,
             text=extra_btn,
             width=120,
-            fg_color="transparent",
-            border_width=1,
             command=on_editar,
+            **estilo_boton_secundario(),
         ).pack(side="left", padx=4)
 
     marco.grid_columnconfigure(1, weight=1)

@@ -5,22 +5,23 @@ from pathlib import Path
 
 import polars as pl
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from consolidado.config.settings import construir_columnas_salida, construir_grupos_encabezado
+from consolidado.config.settings import construir_columnas_salida, construir_grupos_encabezado, etiqueta_export_columna
 from consolidado.core.columnas import alinear_dataframe_salida, formatear_dataframe_salida
 from consolidado.core.constants import (
     ANCHO_MAXIMO_COLUMNA_EXCEL,
     COL_ACTIVACION_RUTA,
+    COL_ALERTA_PROPIA,
     COL_AJUSTE_RAZONABLE,
     COL_FECHA_NACIMIENTO,
-    COL_FUNCIONARIO_BECA,
     COL_NUM_ALERTA_FINAL,
     COL_NUM_ALERTA_INICIAL,
     COL_TELEFONO_CELULAR,
     COL_TIPO_ALERTA_FINAL,
     COL_TIPO_ALERTA_INICIAL,
+    COL_TOTAL_BECA,
     FONT_MATERIA_REPETIDA,
     FORMATO_FECHA_DMY,
     HOJA_LISTADO,
@@ -29,15 +30,61 @@ from consolidado.core.constants import (
 )
 from consolidado.core.excel_io import _longitud_visible_celda
 from consolidado.core.normalizacion import (
-    _es_funcionario_call_center,
     _es_nulo,
     _es_valor_true,
     formatear_fecha_nacimiento,
     normalizar_id,
     normalizar_telefono_celda,
 )
-from consolidado.core.prioridad import color_call_center_excel, color_excel_fila
+from consolidado.core.prioridad import color_excel_fila
 from consolidado.core.repetidas import _materia_es_repetida
+
+FONT_TITULO_GRUPO_EXCEL = Font(bold=True, size=14)
+FONT_ENCABEZADO_COLUMNA_EXCEL = Font(bold=True, size=11)
+FONT_DATOS_EXCEL = Font(size=11)
+
+_BORDE_DELGADO = Side(style="thin", color="C0C0C0")
+_BORDE_GRUESO = Side(style="medium", color="555555")
+
+
+def _borde_celda(
+    col: int,
+    fila: int,
+    ultima_col: int,
+    inicios_grupo: set[int],
+) -> Border:
+    izquierda = _BORDE_DELGADO
+    derecha = _BORDE_DELGADO
+    if col in inicios_grupo and col > 1:
+        izquierda = _BORDE_GRUESO
+    arriba = _BORDE_DELGADO if fila > 1 else None
+    abajo = _BORDE_DELGADO
+    return Border(left=izquierda, right=derecha, top=arriba, bottom=abajo)
+
+
+def _aplicar_bordes_y_fuentes_encabezado(
+    ws,
+    *,
+    ultima_fila: int,
+    ultima_col: int,
+    inicios_grupo: set[int],
+) -> None:
+    ws.row_dimensions[1].height = 30
+    ws.row_dimensions[2].height = 22
+    for fila in range(1, ultima_fila + 1):
+        for col in range(1, ultima_col + 1):
+            celda = ws.cell(row=fila, column=col)
+            celda.border = _borde_celda(col, fila, ultima_col, inicios_grupo)
+            if fila == 1:
+                celda.font = FONT_TITULO_GRUPO_EXCEL
+                celda.alignment = Alignment(horizontal="center", vertical="center")
+            elif fila == 2:
+                celda.font = FONT_ENCABEZADO_COLUMNA_EXCEL
+                celda.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            elif fila >= 3:
+                if not (celda.font and celda.font.underline == "single" and celda.font.bold):
+                    celda.font = FONT_DATOS_EXCEL
+                celda.alignment = Alignment(vertical="top", wrap_text=True)
 
 
 def _valor_excel_celda(col: str, val):
@@ -75,7 +122,13 @@ def _valor_excel_celda(col: str, val):
             return int(float(str(val).strip()))
         except ValueError:
             return val
-    if col in (COL_AJUSTE_RAZONABLE, COL_ACTIVACION_RUTA):
+    if col == COL_TOTAL_BECA and not _es_nulo(val):
+        try:
+            n = float(str(val).strip().replace(",", ""))
+            return int(n) if n == int(n) else n
+        except ValueError:
+            return val
+    if col in (COL_ACTIVACION_RUTA, COL_ALERTA_PROPIA):
         if val is True or _es_valor_true(val):
             return True
         return None
@@ -124,37 +177,30 @@ def _escribir_hoja_consolidada(
     datos = formatear_dataframe_salida(alinear_dataframe_salida(df, columnas))
     col_idx = 1
     mapa_pos: dict[str, int] = {}
+    inicios_grupo: set[int] = set()
 
     for nombre_grupo, cols_grupo in grupos:
         if not cols_grupo:
             continue
         inicio = col_idx
+        inicios_grupo.add(inicio)
         for col in cols_grupo:
             if col not in columnas:
                 continue
             mapa_pos[col] = col_idx
-            ws.cell(row=2, column=col_idx, value=col)
+            ws.cell(row=2, column=col_idx, value=etiqueta_export_columna(col))
             col_idx += 1
         fin = col_idx - 1
         if inicio <= fin:
             ws.merge_cells(start_row=1, start_column=inicio, end_row=1, end_column=fin)
             celda_grupo = ws.cell(row=1, column=inicio, value=nombre_grupo)
             celda_grupo.alignment = Alignment(horizontal="center", vertical="center")
-            celda_grupo.font = Font(bold=True)
+            celda_grupo.font = FONT_TITULO_GRUPO_EXCEL
 
     ultima_fila = 2
     for r_idx, row in enumerate(datos.iter_rows(named=True), start=3):
         ultima_fila = r_idx
-        marcar_gris = _es_funcionario_call_center(row.get(COL_FUNCIONARIO_BECA))
         relleno_fila = _relleno_fila(row)
-        relleno_call_center = None
-        if marcar_gris:
-            codigo_cc = color_call_center_excel()
-            relleno_call_center = PatternFill(
-                start_color=codigo_cc,
-                end_color=codigo_cc,
-                fill_type="solid",
-            )
         id_key = normalizar_id(row.get("Identificación"))
         repetidas_est = materias_repetidas.get(id_key, set()) if id_key else set()
         for col, c_idx in mapa_pos.items():
@@ -165,14 +211,19 @@ def _escribir_hoja_consolidada(
             )
             if relleno_fila is not None:
                 celda.fill = relleno_fila
-            elif relleno_call_center is not None:
-                celda.fill = relleno_call_center
             if repetidas_est and col.startswith("Materia ") and _materia_es_repetida(
                 row.get(col), repetidas_est
             ):
                 celda.font = FONT_MATERIA_REPETIDA
 
-    _ajustar_hoja(ws, ultima_fila, len(mapa_pos), fila_encabezado=2)
+    ultima_col = len(mapa_pos)
+    _aplicar_bordes_y_fuentes_encabezado(
+        ws,
+        ultima_fila=ultima_fila,
+        ultima_col=ultima_col,
+        inicios_grupo=inicios_grupo,
+    )
+    _ajustar_hoja(ws, ultima_fila, ultima_col, fila_encabezado=2)
     return ultima_fila
 
 def _guardar_workbook_excel(wb: Workbook, ruta: Path) -> Path:
@@ -184,6 +235,7 @@ def _guardar_workbook_excel(wb: Workbook, ruta: Path) -> Path:
     destino.parent.mkdir(parents=True, exist_ok=True)
     try:
         wb.save(destino)
+        wb.close()
         return destino
     except PermissionError as exc:
         raise PermissionError(

@@ -11,15 +11,20 @@ from consolidado.config.settings import COLORES_PRIORIDAD_DEFAULT, guardar_confi
 from consolidado.core.prioridad import (
     BLOQUES_PUNTUACION_GUI,
     FORMULA_PUNTAJE_GUI,
-    METADATA_NIVELES,
-    METADATA_OTROS_COLORES,
+    METADATA_COLORES_FILA,
     aplicar_colores_prioridad,
+    colores_fila_para_gui,
     colores_prioridad_desde_cfg,
     normalizar_hex_excel,
-    niveles_prioridad_para_gui,
-    otros_colores_para_gui,
 )
-from consolidado.gui.theme import FONT_PEQUENA, FONT_SUBTITULO, FONT_TEXTO
+from consolidado.gui.theme import (
+    FONT_PEQUENA,
+    FONT_SUBTITULO,
+    FONT_TEXTO,
+    configurar_tabview,
+    estilo_boton_secundario,
+    normalizar_kwargs_boton,
+)
 
 
 def _chip_color(master, color_hex: str | None) -> ctk.CTkFrame:
@@ -168,9 +173,8 @@ class DialogoInfoPrioridad(ctk.CTkToplevel):
             barra,
             text="Restaurar colores",
             width=130,
-            fg_color="transparent",
-            border_width=1,
             command=self._restaurar_colores,
+            **estilo_boton_secundario(),
         ).pack(side="left")
         ctk.CTkButton(barra, text="Guardar colores", width=130, command=self._guardar).pack(
             side="right", padx=(8, 0)
@@ -222,8 +226,9 @@ class DialogoInfoPrioridad(ctk.CTkToplevel):
         ctk.CTkLabel(
             master,
             text=(
-                "Niveles: 5 ≥ 1000 · 4 ≥ 120 · 3 ≥ 70 · 2 ≥ 25 · 1 ≥ 1 · 0 = sin señal. "
-                "Ordene «Puntaje prioridad» de mayor a menor en el Excel."
+                "Niveles de puntaje total: 5 = activación de ruta · 4 = 10–19 · 3 = 7–9 · "
+                "2 = 4–6 · 1 = 1–3 · 0 = sin señal. El color de fila sigue las reglas por "
+                "componente (ver leyenda abajo)."
             ),
             font=FONT_PEQUENA,
             text_color=("gray45", "gray55"),
@@ -241,7 +246,9 @@ class DialogoInfoPrioridad(ctk.CTkToplevel):
         ).pack(anchor="w", pady=(8, 4))
         ctk.CTkLabel(
             master,
-            text="Precedencia: activación de ruta → alerta → nivel → Call Center.",
+            text="Precedencia: rojo → morado/naranja/reintegro/repitiendo (componente más alto) → "
+            "amarillo/verde (empates) → gris (solo beca 0/NO/Call Center sin otra señal). "
+            "El tono varía con el puntaje del componente.",
             font=FONT_PEQUENA,
             text_color=("gray45", "gray55"),
             anchor="w",
@@ -257,16 +264,7 @@ class DialogoInfoPrioridad(ctk.CTkToplevel):
         inner = ctk.CTkFrame(self.marco_leyenda, fg_color="transparent")
         inner.pack(fill="x", padx=12, pady=10)
 
-        for nivel in niveles_prioridad_para_gui():
-            fila = ctk.CTkFrame(inner, fg_color="transparent")
-            fila.pack(fill="x", pady=2)
-            _chip_color(fila, nivel.get("color")).pack(side="left", padx=(0, 8))
-            texto = f"Nivel {nivel['nivel']}: {nivel['nombre']} · Puntaje {nivel['rango']}"
-            if not nivel.get("color"):
-                texto += " · Sin color"
-            ctk.CTkLabel(fila, text=texto, font=FONT_PEQUENA, anchor="w").pack(side="left")
-
-        for item in otros_colores_para_gui():
+        for item in colores_fila_para_gui():
             fila = ctk.CTkFrame(inner, fg_color="transparent")
             fila.pack(fill="x", pady=2)
             _chip_color(fila, item.get("color")).pack(side="left", padx=(0, 8))
@@ -294,22 +292,7 @@ class DialogoInfoPrioridad(ctk.CTkToplevel):
         marco_edit = ctk.CTkFrame(master, fg_color="transparent")
         marco_edit.pack(fill="x")
 
-        for meta in METADATA_NIVELES:
-            clave = meta.get("clave")
-            if not clave:
-                continue
-            editor = FilaEditorColor(
-                marco_edit,
-                titulo=f"Nivel {meta['nivel']}: {meta['nombre']}",
-                subtitulo=f"Puntaje {meta['rango']}",
-                clave=clave,
-                color_inicial=colores[clave],
-                on_change=self._refrescar_leyenda_desde_editores,
-            )
-            editor.pack(fill="x", pady=4)
-            self._editores[clave] = editor
-
-        for meta in METADATA_OTROS_COLORES:
+        for meta in METADATA_COLORES_FILA:
             clave = meta["clave"]
             editor = FilaEditorColor(
                 marco_edit,

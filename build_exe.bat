@@ -10,7 +10,6 @@ if not exist ".venv\Scripts\python.exe" (
 call .venv\Scripts\activate.bat
 python -m pip install -q -U pip
 python -m pip install -q -r requirements.txt
-python -m pip install -q pyinstaller
 
 echo.
 echo Generando ejecutable...

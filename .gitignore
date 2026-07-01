@@ -14,7 +14,7 @@ dist-info/
 .coverage
 htmlcov/
 
-# Build del ejecutable
+# Build del ejecutable (no subir a GitHub; generar localmente con build_exe.bat)
 build/
 dist/
 

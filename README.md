@@ -15,6 +15,8 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+Incluye dependencias de ejecución y de empaquetado (`pyinstaller`). Para generar el `.exe` basta con tener el entorno activo y ejecutar `build_exe.bat`.
+
 ## Uso
 
 ```bat
@@ -41,6 +43,8 @@ build_exe.bat
 ```
 
 Salida en `dist\ConsolidadoHumanidades\`. Comparta esa carpeta completa (incluye `_internal`).
+
+**No suba `dist/` ni `build/` al repositorio:** están en `.gitignore`. Cada quien genera el `.exe` en su máquina con `build_exe.bat`.
 
 ## Estructura del código
 

@@ -7,6 +7,7 @@ import polars as pl
 
 from consolidado.config.settings import carpeta_excels, construir_columnas_salida
 from consolidado.core.alertas import _aplicar_alertas, _cargar_alertas_cfg
+from consolidado.core.alertas_propias import aplicar_alertas_propias
 from consolidado.core.archivos import (
     _limpiar_becas_programa_no_permitido,
     _tipo_libro_desde_nombre,
@@ -16,6 +17,8 @@ from consolidado.core.archivos import (
 from consolidado.core.columnas import alinear_dataframe_salida
 from consolidado.core.constants import (
     COLUMNAS_EXCLUIDAS_LISTADO,
+    COLUMNAS_PUNTAJE_COMPONENTES,
+    COL_REPITIENDO,
     _TIPOS_FUENTE_AUXILIARES,
     aplicar_config,
     columnas_materia_horario,
@@ -34,23 +37,24 @@ from consolidado.core.priorizado_enriquecido import (
     aplicar_priorizado_enriquecido,
 )
 from consolidado.core.prioridad import aplicar_prioridad
-from consolidado.core.priorizados import aplicar_priorizados_propios
-from consolidado.core.repetidas import _cargar_materias_repetidas_cfg
+from consolidado.core.priorizados import (
+    aplicar_priorizados_propios,
+    cargar_priorizados_internos_psi,
+    _unificar_priorizados_propios,
+)
+from consolidado.core.repetidas import _cargar_materias_repetidas_cfg, _cargar_repitiendo_cfg, aplicar_repitiendo
 from consolidado.core.normalizacion import normalizar_id
 from consolidado.storage.priorizados import cargar_priorizados_propios
+from consolidado.storage.alertas_propias import cargar_alertas_propias
 
 
-def ejecutar_consolidado(
+def generar_dataframe_consolidado(
     cfg: dict | None = None,
     *,
     base: Path | None = None,
     archivos: list[Path] | None = None,
-    salida: Path | None = None,
-    abrir: bool = True,
-    preguntar_sobrescribir: bool = False,
-    parent=None,
-) -> tuple[pl.DataFrame, Path]:
-    """Procesa fuentes guardadas (o rutas indicadas) y genera el Excel consolidado."""
+) -> tuple[pl.DataFrame, int]:
+    """Arma el consolidado en memoria (sin guardar Excel)."""
     base = base or PROJECT_ROOT
     cfg = aplicar_config(cfg, base)
 
@@ -105,14 +109,15 @@ def ejecutar_consolidado(
         if df_horarios.height > 0:
             horarios_partes.append(df_horarios)
 
-    materias_repetidas = _cargar_materias_repetidas_cfg(cfg, base)
-    alertas = _cargar_alertas_cfg(cfg, base)
-
     columnas_listado = construir_columnas_salida(cfg, 1)
     columnas_listado = [
         c
         for c in columnas_listado
-        if not es_columna_materia_horario(c) and c not in COLUMNAS_EXCLUIDAS_LISTADO
+        if not es_columna_materia_horario(c)
+        and c not in COLUMNAS_EXCLUIDAS_LISTADO
+        and c not in COLUMNAS_PUNTAJE_COMPONENTES
+        and c not in ("Puntaje prioridad", "Nivel prioridad", "Detalle prioridad")
+        and c != COL_REPITIENDO
     ]
     columnas_materias = columnas_materia_horario(max_materias)
     partes = [alinear_dataframe_salida(df, columnas_listado) for df in partes]
@@ -130,16 +135,39 @@ def ejecutar_consolidado(
     consolidado = aplicar_priorizado_enriquecido(
         consolidado, _cargar_priorizado_enriquecido_cfg(cfg, base)
     )
-    consolidado = _aplicar_alertas(consolidado, alertas)
+    consolidado = _aplicar_alertas(consolidado, _cargar_alertas_cfg(cfg, base))
+    consolidado = aplicar_alertas_propias(consolidado, cargar_alertas_propias(base))
 
-    propios = cargar_priorizados_propios(base)
+    propios = _unificar_priorizados_propios(
+        cargar_priorizados_propios(base),
+        cargar_priorizados_internos_psi(cfg, base),
+    )
     consolidado = aplicar_priorizados_propios(consolidado, propios)
+    consolidado = aplicar_repitiendo(consolidado, _cargar_repitiendo_cfg(cfg, base))
     ids_propios = {
         normalizar_id(p.get("identificacion", ""))
         for p in propios
         if normalizar_id(p.get("identificacion", ""))
     }
     consolidado = aplicar_prioridad(consolidado, ids_propios)
+    return consolidado, max_materias
+
+
+def ejecutar_consolidado(
+    cfg: dict | None = None,
+    *,
+    base: Path | None = None,
+    archivos: list[Path] | None = None,
+    salida: Path | None = None,
+    abrir: bool = True,
+    preguntar_sobrescribir: bool = False,
+    parent=None,
+) -> tuple[pl.DataFrame, Path]:
+    """Procesa fuentes guardadas (o rutas indicadas) y genera el Excel consolidado."""
+    base = base or PROJECT_ROOT
+    cfg = aplicar_config(cfg, base)
+    consolidado, max_materias = generar_dataframe_consolidado(cfg, base=base, archivos=archivos)
+    materias_repetidas = _cargar_materias_repetidas_cfg(cfg, base)
 
     if salida is not None:
         destino = salida
@@ -157,6 +185,5 @@ def ejecutar_consolidado(
         materias_repetidas=materias_repetidas,
     )
     if abrir:
-        abrir_archivo_en_sistema(destino)
+        abrir_archivo_en_sistema(destino, parent=parent)
     return consolidado, destino
-

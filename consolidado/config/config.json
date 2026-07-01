@@ -122,6 +122,18 @@
       "direccion residencia",
       "dir residencia"
     ],
+    "total_beca": [
+      "valor",
+      "valor total",
+      "monto total",
+      "monto",
+      "importe",
+      "vr total",
+      "vlr total",
+      "valor beca",
+      "vr beca",
+      "total beca"
+    ],
     "tipo_beca_credito": [
       "total",
       "nom concepto",

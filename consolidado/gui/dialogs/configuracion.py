@@ -11,7 +11,7 @@ import customtkinter as ctk
 import consolidado as merge
 from consolidado.config.settings import etiqueta_alias, guardar_config
 from consolidado.gui.dialogs.documento import DialogoDocumento
-from consolidado.gui.theme import FONT_SUBTITULO, FONT_TEXTO, configurar_treeview
+from consolidado.gui.theme import FONT_SUBTITULO, FONT_TEXTO, configurar_tabview, configurar_treeview
 
 
 class DialogoCambiarDatos(ctk.CTkToplevel):
@@ -40,6 +40,7 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
 
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
+        configurar_tabview(self.tabview)
 
         self._pestana_aliases()
         self._pestana_programas()

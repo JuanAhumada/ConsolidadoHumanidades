@@ -10,7 +10,7 @@ import customtkinter as ctk
 
 import consolidado as merge
 from consolidado.config.settings import carpeta_excels, guardar_config, guardar_excel_fuente
-from consolidado.gui.theme import FONT_TEXTO
+from consolidado.gui.theme import FONT_TEXTO, estilo_boton_secundario
 
 
 class DialogoDocumento(ctk.CTkToplevel):
@@ -56,14 +56,18 @@ class DialogoDocumento(ctk.CTkToplevel):
 
         fila_arch = ctk.CTkFrame(marco, fg_color="transparent")
         fila_arch.grid(row=2, column=0, columnspan=2, sticky="w", pady=8)
-        ctk.CTkButton(fila_arch, text="Seleccionar Excel…", command=self._elegir_excel).pack(
-            side="left"
-        )
+        ctk.CTkButton(
+            fila_arch,
+            text="Seleccionar Excel…",
+            command=self._elegir_excel,
+            **estilo_boton_secundario(),
+        ).pack(side="left")
         if self.modo_edicion:
             ctk.CTkButton(
                 fila_arch,
                 text="Recargar archivo guardado",
                 command=self._recargar_desde_guardado,
+                **estilo_boton_secundario(),
             ).pack(side="left", padx=8)
 
         self.lbl_archivo = ctk.CTkLabel(marco, text="", anchor="w", font=FONT_TEXTO)

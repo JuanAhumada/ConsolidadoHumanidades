@@ -43,7 +43,7 @@
       "titulo": "Archivo 4 — Becados y con crédito",
       "tipo": "bd3",
       "nombre_guardado": "bd3.xlsx",
-      "hoja": "ESTUDIANTES",
+      "hoja": "BECAS Y CRÉDITOS",
       "categoria": "rendimiento"
     },
     {
@@ -165,22 +165,14 @@
       "direccion residencia",
       "dir residencia"
     ],
+    "total_beca": [
+      "total"
+    ],
     "tipo_beca_credito": [
-      "total",
-      "nom concepto",
-      "tipo de beca o credito",
-      "tipo de beca o crédito",
-      "tipo beca credito",
-      "tipo beca",
-      "modalidad beca"
+      "nom concepto"
     ],
     "funcionario_beca": [
-      "funcionario",
-      "responsable",
-      "funcionario que tiene a cargo la beca",
-      "funcionario beca",
-      "encargado beca",
-      "funcionario"
+      "responsable"
     ]
   },
   "programas_permitidos": [
@@ -201,13 +193,14 @@
     "N.A."
   ],
   "colores_prioridad": {
-    "nivel_1": "FFF2CC",
-    "nivel_2": "C6EFCE",
-    "nivel_3": "BDD7EE",
-    "nivel_4": "F8CBAD",
-    "nivel_5": "FFC7CE",
-    "alerta": "FFEB9C",
-    "call_center": "D9D9D9"
+    "rojo": "E74C3C",
+    "morado": "9B59B6",
+    "naranja": "E67E22",
+    "reintegro": "2980B9",
+    "repitiendo": "5DADE2",
+    "amarillo": "F1C40F",
+    "verde": "2ECC71",
+    "gris": "BDC3C7"
   },
   "categorias_fuente": {
     "base": "Base",
@@ -233,29 +226,36 @@
       ]
     },
     {
-      "nombre": "Priorizados",
+      "nombre": "Puntaje",
       "columnas": [
-        "Priorizado",
-        "Motivo Prio.",
-        "Detalle GPrio.",
-        "Ajuste razonable",
-        "Fecha ajuste razonable",
-        "Activacion de ruta",
-        "Fecha activacion de ruta"
-      ]
-    },
-    {
-      "nombre": "Prioridad",
-      "columnas": [
+        "# Beca",
+        "# Priorizado",
+        "# Repitiendo",
+        "# Reintegro",
+        "Propio",
+        "Activacion",
         "Puntaje prioridad",
         "Nivel prioridad",
         "Detalle prioridad"
       ]
     },
     {
+      "nombre": "Priorizados",
+      "columnas": [
+        "Priorizado",
+        "Motivo Prio.",
+        "Detalle GPrio.",
+        "Adaptacion",
+        "Fecha adaptacion",
+        "Activacion de ruta",
+        "Fecha activacion de ruta"
+      ]
+    },
+    {
       "nombre": "Becas",
       "columnas": [
         "Tipo de beca o crédito",
+        "Total beca",
         "Funcionario que tiene a cargo la beca"
       ]
     },
@@ -265,7 +265,9 @@
         "Num Alerta inicial",
         "Tipo Alerta inicial",
         "Num Alerta final",
-        "Tipo Alerta final"
+        "Tipo Alerta final",
+        "Alerta Propia",
+        "Detalle Propio"
       ]
     }
   ],

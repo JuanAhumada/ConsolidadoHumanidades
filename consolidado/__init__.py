@@ -18,6 +18,10 @@ from consolidado.core.alertas import (
     _cargar_alertas_cfg,
     procesar_archivo_alertas,
 )
+from consolidado.core.alertas_propias import (
+    aplicar_alertas_propias,
+    obtener_lista_alertas_propias_vista,
+)
 from consolidado.core.archivos import (
     _tipo_libro_desde_nombre,
     preparar_archivo,
@@ -128,6 +132,7 @@ __all__ = [
     "abrir_archivo_en_sistema",
     "alinear_dataframe_salida",
     "aplicar_config",
+    "aplicar_alertas_propias",
     "aplicar_priorizados_propios",
     "buscar_estudiantes_en_fuentes",
     "cargar_config",
@@ -159,6 +164,7 @@ __all__ = [
     "normalizar_encabezado",
     "normalizar_id",
     "normalizar_telefono_celda",
+    "obtener_lista_alertas_propias_vista",
     "obtener_lista_priorizados_vista",
     "preparar_archivo",
     "procesar_archivo_alertas",

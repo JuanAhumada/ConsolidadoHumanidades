@@ -439,6 +439,13 @@ def _elegir_hoja_datos(ruta: Path, *, tipo: str | None = None) -> str:
         candidata = next(
             (sn for sn in nombres if sn.strip().upper() == "ESTUDIANTES"),
             None,
+        ) or next(
+            (
+                sn
+                for sn in nombres
+                if "becas" in sn.lower() and "credito" in sn.lower().replace("é", "e")
+            ),
+            None,
         ) or _hoja_por_subcadena(nombres, "estudiantes")
     elif tipo == "bd_rep":
         candidata = _hoja_por_subcadena(nombres, "hoja") or (nombres[0] if nombres else None)

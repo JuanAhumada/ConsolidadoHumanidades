@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 import time
@@ -28,20 +27,35 @@ def _longitud_visible_celda(valor) -> int:
     texto = str(valor).replace("\r\n", "\n")
     return max((len(linea) for linea in texto.split("\n")), default=0)
 
-def abrir_archivo_en_sistema(ruta: Path) -> None:
+def abrir_archivo_en_sistema(ruta: Path, *, parent: tk.Misc | None = None) -> None:
     """Abre el archivo generado con la aplicación predeterminada (Excel en Windows)."""
     destino = ruta.resolve()
     if not destino.is_file():
         return
-    try:
-        if sys.platform == "win32":
-            os.startfile(str(destino))  # type: ignore[attr-defined]
-        elif sys.platform == "darwin":
-            subprocess.run(["open", str(destino)], check=False)
-        else:
-            subprocess.run(["xdg-open", str(destino)], check=False)
-    except OSError as exc:
-        print(f"No se pudo abrir automáticamente el archivo: {exc}")
+
+    def _abrir() -> None:
+        try:
+            if sys.platform == "win32":
+                # os.startfile puede provocar fatal error PyEval_RestoreThread
+                # al llamarse desde callbacks de Tkinter en Python 3.13+.
+                subprocess.Popen(
+                    ["cmd", "/c", "start", "", str(destino)],
+                    close_fds=True,
+                )
+            elif sys.platform == "darwin":
+                subprocess.run(["open", str(destino)], check=False)
+            else:
+                subprocess.run(["xdg-open", str(destino)], check=False)
+        except OSError as exc:
+            print(f"No se pudo abrir automáticamente el archivo: {exc}")
+
+    if parent is not None:
+        try:
+            parent.after(1, _abrir)
+            return
+        except tk.TclError:
+            pass
+    _abrir()
 
 def _pedir_nueva_ruta_excel(etiqueta: str, ruta_fallida: Path) -> Path | None:
     root = tk.Tk()

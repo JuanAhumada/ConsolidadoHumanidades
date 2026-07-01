@@ -9,8 +9,10 @@ from consolidado.core.columnas import (
 )
 from consolidado.core.constants import (
     COL_DATOS_CONTACTO,
+    COL_FUNCIONARIO_BECA,
     COL_NOMBRE,
     COL_TELEFONO_CELULAR,
+    COL_TOTAL_BECA,
     SALIDA_COLUMNAS_LISTADO,
     columnas_materia_horario,
 )
@@ -26,11 +28,13 @@ from consolidado.core.normalizacion import (
     _primero_no_vacio,
     _telefono_presente,
     combinar_valores,
+    combinar_funcionario_beca,
     normalizar_encabezado,
     normalizar_id,
     normalizar_telefono_celda,
     programa_es_permitido,
     programa_esta_excluido,
+    sumar_montos_beca,
 )
 def _columna_programa(df: pl.DataFrame) -> str | None:
     nr = _mapa_norm_a_real(list(df.columns))
@@ -165,6 +169,10 @@ def _fusionar_bloques_por_id(
                 merged = _combinar_nombre(grp[col].to_list())
             elif col in COL_DATOS_CONTACTO:
                 merged = _combinar_contacto(grp, col)
+            elif col == COL_TOTAL_BECA:
+                merged = sumar_montos_beca(grp[col].to_list())
+            elif col == COL_FUNCIONARIO_BECA:
+                merged = combinar_funcionario_beca(grp[col].to_list())
             else:
                 vals = grp[col].to_list()
                 if col == COL_TELEFONO_CELULAR:

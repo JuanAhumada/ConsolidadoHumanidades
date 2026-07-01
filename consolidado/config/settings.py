@@ -30,10 +30,19 @@ COLUMNAS_DATOS = [
 COLUMNAS_PRIORIZADO = ["Priorizado", "Motivo Prio.", "Detalle GPrio."]
 
 COLUMNAS_PRIORIZADO_ENRIQUECIDO = [
-    "Ajuste razonable",
-    "Fecha ajuste razonable",
+    "Adaptacion",
+    "Fecha adaptacion",
     "Activacion de ruta",
     "Fecha activacion de ruta",
+]
+
+COLUMNAS_PUNTAJE_COMPONENTES = [
+    "Ptje Beca",
+    "Ptje Priorizado",
+    "Ptje Repitiendo",
+    "Ptje Reintegro",
+    "Ptje Propio",
+    "Ptje Activacion",
 ]
 
 COLUMNAS_PRIORIDAD = [
@@ -42,8 +51,11 @@ COLUMNAS_PRIORIDAD = [
     "Detalle prioridad",
 ]
 
+COLUMNAS_REPITIENDO = ["Repitiendo"]
+
 COLUMNAS_BECAS = [
     "Tipo de beca o crédito",
+    "Total beca",
     "Funcionario que tiene a cargo la beca",
 ]
 
@@ -53,6 +65,20 @@ COLUMNAS_ALERTAS = [
     "Num Alerta final",
     "Tipo Alerta final",
 ]
+
+COLUMNAS_ALERTAS_PROPIAS = [
+    "Alerta Propia",
+    "Detalle Propio",
+]
+
+ETIQUETAS_EXPORT_COLUMNAS: dict[str, str] = {
+    "Ptje Beca": "Beca",
+    "Ptje Priorizado": "Priorizado",
+    "Ptje Repitiendo": "Repitiendo",
+    "Ptje Reintegro": "Reintegro",
+    "Ptje Propio": "Propio",
+    "Ptje Activacion": "Activacion",
+}
 
 CATEGORIAS_FUENTE_DEFAULT: dict[str, str] = {
     "base": "Base",
@@ -66,6 +92,11 @@ ORDEN_CATEGORIAS_FUENTE = ["base", "priorizado", "rendimiento", "alertas"]
 ARCHIVOS_FUENTE_REQUERIDOS = {"bd1", "bd12", "bd2", "bd3"}
 
 _COLUMNAS_ALERTAS_LEGACY = frozenset({"Num Alertas", "Tipos de Alerta"})
+
+_MIGRACION_COLUMNAS_BECAS = {
+    "Total": "Total beca",
+    "Funcionario": "Funcionario que tiene a cargo la beca",
+}
 
 _MIGRACION_IDS_ARCHIVO: dict[str, str] = {
     "bd_alertas_com": "bd_alertas_com_1",
@@ -131,8 +162,20 @@ ALIASES_DEFAULT: dict[str, list[str]] = {
         "direccion residencia",
         "dir residencia",
     ],
-    "tipo_beca_credito": [
+    "total_beca": [
         "total",
+        "valor",
+        "valor total",
+        "monto total",
+        "monto",
+        "importe",
+        "vr total",
+        "vlr total",
+        "valor beca",
+        "vr beca",
+        "total beca",
+    ],
+    "tipo_beca_credito": [
         "nom concepto",
         "tipo de beca o credito",
         "tipo de beca o crédito",
@@ -141,12 +184,11 @@ ALIASES_DEFAULT: dict[str, list[str]] = {
         "modalidad beca",
     ],
     "funcionario_beca": [
-        "funcionario",
         "responsable",
+        "funcionario",
         "funcionario que tiene a cargo la beca",
         "funcionario beca",
         "encargado beca",
-        "funcionario",
     ],
 }
 
@@ -171,13 +213,26 @@ COLUMNAS_MOTIVO_PRIO_DEFAULT = [
 ]
 
 COLORES_PRIORIDAD_DEFAULT = {
-    "nivel_1": "FFF2CC",
-    "nivel_2": "C6EFCE",
-    "nivel_3": "BDD7EE",
-    "nivel_4": "F8CBAD",
-    "nivel_5": "FFC7CE",
-    "alerta": "FFEB9C",
-    "call_center": "D9D9D9",
+    "rojo": "E74C3C",
+    "morado": "9B59B6",
+    "naranja": "E67E22",
+    "reintegro": "2980B9",
+    "repitiendo": "5DADE2",
+    "amarillo": "F1C40F",
+    "verde": "2ECC71",
+    "gris": "BDC3C7",
+}
+
+# Compatibilidad con configuraciones guardadas con claves antiguas.
+COLORES_PRIORIDAD_LEGACY = {
+    "nivel_5": "rojo",
+    "nivel_4": "naranja",
+    "nivel_3": "reintegro",
+    "nivel_2": "amarillo",
+    "nivel_1": "verde",
+    "alerta": "amarillo",
+    "call_center": "gris",
+    "azul": "reintegro",
 }
 
 ARCHIVOS_FUENTE_DEFAULT = [
@@ -224,7 +279,7 @@ ARCHIVOS_FUENTE_DEFAULT = [
         "titulo": "Becados y con crédito",
         "tipo": "bd3",
         "nombre_guardado": "bd3.xlsx",
-        "hoja": "ESTUDIANTES",
+        "hoja": "BECAS Y CRÉDITOS",
     },
     {
         "id": "bd_rep",
@@ -286,12 +341,18 @@ def config_default(base: Path | None = None) -> dict[str, Any]:
         "grupos_salida": [
             {"nombre": "Datos", "columnas": list(COLUMNAS_DATOS)},
             {
+                "nombre": "Puntaje",
+                "columnas": list(COLUMNAS_PUNTAJE_COMPONENTES) + list(COLUMNAS_PRIORIDAD),
+            },
+            {
                 "nombre": "Priorizados",
                 "columnas": list(COLUMNAS_PRIORIZADO) + list(COLUMNAS_PRIORIZADO_ENRIQUECIDO),
             },
-            {"nombre": "Prioridad", "columnas": list(COLUMNAS_PRIORIDAD)},
             {"nombre": "Becas", "columnas": list(COLUMNAS_BECAS)},
-            {"nombre": "Alertas", "columnas": list(COLUMNAS_ALERTAS)},
+            {
+                "nombre": "Alertas",
+                "columnas": list(COLUMNAS_ALERTAS) + list(COLUMNAS_ALERTAS_PROPIAS),
+            },
         ],
         "grupo_materias": "Materias",
         "interfaz": {"modo_apariencia": "system"},
@@ -373,7 +434,7 @@ def _fusionar_grupos_salida(
             continue
         if nombre in por_nombre:
             existente = por_nombre[nombre]
-            if nombre in ("Alertas", "Priorizados", "Prioridad"):
+            if nombre in ("Alertas", "Priorizados", "Prioridad", "Puntaje", "Becas"):
                 existente["columnas"] = list(grupo.get("columnas", []))
             else:
                 cols = [c for c in existente.get("columnas", []) if c not in _COLUMNAS_ALERTAS_LEGACY]
@@ -473,6 +534,9 @@ def construir_columnas_salida(cfg: dict[str, Any], num_materias: int = 1) -> lis
         for c in columnas:
             if c not in cols:
                 cols.append(c)
+    for c in COLUMNAS_REPITIENDO:
+        if c not in cols:
+            cols.append(c)
     for i in range(1, max(num_materias, 1) + 1):
         for c in (f"Materia {i}", f"Horario {i}", f"Profesor {i}"):
             if c not in cols:
@@ -483,6 +547,9 @@ def construir_columnas_salida(cfg: dict[str, Any], num_materias: int = 1) -> lis
 def construir_grupos_encabezado(cfg: dict[str, Any], num_materias: int) -> list[tuple[str, list[str]]]:
     grupos = columnas_grupos_fijos(cfg)
     materias: list[str] = []
+    for c in COLUMNAS_REPITIENDO:
+        if c not in materias:
+            materias.append(c)
     for i in range(1, max(num_materias, 1) + 1):
         materias.extend([f"Materia {i}", f"Horario {i}", f"Profesor {i}"])
     if materias:
@@ -505,9 +572,14 @@ ALIAS_ETIQUETAS: dict[str, str] = {
     "lugar_nacimiento": "Lugar de nacimiento",
     "lugar_residencia": "Lugar de residencia",
     "direccion_residencia": "Dirección residencia",
+    "total_beca": "Total beca",
     "tipo_beca_credito": "Tipo de beca o crédito",
     "funcionario_beca": "Funcionario beca",
 }
+
+
+def etiqueta_export_columna(nombre_columna: str) -> str:
+    return ETIQUETAS_EXPORT_COLUMNAS.get(nombre_columna, nombre_columna)
 
 
 def etiqueta_alias(canon: str) -> str:

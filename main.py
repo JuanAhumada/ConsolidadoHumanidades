@@ -1,5 +1,3 @@
-"""Punto de entrada único del consolidado de estudiantes."""
-
 from __future__ import annotations
 
 import sys

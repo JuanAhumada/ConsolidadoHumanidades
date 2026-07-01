@@ -92,10 +92,27 @@ def _expr_telefono_celular(df: pl.DataFrame, m: dict[str, str], nr: dict[str, st
         )
     return pl.lit(None).alias(COL_TELEFONO_CELULAR)
 
-def _expr_tipo_beca(df: pl.DataFrame, m: dict[str, str], nr: dict[str, str]) -> pl.Expr:
-    # BD 3 hoja ESTUDIANTES: columna TOTAL
+def _expr_total_beca(df: pl.DataFrame, m: dict[str, str], nr: dict[str, str]) -> pl.Expr:
+    """Valor monetario de la beca (columna TOTAL en hoja BECAS Y CRÉDITOS)."""
     if "total" in nr:
-        return pl.col(nr["total"]).cast(pl.Utf8).alias("Tipo de beca o crédito")
+        return pl.col(nr["total"]).alias("Total beca")
+    if not _ALIASES_RUNTIME:
+        aplicar_config()
+    col = _buscar_columna_por_aliases(list(df.columns), _ALIASES_RUNTIME.get("total_beca", []))
+    if col:
+        return pl.col(col).alias("Total beca")
+    return pl.lit(None).alias("Total beca")
+
+
+def _expr_funcionario_beca(df: pl.DataFrame, m: dict[str, str], nr: dict[str, str]) -> pl.Expr:
+    if "responsable" in nr:
+        return pl.col(nr["responsable"]).alias("Funcionario que tiene a cargo la beca")
+    if "funcionario_beca" in m:
+        return pl.col(m["funcionario_beca"]).alias("Funcionario que tiene a cargo la beca")
+    return pl.lit(None).alias("Funcionario que tiene a cargo la beca")
+
+
+def _expr_tipo_beca(df: pl.DataFrame, m: dict[str, str], nr: dict[str, str]) -> pl.Expr:
     if "nom concepto" in nr:
         nom = pl.col(nr["nom concepto"]).cast(pl.Utf8)
         if "tipo" in nr:
@@ -152,13 +169,14 @@ def renombrar_y_filtrar(
         ("reintegros", "Reintegros"),
         ("lugar_nacimiento", "Lugar de nacimiento"),
         ("lugar_residencia", "Lugar de residencia"),
-        ("funcionario_beca", "Funcionario que tiene a cargo la beca"),
     ]:
         exprs.append(
             pl.col(m[canon]).alias(salida) if canon in m else pl.lit(None).alias(salida)
         )
 
+    exprs.append(_expr_funcionario_beca(df, m, nr))
     exprs.append(_expr_tipo_beca(df, m, nr))
+    exprs.append(_expr_total_beca(df, m, nr))
     for col_prio in COLUMNAS_PRIORIZADO:
         exprs.append(pl.lit(None).alias(col_prio))
 

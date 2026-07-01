@@ -42,6 +42,7 @@ _CANON_A_SALIDA: dict[str, str] = {
     "lugar_nacimiento": "Lugar de nacimiento",
     "lugar_residencia": "Lugar de residencia",
     "tipo_beca_credito": "Tipo de beca o crédito",
+    "total_beca": "Total beca",
     "funcionario_beca": "Funcionario que tiene a cargo la beca",
 }
 
@@ -207,10 +208,11 @@ def obtener_vista_previa_slot(slot: dict, cfg: dict, base: Path) -> tuple[list[d
         return _mapa_alertas(df, slot.get("fase", "inicial")), None
     if tipo == "bd_rep":
         return [
+            _fila_mapa("Repitiendo", "EST_MATRICULA (máximo por estudiante)", "0–7+"),
             _fila_mapa(
-                "(sin columnas en consolidado)",
+                "(marcado visual)",
                 "Identificación + materia repetida",
-                "Marca en negrita/subrayado las materias repetidas",
-            )
+                "Negrita/subrayado en materias repetidas",
+            ),
         ], None
     return [], f"Tipo de archivo no soportado para vista previa: {tipo}"
