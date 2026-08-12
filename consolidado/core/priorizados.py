@@ -27,6 +27,7 @@ from consolidado.core.normalizacion import (
     normalizar_encabezado,
     normalizar_id,
 )
+from consolidado.storage.contactados import cargar_ids_contactados
 from consolidado.storage.priorizados import cargar_priorizados_propios
 
 _ORIGEN_PRIORIZADO_INTERNO = "Priorizado interno (Psicología)"
@@ -353,6 +354,7 @@ def obtener_lista_priorizados_vista(cfg: dict, base: Path) -> list[dict]:
     vista: list[dict] = []
     ids_vista: set[str] = set()
     id_to_name = _mapa_nombres_estudiantes(cfg, base)
+    ids_contactados = cargar_ids_contactados(base)
     carpeta = carpeta_excels(cfg, base)
     slot_bd2 = next((s for s in cfg.get("archivos_fuente", []) if s.get("tipo") == "bd2"), None)
 
@@ -427,5 +429,7 @@ def obtener_lista_priorizados_vista(cfg: dict, base: Path) -> list[dict]:
             key = normalizar_id(v.get("identificacion", ""))
             v["nombre"] = id_to_name.get(key, "")
         v.setdefault("es_propio", v.get("origen") == "Priorizado propio")
+        key = normalizar_id(v.get("identificacion", ""))
+        v["contactado"] = key in ids_contactados
     return vista
 

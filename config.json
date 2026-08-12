@@ -228,12 +228,12 @@
     {
       "nombre": "Puntaje",
       "columnas": [
-        "# Beca",
-        "# Priorizado",
-        "# Repitiendo",
-        "# Reintegro",
-        "Propio",
-        "Activacion",
+        "Ptje Beca",
+        "Ptje Priorizado",
+        "Ptje Repitiendo",
+        "Ptje Reintegro",
+        "Ptje Propio",
+        "Ptje Activacion",
         "Puntaje prioridad",
         "Nivel prioridad",
         "Detalle prioridad"

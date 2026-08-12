@@ -1,4 +1,4 @@
-"""Ventana principal de la interfaz gráfica (CustomTkinter)."""
+"""Ventana principal — interfaz tipo aplicación web (CustomTkinter)."""
 
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from consolidado.config.settings import (
     guardar_excel_fuente,
     slot_es_requerido,
 )
-from consolidado.core.excel_io import elegir_guardar_consolidado
 from consolidado.gui.dialogs import (
     DialogoAlertaPropia,
     DialogoCambiarDatos,
@@ -25,18 +24,23 @@ from consolidado.gui.dialogs import (
     DialogoDocumento,
     DialogoInfoPrioridad,
     DialogoPriorizadoPropio,
+    DialogoVersiones,
     DialogoVistaPrevia,
 )
 from consolidado.gui.icons import icono
 from consolidado.gui.theme import (
     COLOR_ACENTO,
+    COLOR_PAGE,
+    COLOR_TEXTO,
+    COLOR_TEXTO_MUTED,
+    COLOR_TOPBAR,
     FONT_PEQUENA,
     FONT_SUBTITULO,
     FONT_TEXTO,
-    FONT_TITULO,
     alternar_modo_apariencia,
     configurar_apariencia,
     configurar_treeview,
+    estilo_boton_primario,
     estilo_boton_secundario,
     estilo_seccion,
     estilo_tarjeta_paso,
@@ -45,11 +49,12 @@ from consolidado.gui.theme import (
 from consolidado.gui.widgets import (
     BarraEstado,
     BotonIconoTexto,
-    ContenidoRetractil,
+    EncabezadoPagina,
     IconButton,
     MarcoDesplazable,
     PanelPasos,
     Seccion,
+    Sidebar,
     TablaAlertasPropias,
     TablaPriorizados,
     fila_archivo,
@@ -57,7 +62,10 @@ from consolidado.gui.widgets import (
 )
 from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.alertas_propias import quitar_alerta_propia
+from consolidado.storage.contactados import marcar_contactado
+from consolidado.storage.db import ultima_version
 from consolidado.storage.priorizados import quitar_priorizado_propio
+from consolidado.storage.versiones import asegurar_semilla_si_vacia
 
 
 class AppConsolidado(ctk.CTk):
@@ -69,266 +77,419 @@ class AppConsolidado(ctk.CTk):
         configurar_apariencia(modo)
         merge.aplicar_config(self.cfg, self.base)
         self._icon_refs: list[ctk.CTkImage] = []
+        self._paginas: dict[str, ctk.CTkFrame] = {}
+        self._pagina_activa: str | None = None
 
         self.title("Consolidado de Humanidades")
-        self.geometry("980x800")
-        self.minsize(760, 640)
+        self.geometry("1180x780")
+        self.minsize(960, 640)
+        self.configure(fg_color=COLOR_PAGE)
 
         self._construir_ui()
         self._actualizar_lista_archivos()
         self._actualizar_tabla_priorizados()
         self._actualizar_tabla_alertas()
         self._actualizar_ruta_salida()
+        self.sidebar.activar("archivos")
+        self._mostrar_pagina("archivos")
+        self.after(200, self._sembrar_bd_si_hace_falta)
 
-    def _ico(self, nombre: str, size: int = 20) -> ctk.CTkImage:
-        img = icono(nombre, size=size)
+    def _ico(self, nombre: str, size: int = 20, *, color: str | None = None) -> ctk.CTkImage:
+        img = icono(nombre, size=size, color=color)
         self._icon_refs.append(img)
         return img
 
     def _construir_ui(self) -> None:
-        contenedor = ctk.CTkFrame(self, fg_color="transparent")
-        contenedor.pack(fill="both", expand=True, padx=16, pady=16)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-        encabezado = ctk.CTkFrame(contenedor, fg_color="transparent")
-        encabezado.pack(fill="x", pady=(0, 8))
+        self.sidebar = Sidebar(self)
+        self.sidebar.grid(row=0, column=0, sticky="nsw")
 
-        titulos = ctk.CTkFrame(encabezado, fg_color="transparent")
-        titulos.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(
-            titulos,
-            text="Consolidado de Humanidades",
-            font=FONT_TITULO,
-            anchor="w",
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            titulos,
-            text="Una sola herramienta para unir matrículas, priorizados, becas y alertas en un Excel final.",
-            font=FONT_TEXTO,
-            text_color=("gray45", "gray60"),
-            anchor="w",
-            wraplength=520,
-            justify="left",
-        ).pack(anchor="w", pady=(2, 0))
-
-        acciones = ctk.CTkFrame(encabezado, fg_color="transparent")
-        acciones.pack(side="right")
+        self.sidebar.configurar_navegacion(
+            [
+                ("archivos", "Archivos", self._ico("folder", color="#e2e8f0")),
+                ("priorizados", "Priorizados", self._ico("add_user", color="#e2e8f0")),
+                ("alertas", "Alertas", self._ico("info", color="#e2e8f0")),
+                ("versiones", "Versiones", self._ico("save", color="#e2e8f0")),
+            ],
+            self._navegar,
+        )
 
         BotonIconoTexto(
-            acciones,
-            icon=self._ico("save"),
-            texto="Ruta de salida",
-            fg_color="transparent",
-            border_width=1,
-            command=self._elegir_ruta_salida,
-        ).pack(side="left", padx=(0, 6))
+            self.sidebar.pie,
+            icon=self._ico("generate", size=18, color="#ffffff"),
+            texto="Generar",
+            height=42,
+            command=self.generar,
+            **estilo_boton_primario(),
+        ).pack(fill="x", pady=(0, 8))
 
+        fila_pie = ctk.CTkFrame(self.sidebar.pie, fg_color="transparent")
+        fila_pie.pack(fill="x")
         self.btn_tema = IconButton(
-            acciones,
-            icon=self._ico_tema(),
+            fila_pie,
+            icon=self._ico_tema_sidebar(),
             tooltip="Modo claro / oscuro",
+            fg_color=("#1e293b", "#0f172a"),
+            hover_color=("#334155", "#1e293b"),
             command=self._toggle_tema,
         )
-        self.btn_tema.pack(side="left", padx=(0, 8))
+        self.btn_tema.pack(side="left")
+        BotonIconoTexto(
+            fila_pie,
+            icon=self._ico("settings", size=16, color="#cbd5e1"),
+            texto="Config",
+            height=36,
+            command=self.cambiar_datos,
+            fg_color=("#1e293b", "#0f172a"),
+            hover_color=("#334155", "#1e293b"),
+            text_color="#cbd5e1",
+            border_width=0,
+            corner_radius=10,
+        ).pack(side="right")
 
-        self.btn_generar = BotonIconoTexto(
-            acciones,
-            icon=self._ico("generate", size=22),
-            texto="Generar consolidado",
-            height=40,
-            width=200,
-            font=("Segoe UI", 14, "bold"),
-            fg_color=COLOR_ACENTO,
-            hover_color="#36719f",
-            command=self.generar,
+        self.area = ctk.CTkFrame(self, fg_color=COLOR_PAGE, corner_radius=0)
+        self.area.grid(row=0, column=1, sticky="nsew")
+        self.area.grid_rowconfigure(1, weight=1)
+        self.area.grid_columnconfigure(0, weight=1)
+
+        topbar = ctk.CTkFrame(
+            self.area,
+            fg_color=COLOR_TOPBAR,
+            corner_radius=0,
+            border_width=0,
+            height=64,
         )
-        self.btn_generar.pack(side="left")
+        topbar.grid(row=0, column=0, sticky="ew")
+        topbar.grid_propagate(False)
+        topbar.grid_columnconfigure(0, weight=1)
 
-        self.panel_pasos = PanelPasos(contenedor)
-        self.panel_pasos.pack(fill="x", pady=(0, 10))
+        self.lbl_ruta_top = ctk.CTkLabel(
+            topbar,
+            text="",
+            font=FONT_PEQUENA,
+            text_color=COLOR_TEXTO_MUTED,
+            anchor="w",
+        )
+        self.lbl_ruta_top.grid(row=0, column=0, sticky="w", padx=24, pady=18)
 
-        self.barra_estado = BarraEstado(contenedor)
-        self.barra_estado.pack(fill="x", pady=(0, 10))
+        acciones_top = ctk.CTkFrame(topbar, fg_color="transparent")
+        acciones_top.grid(row=0, column=1, sticky="e", padx=20, pady=12)
+        BotonIconoTexto(
+            acciones_top,
+            icon=self._ico("add_user"),
+            texto="Consultar estudiante",
+            command=self._abrir_consulta_estudiante,
+            **estilo_boton_secundario(),
+        ).pack(side="left", padx=(0, 8))
+        BotonIconoTexto(
+            acciones_top,
+            icon=self._ico("save"),
+            texto="Carpeta salida",
+            command=self._elegir_ruta_salida,
+            **estilo_boton_secundario(),
+        ).pack(side="left")
 
-        self.marco_principal = ctk.CTkFrame(contenedor, fg_color="transparent")
-        self.marco_principal.pack(fill="both", expand=True, pady=(0, 8))
+        self.contenedor_paginas = ctk.CTkFrame(self.area, fg_color="transparent")
+        self.contenedor_paginas.grid(row=1, column=0, sticky="nsew", padx=24, pady=20)
+
+        self._construir_pagina_archivos()
+        self._construir_pagina_priorizados()
+        self._construir_pagina_alertas()
+        self._construir_pagina_versiones()
+
+    def _construir_pagina_archivos(self) -> None:
+        pagina = ctk.CTkFrame(self.contenedor_paginas, fg_color="transparent")
+        self._paginas["archivos"] = pagina
+
+        EncabezadoPagina(
+            pagina,
+            titulo="Archivos fuente",
+            subtitulo=(
+                "Cargue los Excels por categoría. Cada generación une matrículas, "
+                "priorizados, becas y alertas en un consolidado versionado."
+            ),
+        ).pack(fill="x", pady=(0, 14))
+
+        self.panel_pasos = PanelPasos(pagina)
+        self.panel_pasos.pack(fill="x", pady=(0, 12))
+
+        self.barra_estado = BarraEstado(pagina)
+        self.barra_estado.pack(fill="x", pady=(0, 14))
+
+        scroll = MarcoDesplazable(pagina)
+        scroll.pack(fill="both", expand=True)
+        self.scroll_fuentes = scroll
 
         self.marco_fuentes = Seccion(
-            self.marco_principal,
-            titulo="Paso 1 · Archivos fuente",
+            scroll.inner,
+            titulo="Excels por categoría",
             ayuda=(
-                "Cada Excel se guarda por separado en datos/entrada. "
                 "Use «Cargar» la primera vez y «Cambiar» cuando reciba una versión nueva. "
                 "Los marcados como obligatorio deben estar listos antes de generar."
             ),
         )
-        self.marco_fuentes.pack(fill="x", pady=(0, 8))
+        self.marco_fuentes.pack(fill="x", pady=(0, 12))
 
-        self.retractil_fuentes = ContenidoRetractil(
-            self.marco_fuentes.body,
-            texto_abierto="Ocultar lista de archivos",
-            texto_cerrado="Mostrar lista de archivos",
-            icono_abierto=self._ico("folder_open"),
-            icono_cerrado=self._ico("folder"),
-        )
-        self.retractil_fuentes.pack(fill="x")
-
-        self.scroll_fuentes = MarcoDesplazable(self.retractil_fuentes.contenido, altura=340)
-        self.scroll_fuentes.pack(fill="x", pady=(0, 4))
-
-        self.marco_filas_fuentes = ctk.CTkFrame(self.scroll_fuentes.inner, fg_color="transparent")
+        self.marco_filas_fuentes = ctk.CTkFrame(self.marco_fuentes.body, fg_color="transparent")
         self.marco_filas_fuentes.pack(fill="x")
-        self.marco_filas_fuentes.grid_columnconfigure(1, weight=1)
 
         self.marco_docs = Seccion(
-            self.retractil_fuentes.contenido,
+            scroll.inner,
             titulo="Documentos adicionales",
-            ayuda="Opcional: otras hojas Excel que se añaden como columnas extra al consolidado.",
+            ayuda="Opcional: otras hojas Excel que se añaden como columnas extra.",
         )
-        self.marco_docs.pack(fill="x", pady=(8, 0))
+        self.marco_docs.pack(fill="x", pady=(0, 8))
         self.marco_filas_docs = ctk.CTkFrame(self.marco_docs.body, fg_color="transparent")
         self.marco_filas_docs.pack(fill="x")
 
-        barra_docs = ctk.CTkFrame(self.marco_docs.body, fg_color="transparent")
-        barra_docs.pack(fill="x", pady=(8, 0))
         BotonIconoTexto(
-            barra_docs,
+            self.marco_docs.body,
             icon=self._ico("add"),
             texto="Añadir documento",
             command=self.anadir_documento,
-        ).pack(side="left")
+            **estilo_boton_secundario(),
+        ).pack(anchor="w", pady=(10, 0))
 
-        self.marco_prio = Seccion(
-            self.marco_principal,
-            titulo="Paso 2 · Priorizados",
-            ayuda=(
-                "Vista de todos los estudiantes marcados como priorizados. "
-                "Algunos vienen de los Excels (grupos, Psicología internos); "
-                "otros los puede añadir usted con «Añadir priorizado propio»."
+        self.lbl_resumen = ctk.CTkLabel(
+            scroll.inner,
+            text="",
+            font=FONT_PEQUENA,
+            text_color=COLOR_TEXTO_MUTED,
+            anchor="w",
+        )
+        self.lbl_resumen.pack(anchor="w", pady=(8, 4))
+
+    def _construir_pagina_priorizados(self) -> None:
+        pagina = ctk.CTkFrame(self.contenedor_paginas, fg_color="transparent")
+        self._paginas["priorizados"] = pagina
+        self._vista_priorizados = "primer_plano"
+        self._filas_priorizados: list[dict] = []
+
+        cab = EncabezadoPagina(
+            pagina,
+            titulo="Priorizados",
+            subtitulo=(
+                "Marque «Contactado» para sacarlo del primer plano. "
+                "En la vista completa siguen visibles todos."
             ),
         )
-        self.marco_prio.pack(fill="x", pady=(0, 8))
-
-        self.retractil_prio = ContenidoRetractil(
-            self.marco_prio.body,
-            texto_abierto="Ocultar priorizados",
-            texto_cerrado="Mostrar priorizados",
-            icono_abierto=self._ico("folder_open"),
-            icono_cerrado=self._ico("folder"),
-            expandido=False,
-        )
-        self.retractil_prio.pack(fill="x")
-
-        barra_prio = ctk.CTkFrame(self.retractil_prio.contenido, fg_color="transparent")
-        barra_prio.pack(fill="x", pady=(0, 6))
+        cab.pack(fill="x", pady=(0, 14))
         BotonIconoTexto(
-            barra_prio,
+            cab.acciones,
             icon=self._ico("refresh"),
             texto="Actualizar",
-            fg_color="transparent",
-            border_width=1,
             command=self._actualizar_tabla_priorizados,
+            **estilo_boton_secundario(),
         ).pack(side="left", padx=(0, 6))
         BotonIconoTexto(
-            barra_prio,
+            cab.acciones,
             icon=self._ico("add_user"),
-            texto="Añadir priorizado propio",
+            texto="Añadir propio",
             command=self._abrir_priorizado_propio,
+            **estilo_boton_primario(),
         ).pack(side="left", padx=(0, 6))
         BotonIconoTexto(
-            barra_prio,
+            cab.acciones,
             icon=self._ico("remove"),
             texto="Quitar propio",
-            fg_color="transparent",
-            border_width=1,
             command=self._quitar_priorizado_propio_seleccionado,
+            **estilo_boton_secundario(),
         ).pack(side="left", padx=(0, 6))
         BotonIconoTexto(
-            barra_prio,
+            cab.acciones,
             icon=self._ico("info"),
-            texto="Cómo se calcula la prioridad",
-            fg_color="transparent",
-            border_width=1,
+            texto="Fórmula",
             command=self._abrir_info_prioridad,
-        ).pack(side="right")
+            **estilo_boton_secundario(),
+        ).pack(side="left")
 
-        self.tabla_priorizados = TablaPriorizados(self.retractil_prio.contenido)
-        self.tabla_priorizados.pack(fill="x", expand=False)
+        filtros = ctk.CTkFrame(pagina, fg_color="transparent")
+        filtros.pack(fill="x", pady=(0, 10))
+        self.seg_priorizados = ctk.CTkSegmentedButton(
+            filtros,
+            values=["Primer plano", "Completo"],
+            command=self._cambiar_vista_priorizados,
+        )
+        self.seg_priorizados.set("Primer plano")
+        self.seg_priorizados.pack(side="left")
+        self.lbl_conteo_prio = ctk.CTkLabel(
+            filtros,
+            text="",
+            font=FONT_PEQUENA,
+            text_color=COLOR_TEXTO_MUTED,
+        )
+        self.lbl_conteo_prio.pack(side="left", padx=12)
 
-        self.marco_alertas = Seccion(
-            self.marco_principal,
+        tarjeta = Seccion(pagina, titulo="Listado", ayuda=None)
+        tarjeta.pack(fill="both", expand=True)
+        self.tabla_priorizados = TablaPriorizados(
+            tarjeta.body,
+            on_toggle_contactado=self._on_toggle_contactado,
+        )
+        self.tabla_priorizados.pack(fill="both", expand=True)
+
+    def _construir_pagina_alertas(self) -> None:
+        pagina = ctk.CTkFrame(self.contenedor_paginas, fg_color="transparent")
+        self._paginas["alertas"] = pagina
+
+        cab = EncabezadoPagina(
+            pagina,
             titulo="Alertas propias",
-            ayuda=(
-                "Marcaciones manuales que se suman al consolidado "
-                "(columnas Alerta Propia y Detalle Propio). "
-                "No sustituyen las alertas que vienen de los Excels de alertas."
+            subtitulo=(
+                "Marcaciones manuales (Alerta Propia / Detalle Propio). "
+                "No sustituyen las alertas de los Excels de alertas."
             ),
         )
-        self.marco_alertas.pack(fill="x", pady=(0, 8))
-
-        self.retractil_alertas = ContenidoRetractil(
-            self.marco_alertas.body,
-            texto_abierto="Ocultar alertas propias",
-            texto_cerrado="Mostrar alertas propias",
-            icono_abierto=self._ico("folder_open"),
-            icono_cerrado=self._ico("folder"),
-            expandido=False,
-        )
-        self.retractil_alertas.pack(fill="x")
-
-        barra_alertas = ctk.CTkFrame(self.retractil_alertas.contenido, fg_color="transparent")
-        barra_alertas.pack(fill="x", pady=(0, 6))
+        cab.pack(fill="x", pady=(0, 14))
         BotonIconoTexto(
-            barra_alertas,
+            cab.acciones,
             icon=self._ico("refresh"),
             texto="Actualizar",
-            fg_color="transparent",
-            border_width=1,
             command=self._actualizar_tabla_alertas,
+            **estilo_boton_secundario(),
         ).pack(side="left", padx=(0, 6))
         BotonIconoTexto(
-            barra_alertas,
+            cab.acciones,
             icon=self._ico("add"),
             texto="Añadir alerta",
             command=self._abrir_alerta_propia,
+            **estilo_boton_primario(),
         ).pack(side="left", padx=(0, 6))
         BotonIconoTexto(
-            barra_alertas,
+            cab.acciones,
             icon=self._ico("remove"),
             texto="Quitar alerta",
-            fg_color="transparent",
-            border_width=1,
             command=self._quitar_alerta_propia_seleccionada,
-        ).pack(side="left")
-
-        self.tabla_alertas = TablaAlertasPropias(self.retractil_alertas.contenido)
-        self.tabla_alertas.pack(fill="x", expand=False)
-
-        pie = ctk.CTkFrame(contenedor, fg_color="transparent")
-        pie.pack(fill="x")
-        BotonIconoTexto(
-            pie,
-            icon=self._ico("add_user"),
-            texto="Consultar estudiante",
-            command=self._abrir_consulta_estudiante,
-        ).pack(side="left", padx=(0, 8))
-        BotonIconoTexto(
-            pie,
-            icon=self._ico("settings"),
-            texto="Configurar columnas y aliases",
-            command=self.cambiar_datos,
             **estilo_boton_secundario(),
         ).pack(side="left")
-        self.lbl_resumen = ctk.CTkLabel(
-            pie,
-            text="",
-            font=FONT_PEQUENA,
-            text_color=("gray50", "gray60"),
+
+        tarjeta = Seccion(pagina, titulo="Listado", ayuda=None)
+        tarjeta.pack(fill="both", expand=True)
+        self.tabla_alertas = TablaAlertasPropias(tarjeta.body)
+        self.tabla_alertas.pack(fill="both", expand=True)
+
+    def _construir_pagina_versiones(self) -> None:
+        pagina = ctk.CTkFrame(self.contenedor_paginas, fg_color="transparent")
+        self._paginas["versiones"] = pagina
+
+        cab = EncabezadoPagina(
+            pagina,
+            titulo="Historial de versiones",
+            subtitulo=(
+                "Cada generación queda en SQLite con columnas consultables "
+                "y un Excel nombrado por periodo y fecha."
+            ),
         )
-        self.lbl_resumen.pack(side="right")
+        cab.pack(fill="x", pady=(0, 14))
+        BotonIconoTexto(
+            cab.acciones,
+            icon=self._ico("folder"),
+            texto="Abrir historial",
+            command=self._abrir_versiones,
+            **estilo_boton_primario(),
+        ).pack(side="left", padx=(0, 6))
+        BotonIconoTexto(
+            cab.acciones,
+            icon=self._ico("generate"),
+            texto="Vista web",
+            command=self._abrir_vista_web_ultima,
+            **estilo_boton_secundario(),
+        ).pack(side="left")
+
+        tarjeta = ctk.CTkFrame(pagina, **estilo_seccion())
+        tarjeta.pack(fill="both", expand=True)
+        cuerpo = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        cuerpo.pack(fill="both", expand=True, padx=28, pady=28)
+        ctk.CTkLabel(
+            cuerpo,
+            text="Base de datos unificada",
+            font=FONT_SUBTITULO,
+            text_color=COLOR_TEXTO,
+            anchor="w",
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            cuerpo,
+            text=(
+                "Las versiones del consolidado, los priorizados propios y las alertas "
+                "propias viven en la misma base SQLite. Puede filtrar por periodo, "
+                "reabrir el Excel o regenerarlo desde el snapshot guardado."
+            ),
+            font=FONT_TEXTO,
+            text_color=COLOR_TEXTO_MUTED,
+            wraplength=640,
+            justify="left",
+            anchor="w",
+        ).pack(anchor="w", pady=(8, 18))
+        self.lbl_meta_versiones = ctk.CTkLabel(
+            cuerpo,
+            text="",
+            font=FONT_TEXTO,
+            text_color=COLOR_ACENTO,
+            anchor="w",
+        )
+        self.lbl_meta_versiones.pack(anchor="w")
+
+    def _navegar(self, clave: str) -> None:
+        if clave == "versiones":
+            self._mostrar_pagina("versiones")
+            self._actualizar_meta_versiones()
+            return
+        self._mostrar_pagina(clave)
+
+    def _mostrar_pagina(self, clave: str) -> None:
+        if self._pagina_activa == clave:
+            return
+        for k, frame in self._paginas.items():
+            if k == clave:
+                frame.pack(fill="both", expand=True)
+            else:
+                frame.pack_forget()
+        self._pagina_activa = clave
+
+    def _actualizar_meta_versiones(self) -> None:
+        from consolidado.storage.db import contar_versiones, listar_versiones, periodo_desde_fecha
+
+        n = contar_versiones(self.base)
+        ult = ultima_version(self.base)
+        periodos = sorted({v["periodo"] for v in listar_versiones(self.base)}, reverse=True)
+        partes = [f"{n} versión(es) guardada(s)", f"periodo actual {periodo_desde_fecha()}"]
+        if ult:
+            partes.append(f"última: {ult['periodo']} · {ult['fecha_version']}")
+        if periodos:
+            partes.append(f"periodos: {', '.join(periodos[:4])}")
+        self.lbl_meta_versiones.configure(text="  ·  ".join(partes))
 
     def _ruta_salida_actual(self) -> Path:
+        ult = ultima_version(self.base)
+        if ult and ult.get("ruta_excel"):
+            ruta = Path(ult["ruta_excel"])
+            return ruta if ruta.is_absolute() else (self.base / ruta).resolve()
         rel = self.cfg.get("salida", {}).get("ruta", "salida/estudiantes_consolidado.xlsx")
         return (self.base / rel).resolve()
+
+    def _sembrar_bd_si_hace_falta(self) -> None:
+        try:
+            meta = asegurar_semilla_si_vacia(self.base)
+        except Exception as exc:
+            messagebox.showwarning(
+                "Base de datos",
+                f"No se pudo importar el consolidado inicial a SQL:\n{exc}",
+            )
+            return
+        if meta:
+            messagebox.showinfo(
+                "Registro inicial",
+                f"Se importó el consolidado existente como versión {meta['periodo']} "
+                f"(fecha {meta['fecha_version']}).\n"
+                f"{meta['num_estudiantes']} estudiantes guardados en la base SQL.\n\n"
+                f"Excel: {meta.get('ruta_excel') or '—'}",
+            )
+            self._actualizar_ruta_salida()
+
+    def _abrir_versiones(self) -> None:
+        DialogoVersiones(self, self.cfg, self.base)
 
     def _conteo_archivos(self) -> tuple[int, int, int, int, list[str]]:
         slots = self.cfg.get("archivos_fuente", [])
@@ -374,42 +535,52 @@ class AppConsolidado(ctk.CTk):
         self.lbl_resumen.configure(
             text=f"{cargados_all}/{total_all} archivos fuente cargados (incluye opcionales)"
         )
+        self.lbl_ruta_top.configure(text=f"Salida · {ruta_corta}")
 
     def _actualizar_ruta_salida(self) -> None:
         self._actualizar_estado_general()
 
     def _elegir_ruta_salida(self) -> None:
-        elegida = elegir_guardar_consolidado(self._ruta_salida_actual())
-        if elegida is None:
+        actual = self._ruta_salida_actual().parent
+        carpeta = filedialog.askdirectory(
+            title="Carpeta donde guardar los Excel versionados",
+            initialdir=str(actual if actual.exists() else self.base / "salida"),
+        )
+        if not carpeta:
             return
+        destino_dir = Path(carpeta)
         try:
-            rel = elegida.resolve().relative_to(self.base.resolve())
-            self.cfg.setdefault("salida", {})["ruta"] = rel.as_posix()
+            rel = destino_dir.resolve().relative_to(self.base.resolve())
+            self.cfg.setdefault("salida", {})["ruta"] = (rel / "estudiantes_consolidado.xlsx").as_posix()
         except ValueError:
-            self.cfg.setdefault("salida", {})["ruta"] = str(elegida.resolve())
+            self.cfg.setdefault("salida", {})["ruta"] = str(
+                (destino_dir / "estudiantes_consolidado.xlsx").resolve()
+            )
         guardar_config(self.cfg, self.base)
         merge.aplicar_config(self.cfg, self.base)
         self._actualizar_ruta_salida()
-        messagebox.showinfo("Ruta guardada", f"El consolidado se guardará en:\n{elegida}")
+        messagebox.showinfo(
+            "Carpeta guardada",
+            f"Los consolidados se guardarán en:\n{destino_dir}\n\n"
+            "Con nombre estudiantes_consolidado_{periodo}_{fecha}.xlsx",
+        )
 
     def _toggle_tema(self) -> None:
         nuevo = alternar_modo_apariencia()
         self.cfg.setdefault("interfaz", {})["modo_apariencia"] = nuevo
         guardar_config(self.cfg, self.base)
-        self.btn_tema.configure(image=self._ico_tema())
+        self.configure(fg_color=COLOR_PAGE)
+        self.area.configure(fg_color=COLOR_PAGE)
+        self.btn_tema.configure(image=self._ico_tema_sidebar())
         configurar_treeview(self.tabla_priorizados.tree)
         configurar_treeview(self.tabla_alertas.tree)
         self.scroll_fuentes.actualizar_fondo()
         estilo = estilo_seccion()
-        for marco in (
-            self.marco_fuentes,
-            self.marco_prio,
-            self.marco_alertas,
-            self.marco_docs,
-        ):
+        for marco in (self.marco_fuentes, self.marco_docs):
             marco.configure(**estilo)
         for tarjeta in self.panel_pasos._tarjetas:
             tarjeta.configure(**estilo_tarjeta_paso())
+        self._actualizar_lista_archivos()
 
     def _ruta_guardada(self, nombre: str) -> Path:
         return carpeta_excels(self.cfg, self.base) / nombre
@@ -417,8 +588,11 @@ class AppConsolidado(ctk.CTk):
     def _carpeta_excels(self) -> Path:
         return carpeta_excels(self.cfg, self.base)
 
-    def _ico_tema(self) -> ctk.CTkImage:
-        return self._ico("sun" if modo_apariencia_actual() == "dark" else "moon")
+    def _ico_tema_sidebar(self) -> ctk.CTkImage:
+        return self._ico(
+            "sun" if modo_apariencia_actual() == "dark" else "moon",
+            color="#e2e8f0",
+        )
 
     def _actualizar_lista_archivos(self) -> None:
         carpeta = self._carpeta_excels()
@@ -440,8 +614,9 @@ class AppConsolidado(ctk.CTk):
                 self.marco_filas_fuentes,
                 text=titulo_cat,
                 font=FONT_SUBTITULO,
+                text_color=COLOR_TEXTO,
                 anchor="w",
-            ).grid(row=fila, column=0, columnspan=3, sticky="w", pady=(10, 4))
+            ).grid(row=fila, column=0, columnspan=3, sticky="w", pady=(12, 6))
             fila += 1
             for slot in slots:
                 nombre = slot.get("nombre_guardado", "")
@@ -463,7 +638,7 @@ class AppConsolidado(ctk.CTk):
             ctk.CTkLabel(
                 self.marco_filas_docs,
                 text="No hay documentos adicionales. Use «Añadir documento» para agregar uno.",
-                text_color=("gray50", "gray60"),
+                text_color=COLOR_TEXTO_MUTED,
             ).pack(anchor="w")
         else:
             for i, doc in enumerate(docs):
@@ -534,16 +709,92 @@ class AppConsolidado(ctk.CTk):
     def _on_documento_guardado(self) -> None:
         self._actualizar_lista_archivos()
 
+    def _cambiar_vista_priorizados(self, valor: str) -> None:
+        self._vista_priorizados = "completo" if valor == "Completo" else "primer_plano"
+        self._refrescar_tabla_priorizados_filtrada()
+
+    def _on_toggle_contactado(self, identificacion: str, contactado: bool) -> None:
+        marcar_contactado(identificacion, contactado=contactado, base=self.base)
+        for fila in self._filas_priorizados:
+            if str(fila.get("identificacion", "")).strip() == identificacion.strip():
+                fila["contactado"] = contactado
+                break
+        if self._vista_priorizados == "primer_plano" and contactado:
+            self._refrescar_tabla_priorizados_filtrada()
+        else:
+            n_total = len(self._filas_priorizados)
+            n_visibles = sum(
+                1 for f in self._filas_priorizados if not f.get("contactado")
+            )
+            if self._vista_priorizados == "primer_plano":
+                self.lbl_conteo_prio.configure(
+                    text=f"{n_visibles} pendientes · {n_total - n_visibles} contactados ocultos"
+                )
+            else:
+                self.lbl_conteo_prio.configure(text=f"{n_total} priorizados (vista completa)")
+
+    def _refrescar_tabla_priorizados_filtrada(self) -> None:
+        self.tabla_priorizados.limpiar()
+        if self._vista_priorizados == "primer_plano":
+            visibles = [f for f in self._filas_priorizados if not f.get("contactado")]
+        else:
+            visibles = list(self._filas_priorizados)
+        for f in visibles:
+            self.tabla_priorizados.insertar_fila(f)
+        n_total = len(self._filas_priorizados)
+        n_contactados = sum(1 for f in self._filas_priorizados if f.get("contactado"))
+        if self._vista_priorizados == "primer_plano":
+            self.lbl_conteo_prio.configure(
+                text=f"{len(visibles)} pendientes · {n_contactados} contactados ocultos"
+            )
+        else:
+            self.lbl_conteo_prio.configure(
+                text=f"{n_total} priorizados · {n_contactados} contactados"
+            )
+
     def _actualizar_tabla_priorizados(self) -> None:
         merge.aplicar_config(self.cfg, self.base)
-        self.tabla_priorizados.limpiar()
         try:
-            filas = merge.obtener_lista_priorizados_vista(self.cfg, self.base)
+            self._filas_priorizados = merge.obtener_lista_priorizados_vista(self.cfg, self.base)
         except Exception as exc:
             messagebox.showerror("Priorizados", f"No se pudo cargar la lista:\n{exc}")
             return
-        for f in filas:
-            self.tabla_priorizados.insertar_fila(f)
+        self._refrescar_tabla_priorizados_filtrada()
+
+    def _abrir_vista_web_ultima(self) -> None:
+        from consolidado.core.html_export import (
+            guardar_html_consolidado,
+            ruta_html_desde_excel,
+        )
+        from consolidado.storage.db import cargar_dataframe_version, ultima_version
+
+        ult = ultima_version(self.base)
+        if not ult:
+            messagebox.showinfo("Vista web", "Aún no hay versiones generadas.")
+            return
+        ruta_excel = ult.get("ruta_excel")
+        if ruta_excel:
+            excel = Path(ruta_excel)
+            if not excel.is_absolute():
+                excel = self.base / excel
+            html_path = ruta_html_desde_excel(excel)
+            if html_path.is_file():
+                merge.abrir_archivo_en_sistema(html_path, parent=self)
+                return
+        try:
+            df = cargar_dataframe_version(ult["id"], self.base)
+            destino = self.base / "salida" / f"vista_web_{ult['periodo']}_{ult['id']}.html"
+            html_path = guardar_html_consolidado(
+                df,
+                destino,
+                cfg=self.cfg,
+                num_materias=ult.get("num_materias"),
+                titulo=f"Consolidado · {ult['periodo']} · {ult['fecha_version']}",
+            )
+        except Exception as exc:
+            messagebox.showerror("Vista web", str(exc))
+            return
+        merge.abrir_archivo_en_sistema(html_path, parent=self)
 
     def _actualizar_tabla_alertas(self) -> None:
         merge.aplicar_config(self.cfg, self.base)
@@ -610,16 +861,21 @@ class AppConsolidado(ctk.CTk):
         if faltantes:
             messagebox.showwarning(
                 "Faltan archivos obligatorios",
-                "Antes de generar, cargue estos archivos en el Paso 1:\n\n• "
+                "Antes de generar, cargue estos archivos en Archivos:\n\n• "
                 + "\n• ".join(faltantes),
             )
+            self.sidebar.activar("archivos")
+            self._mostrar_pagina("archivos")
             return
         try:
-            _, destino = merge.ejecutar_consolidado(
+            from consolidado.storage.db import periodo_desde_fecha
+            from datetime import date
+
+            periodo = periodo_desde_fecha(date.today())
+            consolidado, destino = merge.ejecutar_consolidado(
                 self.cfg,
                 base=self.base,
                 abrir=False,
-                preguntar_sobrescribir=True,
                 parent=self,
             )
         except SystemExit:
@@ -628,11 +884,18 @@ class AppConsolidado(ctk.CTk):
             messagebox.showerror("Error", str(exc))
             return
         self._actualizar_ruta_salida()
+        from consolidado.core.html_export import ruta_html_desde_excel
+
+        html_path = ruta_html_desde_excel(destino)
         messagebox.showinfo(
             "Consolidado generado",
-            f"El archivo se guardó correctamente:\n{destino}\n\nSe abrirá en Excel.",
+            f"Nueva versión guardada en SQL (periodo {periodo}).\n"
+            f"{consolidado.height} estudiantes.\n\n"
+            f"Excel:\n{destino}\n\n"
+            f"Vista web:\n{html_path}\n\nSe abrirá la vista web.",
         )
-        merge.abrir_archivo_en_sistema(destino, parent=self)
+        if html_path.is_file():
+            merge.abrir_archivo_en_sistema(html_path, parent=self)
 
     def _abrir_consulta_estudiante(self) -> None:
         DialogoConsultaEstudiante(self, self.cfg, self.base)

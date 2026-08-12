@@ -30,6 +30,8 @@ dist/
 # Carpetas de datos generados (mantener solo .gitkeep)
 datos/entrada/*
 !datos/entrada/.gitkeep
+datos/*.db
+datos/*.db-journal
 salida/*
 !salida/.gitkeep
 Ejemplos/*

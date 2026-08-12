@@ -14,6 +14,10 @@ def _fg(mode: str) -> str:
     return "#dce4ee" if mode == "Dark" else "#1a1a1a"
 
 
+def _fg_fijo(color: str | None, mode: str) -> str:
+    return color if color else _fg(mode)
+
+
 def _dibujar(nombre: str, size: int, fg: str) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
@@ -87,12 +91,12 @@ def _dibujar(nombre: str, size: int, fg: str) -> Image.Image:
     return img
 
 
-def icono(nombre: str, size: int = 22) -> ctk.CTkImage:
+def icono(nombre: str, size: int = 22, *, color: str | None = None) -> ctk.CTkImage:
     mode = ctk.get_appearance_mode()
-    key = (nombre, size, mode)
+    key = (nombre, size, mode, color or "")
     if key not in _CACHE:
         px = size * 2
-        fg = _fg(mode)
+        fg = _fg_fijo(color, mode)
         pil = _dibujar(nombre, px, fg)
         _CACHE[key] = ctk.CTkImage(light_image=pil, dark_image=pil, size=(size, size))
     return _CACHE[key]

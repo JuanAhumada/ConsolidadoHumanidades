@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from consolidado.paths import PROJECT_ROOT
 from pathlib import Path
 
 import polars as pl
 
-from consolidado.config.settings import carpeta_excels, construir_columnas_salida
+from consolidado.config.settings import (
+    carpeta_excels,
+    construir_columnas_salida,
+    guardar_config,
+)
 from consolidado.core.alertas import _aplicar_alertas, _cargar_alertas_cfg
 from consolidado.core.alertas_propias import aplicar_alertas_propias
 from consolidado.core.archivos import (
@@ -26,11 +31,9 @@ from consolidado.core.constants import (
     max_materias_en_dataframe,
 )
 from consolidado.core.documentos import _unir_documentos_adicionales
-from consolidado.core.excel_io import (
-    abrir_archivo_en_sistema,
-    resolver_ruta_salida_consolidado,
-)
+from consolidado.core.excel_io import abrir_archivo_en_sistema
 from consolidado.core.export import guardar_excel_consolidado
+from consolidado.core.html_export import guardar_html_consolidado, ruta_html_desde_excel
 from consolidado.core.fusion import fusionar_por_id
 from consolidado.core.priorizado_enriquecido import (
     _cargar_priorizado_enriquecido_cfg,
@@ -44,8 +47,53 @@ from consolidado.core.priorizados import (
 )
 from consolidado.core.repetidas import _cargar_materias_repetidas_cfg, _cargar_repitiendo_cfg, aplicar_repitiendo
 from consolidado.core.normalizacion import normalizar_id
-from consolidado.storage.priorizados import cargar_priorizados_propios
 from consolidado.storage.alertas_propias import cargar_alertas_propias
+from consolidado.storage.db import (
+    guardar_version,
+    nombre_excel_version,
+    periodo_desde_fecha,
+)
+from consolidado.storage.priorizados import cargar_priorizados_propios
+
+
+def _carpeta_salida(cfg: dict, base: Path) -> Path:
+    rel = cfg.get("salida", {}).get("ruta", "salida/estudiantes_consolidado.xlsx")
+    ruta = Path(rel)
+    if ruta.suffix.lower() in {".xlsx", ".xlsm", ".xls"}:
+        carpeta = (base / ruta).parent if not ruta.is_absolute() else ruta.parent
+    else:
+        carpeta = base / ruta if not ruta.is_absolute() else ruta
+    carpeta.mkdir(parents=True, exist_ok=True)
+    return carpeta
+
+
+def resolver_destino_versionado(
+    cfg: dict,
+    base: Path,
+    *,
+    fecha_version: date | None = None,
+    salida_explicita: Path | None = None,
+) -> tuple[Path, str, date]:
+    """
+    Destino Excel con periodo (YYYY-1 / YYYY-2) y fecha de versión.
+    Si salida_explicita es un archivo, se usa esa ruta (CLI/manual).
+    """
+    fecha_version = fecha_version or date.today()
+    periodo = periodo_desde_fecha(fecha_version)
+    if salida_explicita is not None:
+        destino = Path(salida_explicita)
+        if destino.suffix.lower() not in {".xlsx", ".xlsm", ".xls"}:
+            destino = destino / nombre_excel_version(periodo, fecha_version)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        return destino, periodo, fecha_version
+
+    carpeta = _carpeta_salida(cfg, base)
+    nombre = nombre_excel_version(periodo, fecha_version)
+    destino = carpeta / nombre
+    if destino.exists():
+        hora = datetime.now().strftime("%H%M%S")
+        destino = carpeta / nombre_excel_version(periodo, fecha_version, sufijo_hora=hora)
+    return destino, periodo, fecha_version
 
 
 def generar_dataframe_consolidado(
@@ -162,28 +210,57 @@ def ejecutar_consolidado(
     abrir: bool = True,
     preguntar_sobrescribir: bool = False,
     parent=None,
+    fecha_version: date | None = None,
+    guardar_en_db: bool = True,
 ) -> tuple[pl.DataFrame, Path]:
-    """Procesa fuentes guardadas (o rutas indicadas) y genera el Excel consolidado."""
+    """
+    Procesa fuentes, guarda una nueva versión en SQL y genera el Excel
+    con nombre ``estudiantes_consolidado_{periodo}_{fecha}.xlsx``.
+    Cada generación es un registro nuevo; no se sobrescriben versiones previas.
+    """
+    del preguntar_sobrescribir  # compatibilidad API; el versionado ya no sobrescribe
     base = base or PROJECT_ROOT
     cfg = aplicar_config(cfg, base)
     consolidado, max_materias = generar_dataframe_consolidado(cfg, base=base, archivos=archivos)
     materias_repetidas = _cargar_materias_repetidas_cfg(cfg, base)
 
-    if salida is not None:
-        destino = salida
-    elif preguntar_sobrescribir:
-        destino_resuelta = resolver_ruta_salida_consolidado(cfg, base, parent=parent)
-        if destino_resuelta is None:
-            raise SystemExit("Operación cancelada.")
-        destino = destino_resuelta
-    else:
-        rel_salida = cfg.get("salida", {}).get("ruta", "salida/estudiantes_consolidado.xlsx")
-        destino = base / rel_salida
-    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino, periodo, fecha_v = resolver_destino_versionado(
+        cfg, base, fecha_version=fecha_version, salida_explicita=salida
+    )
     destino = guardar_excel_consolidado(
-        consolidado, destino, cfg=cfg, num_materias=max_materias,
+        consolidado,
+        destino,
+        cfg=cfg,
+        num_materias=max_materias,
         materias_repetidas=materias_repetidas,
     )
+    destino_html = guardar_html_consolidado(
+        consolidado,
+        ruta_html_desde_excel(destino),
+        cfg=cfg,
+        num_materias=max_materias,
+        titulo=f"Consolidado · {periodo} · {fecha_v.isoformat()}",
+    )
+
+    # Mantener la carpeta de salida en config (no el archivo puntual)
+    try:
+        rel_carpeta = destino.parent.resolve().relative_to(base.resolve())
+        cfg.setdefault("salida", {})["ruta"] = (rel_carpeta / "estudiantes_consolidado.xlsx").as_posix()
+        guardar_config(cfg, base)
+    except ValueError:
+        pass
+
+    if guardar_en_db:
+        guardar_version(
+            consolidado,
+            base=base,
+            fecha_version=fecha_v,
+            periodo=periodo,
+            num_materias=max_materias,
+            ruta_excel=destino,
+            notas=f"Consolidado generado · periodo {periodo}",
+        )
+
     if abrir:
-        abrir_archivo_en_sistema(destino, parent=parent)
+        abrir_archivo_en_sistema(destino_html, parent=parent)
     return consolidado, destino
