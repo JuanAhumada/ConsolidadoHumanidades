@@ -10,9 +10,9 @@ from consolidado.core.constants import aplicar_config
 from consolidado.core.excel_io import (
     elegir_cuatro_excels_en_explorador,
     listar_excels_en_carpeta,
-    resolver_ruta_salida_consolidado,
 )
 from consolidado.core.pipeline import ejecutar_consolidado
+from consolidado.storage.versiones import asegurar_semilla_si_vacia
 
 
 def main() -> None:
@@ -23,7 +23,7 @@ def main() -> None:
         module="openpyxl.styles.stylesheet",
     )
     base = PROJECT_ROOT
-    salida_default = base / "salida" / "estudiantes_consolidado.xlsx"
+    asegurar_semilla_si_vacia(base)
 
     parser = argparse.ArgumentParser(description="Fusiona Excel de estudiantes por identificación.")
     parser.add_argument(
@@ -37,8 +37,8 @@ def main() -> None:
         "--salida",
         type=Path,
         default=None,
-        help="Ruta del Excel de salida. Si se omite, se preguntará si desea "
-        "sobreescribir salida/estudiantes_consolidado.xlsx (o la última ruta guardada).",
+        help="Ruta del Excel de salida. Si se omite, se genera automáticamente "
+        "como estudiantes_consolidado_{periodo}_{fecha}.xlsx en salida/.",
     )
     parser.add_argument(
         "--gui",
@@ -64,19 +64,13 @@ def main() -> None:
         archivos = listar_excels_en_carpeta(entrada)
         if len(archivos) < 1:
             raise SystemExit(f"No hay archivos .xlsx ni .xlsm en {entrada}.")
-        salida: Path = args.salida if args.salida is not None else salida_default
+        salida: Path | None = args.salida
     else:
         archivos_gui = elegir_cuatro_excels_en_explorador()
         if archivos_gui is None:
             raise SystemExit("Operación cancelada.")
         archivos = archivos_gui
-        salida = args.salida if args.salida is not None else salida_default
-
-    if args.salida is None:
-        destino_resuelta = resolver_ruta_salida_consolidado(aplicar_config(), base)
-        if destino_resuelta is None:
-            raise SystemExit("Operación cancelada.")
-        salida = destino_resuelta
+        salida = args.salida
 
     consolidado, salida = ejecutar_consolidado(
         base=base,
@@ -85,5 +79,6 @@ def main() -> None:
         abrir=True,
     )
     print(f"Listo: {consolidado.height} estudiantes -> {salida}")
+    print("  Guardado también en la base SQL (datos/consolidado.db)")
     print("  Hoja única con grupos: Datos, Priorizados, Becas, Materias (+ documentos extra)")
     print("  Abriendo el Excel generado...")

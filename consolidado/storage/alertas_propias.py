@@ -1,44 +1,68 @@
-"""Persistencia de alertas propias (JSON)."""
+"""Persistencia de alertas propias (SQLite)."""
 
 from __future__ import annotations
 
-import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from consolidado.paths import PROJECT_ROOT
-
-ALERTAS_PROPIAS_FILENAME = "alertas_propias.json"
-CARPETA_DATOS = "datos"
-
-
-def ruta_alertas_propias(base: Path | None = None) -> Path:
-    base = base or PROJECT_ROOT
-    return base / CARPETA_DATOS / ALERTAS_PROPIAS_FILENAME
+from consolidado.storage.db import conexion, inicializar_db
 
 
 def cargar_alertas_propias(base: Path | None = None) -> list[dict[str, Any]]:
     base = base or PROJECT_ROOT
-    path = ruta_alertas_propias(base)
-    if not path.is_file():
-        return []
-    with path.open(encoding="utf-8") as f:
-        data = json.load(f)
-    if isinstance(data, list):
-        return data
-    return list(data.get("alertas_propias", []))
+    inicializar_db(base)
+    with conexion(base) as conn:
+        rows = conn.execute(
+            """
+            SELECT identificacion, nombre, detalle
+            FROM alertas_propias
+            ORDER BY nombre COLLATE NOCASE, identificacion
+            """
+        ).fetchall()
+    return [
+        {
+            "identificacion": r["identificacion"],
+            "nombre": r["nombre"] or "",
+            "detalle": r["detalle"] or "",
+        }
+        for r in rows
+    ]
 
 
 def guardar_alertas_propias(
     items: list[dict[str, Any]],
     base: Path | None = None,
 ) -> Path:
+    """Reemplaza el conjunto completo de alertas propias."""
     base = base or PROJECT_ROOT
-    path = ruta_alertas_propias(base)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump({"alertas_propias": items}, f, ensure_ascii=False, indent=2)
-    return path
+    inicializar_db(base)
+    ahora = datetime.now().isoformat(timespec="seconds")
+    with conexion(base) as conn:
+        conn.execute("DELETE FROM alertas_propias")
+        for item in items:
+            ident = str(item.get("identificacion", "")).strip()
+            detalle = str(item.get("detalle") or "").strip()
+            if not ident or not detalle:
+                continue
+            conn.execute(
+                """
+                INSERT INTO alertas_propias (
+                    identificacion, nombre, detalle, creado_en, actualizado_en
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    ident,
+                    str(item.get("nombre") or "") or None,
+                    detalle,
+                    ahora,
+                    ahora,
+                ),
+            )
+    from consolidado.storage.db import ruta_base_datos
+
+    return ruta_base_datos(base)
 
 
 def agregar_alerta_propia(
@@ -47,20 +71,46 @@ def agregar_alerta_propia(
 ) -> list[dict[str, Any]]:
     """Añade o actualiza una alerta propia por identificación."""
     base = base or PROJECT_ROOT
-    items = cargar_alertas_propias(base)
-    id_nuevo = str(entrada.get("identificacion", "")).strip()
-    filtrados = [i for i in items if str(i.get("identificacion", "")).strip() != id_nuevo]
-    filtrados.append(entrada)
-    guardar_alertas_propias(filtrados, base)
-    return filtrados
+    inicializar_db(base)
+    ident = str(entrada.get("identificacion", "")).strip()
+    detalle = str(entrada.get("detalle") or "").strip()
+    if not ident or not detalle:
+        return cargar_alertas_propias(base)
+    ahora = datetime.now().isoformat(timespec="seconds")
+    with conexion(base) as conn:
+        existente = conn.execute(
+            "SELECT creado_en FROM alertas_propias WHERE identificacion = ?",
+            (ident,),
+        ).fetchone()
+        creado = existente["creado_en"] if existente else ahora
+        conn.execute(
+            """
+            INSERT INTO alertas_propias (
+                identificacion, nombre, detalle, creado_en, actualizado_en
+            ) VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(identificacion) DO UPDATE SET
+                nombre = excluded.nombre,
+                detalle = excluded.detalle,
+                actualizado_en = excluded.actualizado_en
+            """,
+            (
+                ident,
+                str(entrada.get("nombre") or "") or None,
+                detalle,
+                creado,
+                ahora,
+            ),
+        )
+    return cargar_alertas_propias(base)
 
 
 def quitar_alerta_propia(identificacion: str, base: Path | None = None) -> list[dict[str, Any]]:
     base = base or PROJECT_ROOT
+    inicializar_db(base)
     id_key = identificacion.strip()
-    items = [
-        i for i in cargar_alertas_propias(base)
-        if str(i.get("identificacion", "")).strip() != id_key
-    ]
-    guardar_alertas_propias(items, base)
-    return items
+    with conexion(base) as conn:
+        conn.execute(
+            "DELETE FROM alertas_propias WHERE identificacion = ?",
+            (id_key,),
+        )
+    return cargar_alertas_propias(base)

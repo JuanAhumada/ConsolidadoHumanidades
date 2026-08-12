@@ -40,7 +40,6 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
 
         self.tabview = ctk.CTkTabview(self)
         self.tabview.pack(fill="both", expand=True, padx=8, pady=8)
-        configurar_tabview(self.tabview)
 
         self._pestana_aliases()
         self._pestana_programas()
@@ -51,6 +50,9 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
         )
         self._pestana_priorizados()
         self._pestana_documentos()
+        # Estilos después de crear pestañas: CTkTabview falla si configure()
+        # se llama con _current_name vacío.
+        configurar_tabview(self.tabview)
 
         marco_btn = ctk.CTkFrame(self, fg_color="transparent")
         marco_btn.pack(fill="x", padx=8, pady=(0, 12))
