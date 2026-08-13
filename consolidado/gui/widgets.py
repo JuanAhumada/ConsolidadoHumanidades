@@ -517,9 +517,17 @@ class Sidebar(ctk.CTkFrame):
 
 
 class TablaPriorizados(ctk.CTkFrame):
-    """Treeview de priorizados con columna Contactado (checkbox)."""
+    """Treeview de priorizados con Contactado y estado Activo (propios)."""
 
-    COLUMNAS = ("contactado", "identificacion", "nombre", "motivo", "detalle", "origen")
+    COLUMNAS = (
+        "contactado",
+        "activo",
+        "identificacion",
+        "nombre",
+        "motivo",
+        "detalle",
+        "origen",
+    )
     _CHECK_ON = "☑"
     _CHECK_OFF = "☐"
 
@@ -540,23 +548,27 @@ class TablaPriorizados(ctk.CTkFrame):
             height=12,
         )
         self.tree.heading("contactado", text="Contactado")
+        self.tree.heading("activo", text="Activo")
         self.tree.heading("identificacion", text="Identificación")
         self.tree.heading("nombre", text="Nombre")
         self.tree.heading("motivo", text="Motivo")
         self.tree.heading("detalle", text="Detalle")
         self.tree.heading("origen", text="Origen")
-        self.tree.column("contactado", width=88, anchor="center")
+        self.tree.column("contactado", width=80, anchor="center")
+        self.tree.column("activo", width=60, anchor="center")
         self.tree.column("identificacion", width=110, anchor="w")
-        self.tree.column("nombre", width=180, anchor="w")
-        self.tree.column("motivo", width=140, anchor="w")
-        self.tree.column("detalle", width=160, anchor="w")
-        self.tree.column("origen", width=130, anchor="w")
+        self.tree.column("nombre", width=170, anchor="w")
+        self.tree.column("motivo", width=130, anchor="w")
+        self.tree.column("detalle", width=140, anchor="w")
+        self.tree.column("origen", width=120, anchor="w")
         scroll = ttk.Scrollbar(self, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side="left", fill="both", expand=True)
         scroll.pack(side="right", fill="y")
         configurar_treeview(self.tree)
         self.tree.bind("<Button-1>", self._on_click, add="+")
+        self.tree.tag_configure("contactado", foreground="#64748b")
+        self.tree.tag_configure("inactivo", foreground="#94a3b8")
 
     def limpiar(self) -> None:
         for item in self.tree.get_children():
@@ -565,18 +577,32 @@ class TablaPriorizados(ctk.CTkFrame):
 
     def insertar_fila(self, fila: dict) -> None:
         contactado = bool(fila.get("contactado"))
+        es_propio = bool(fila.get("es_propio")) or "Priorizado propio" in str(
+            fila.get("origen", "")
+        )
+        activo = bool(fila.get("activo", True))
+        if es_propio:
+            texto_activo = self._CHECK_ON if activo else self._CHECK_OFF
+        else:
+            texto_activo = "—"
+        tags: list[str] = []
+        if contactado:
+            tags.append("contactado")
+        if es_propio and not activo:
+            tags.append("inactivo")
         item = self.tree.insert(
             "",
             "end",
             values=(
                 self._CHECK_ON if contactado else self._CHECK_OFF,
+                texto_activo,
                 fila.get("identificacion", ""),
                 fila.get("nombre", ""),
                 fila.get("motivo", ""),
                 fila.get("detalle", ""),
                 fila.get("origen", ""),
             ),
-            tags=("contactado",) if contactado else (),
+            tags=tuple(tags),
         )
         self._por_item[item] = {
             "identificacion": fila.get("identificacion", ""),
@@ -585,9 +611,9 @@ class TablaPriorizados(ctk.CTkFrame):
             "detalle": fila.get("detalle", ""),
             "origen": fila.get("origen", ""),
             "contactado": contactado,
-            "es_propio": bool(fila.get("es_propio")),
+            "es_propio": es_propio,
+            "activo": activo,
         }
-        self.tree.tag_configure("contactado", foreground="#64748b")
 
     def _on_click(self, event) -> str | None:
         region = self.tree.identify_region(event.x, event.y)
@@ -604,7 +630,12 @@ class TablaPriorizados(ctk.CTkFrame):
         datos["contactado"] = nuevo
         vals = list(self.tree.item(item, "values"))
         vals[0] = self._CHECK_ON if nuevo else self._CHECK_OFF
-        self.tree.item(item, values=vals, tags=("contactado",) if nuevo else ())
+        tags = list(self.tree.item(item, "tags") or ())
+        if nuevo and "contactado" not in tags:
+            tags.append("contactado")
+        if not nuevo and "contactado" in tags:
+            tags = [t for t in tags if t != "contactado"]
+        self.tree.item(item, values=vals, tags=tuple(tags))
         if self._on_toggle:
             self._on_toggle(str(datos["identificacion"]), nuevo)
         return "break"

@@ -11,6 +11,7 @@ from typing import Any
 from consolidado.paths import PROJECT_ROOT
 
 CONFIG_FILENAME = "config.json"
+CONFIG_FABRICA_FILENAME = "config_fabrica.json"
 CARPETA_EXCELS_DEFAULT = "datos/entrada"
 
 COLUMNAS_DATOS = [
@@ -377,8 +378,59 @@ def ruta_config(base: Path | None = None) -> Path:
     return base / CONFIG_FILENAME
 
 
+def ruta_config_fabrica(base: Path | None = None) -> Path:
+    base = base or PROJECT_ROOT
+    return base / CONFIG_FABRICA_FILENAME
+
+
+def asegurar_config_fabrica(base: Path | None = None) -> Path:
+    """
+    Guarda una copia de la configuración base (valores de fábrica) si aún no existe.
+    No sobrescribe una fábrica ya guardada.
+    """
+    base = base or PROJECT_ROOT
+    path = ruta_config_fabrica(base)
+    if not path.is_file():
+        fabrica = config_default(base)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(fabrica, f, ensure_ascii=False, indent=2)
+    return path
+
+
+def cargar_config_fabrica(base: Path | None = None) -> dict[str, Any]:
+    base = base or PROJECT_ROOT
+    asegurar_config_fabrica(base)
+    path = ruta_config_fabrica(base)
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    return _fusionar_con_default(data, config_default(base))
+
+
+def restaurar_config_fabrica(
+    cfg_actual: dict[str, Any] | None = None,
+    base: Path | None = None,
+    *,
+    preservar_interfaz: bool = True,
+    preservar_salida: bool = True,
+) -> dict[str, Any]:
+    """
+    Restablece config.json a los valores de fábrica.
+    Conserva por defecto modo de apariencia y carpeta de salida.
+    """
+    base = base or PROJECT_ROOT
+    fabrica = cargar_config_fabrica(base)
+    actual = cfg_actual or {}
+    if preservar_interfaz and isinstance(actual.get("interfaz"), dict):
+        fabrica["interfaz"] = deepcopy(actual["interfaz"])
+    if preservar_salida and isinstance(actual.get("salida"), dict):
+        fabrica["salida"] = deepcopy(actual["salida"])
+    guardar_config(fabrica, base)
+    return fabrica
+
+
 def cargar_config(base: Path | None = None) -> dict[str, Any]:
     base = base or PROJECT_ROOT
+    asegurar_config_fabrica(base)
     path = ruta_config(base)
     if not path.is_file():
         cfg = config_default(base)

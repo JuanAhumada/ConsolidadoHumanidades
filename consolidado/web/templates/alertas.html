@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Alertas{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Alertas propias</h2>
+    <p class="sub">Marcaciones manuales persistidas en SQLite.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Añadir alerta</h3>
+  <form method="post" action="/alertas/anadir" class="form-row">
+    <div><label>Identificación</label><input name="identificacion" required/></div>
+    <div><label>Nombre</label><input name="nombre"/></div>
+    <div style="grid-column:1/-1;"><label>Detalle</label><input name="detalle" required/></div>
+    <div><button class="btn" type="submit">Guardar</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Identificación</th><th>Nombre</th><th>Detalle</th><th></th></tr></thead>
+      <tbody>
+      {% for a in alertas %}
+        <tr>
+          <td><a href="/estudiante/{{ a.identificacion }}">{{ a.identificacion }}</a></td>
+          <td>{{ a.nombre }}</td>
+          <td>{{ a.detalle }}</td>
+          <td>
+            <form method="post" action="/alertas/quitar">
+              <input type="hidden" name="identificacion" value="{{ a.identificacion }}"/>
+              <button class="btn sm danger" type="submit">Quitar</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="muted">No hay alertas propias.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

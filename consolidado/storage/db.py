@@ -15,7 +15,7 @@ from consolidado.paths import PROJECT_ROOT
 
 DB_FILENAME = "consolidado.db"
 CARPETA_DATOS = "datos"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Columnas canónicas del consolidado → campos indexables en `estudiantes`.
 _CAMPOS_INDEXABLES: dict[str, str] = {
@@ -147,6 +147,7 @@ def _crear_tablas_v2(conn: sqlite3.Connection) -> None:
             nombre TEXT,
             motivo TEXT,
             detalle TEXT,
+            activo INTEGER NOT NULL DEFAULT 1,
             creado_en TEXT NOT NULL,
             actualizado_en TEXT NOT NULL
         );
@@ -191,6 +192,8 @@ def _crear_indices_v2(conn: sqlite3.Connection) -> None:
             ON alertas_propias(identificacion);
         CREATE INDEX IF NOT EXISTS idx_contactados_flag
             ON priorizados_contactados(contactado);
+        CREATE INDEX IF NOT EXISTS idx_priorizados_activo
+            ON priorizados_propios(activo);
         """
     )
 
@@ -200,6 +203,14 @@ def _marcar_schema_version(conn: sqlite3.Connection) -> None:
         "INSERT OR REPLACE INTO schema_meta (clave, valor) VALUES ('version', ?)",
         (str(SCHEMA_VERSION),),
     )
+
+
+def _migrar_priorizados_activo(conn: sqlite3.Connection) -> None:
+    cols = _columnas_tabla(conn, "priorizados_propios")
+    if cols and "activo" not in cols:
+        conn.execute(
+            "ALTER TABLE priorizados_propios ADD COLUMN activo INTEGER NOT NULL DEFAULT 1"
+        )
 
 
 def _crear_schema_v2(conn: sqlite3.Connection) -> None:
@@ -289,9 +300,9 @@ def _migrar_json_marcaciones(conn: sqlite3.Connection, base: Path) -> None:
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO priorizados_propios (
-                        identificacion, nombre, motivo, detalle,
+                        identificacion, nombre, motivo, detalle, activo,
                         creado_en, actualizado_en
-                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, 1, ?, ?)
                     """,
                     (
                         ident,
@@ -350,12 +361,14 @@ def inicializar_db(base: Path | None = None) -> Path:
         elif version < SCHEMA_VERSION:
             _crear_tablas_v2(conn)
             _migrar_estudiantes_v1_a_v2(conn)
+            _migrar_priorizados_activo(conn)
             _crear_indices_v2(conn)
             _migrar_json_marcaciones(conn, base)
             _marcar_schema_version(conn)
         else:
             # Asegura tablas/índices por si el archivo se creó a medias.
             _crear_tablas_v2(conn)
+            _migrar_priorizados_activo(conn)
             _crear_indices_v2(conn)
             _migrar_json_marcaciones(conn, base)
             _marcar_schema_version(conn)

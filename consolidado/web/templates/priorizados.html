@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Priorizados{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Priorizados</h2>
+    <p class="sub">{{ visibles }} visibles de {{ total }} · vista {{ vista }}</p>
+  </div>
+  <div class="segment">
+    <a class="btn sm {% if vista!='primer_plano' %}secondary{% endif %}" href="/priorizados?vista=primer_plano">Primer plano</a>
+    <a class="btn sm {% if vista!='completo' %}secondary{% endif %}" href="/priorizados?vista=completo">Completo</a>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Añadir priorizado propio</h3>
+  <form method="post" action="/priorizados/anadir" class="form-row">
+    <div><label>Identificación</label><input name="identificacion" required/></div>
+    <div><label>Nombre</label><input name="nombre"/></div>
+    <div><label>Motivo</label><input name="motivo" value="Priorizado propio"/></div>
+    <div><label>Detalle</label><input name="detalle"/></div>
+    <div style="grid-column:1/-1;"><button class="btn" type="submit">Guardar en SQL</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Contactado</th>
+          <th>Activo</th>
+          <th>Identificación</th>
+          <th>Nombre</th>
+          <th>Motivo</th>
+          <th>Origen</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for f in filas %}
+        <tr>
+          <td>
+            <form method="post" action="/priorizados/contactado">
+              <input type="hidden" name="identificacion" value="{{ f.identificacion }}"/>
+              <input type="hidden" name="vista" value="{{ vista }}"/>
+              <input type="hidden" name="contactado" value="{% if f.contactado %}0{% else %}1{% endif %}"/>
+              <button class="btn sm secondary" type="submit">{% if f.contactado %}☑{% else %}☐{% endif %}</button>
+            </form>
+          </td>
+          <td>
+            {% if f.es_propio %}
+            <form method="post" action="/priorizados/activo">
+              <input type="hidden" name="identificacion" value="{{ f.identificacion }}"/>
+              <input type="hidden" name="vista" value="completo"/>
+              <input type="hidden" name="activo" value="{% if f.activo %}0{% else %}1{% endif %}"/>
+              <button class="btn sm secondary" type="submit">{% if f.activo %}Sí{% else %}No{% endif %}</button>
+            </form>
+            {% else %}—{% endif %}
+          </td>
+          <td><a href="/estudiante/{{ f.identificacion }}">{{ f.identificacion }}</a></td>
+          <td>{{ f.nombre }}</td>
+          <td>{{ f.motivo }}</td>
+          <td>{{ f.origen }}</td>
+          <td></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="muted">Sin priorizados en esta vista.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

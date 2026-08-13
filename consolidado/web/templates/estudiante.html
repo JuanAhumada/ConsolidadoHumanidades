@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Estudiante{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Consulta individual</h2>
+    <p class="sub">Busque por cédula o nombre y revise la ficha completa del estudiante.</p>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" action="/estudiante" class="form-row" style="align-items:end;">
+    <div>
+      <label for="q">Cédula o nombre</label>
+      <input id="q" type="search" name="q" value="{{ q or '' }}" placeholder="Ej. 521725 o Farfan"/>
+    </div>
+    <div>
+      <button class="btn" type="submit">Buscar</button>
+    </div>
+  </form>
+</div>
+
+{% if resultados and not ficha %}
+<div class="card">
+  <h3>Resultados</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Identificación</th><th>Nombre</th><th>Programa</th><th></th></tr></thead>
+      <tbody>
+      {% for r in resultados %}
+        <tr>
+          <td>{{ r.identificacion }}</td>
+          <td>{{ r.nombre }}</td>
+          <td>{{ r.programa or '—' }}</td>
+          <td><a class="btn sm secondary" href="/estudiante/{{ r.identificacion }}">Ver ficha</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if ficha %}
+<div class="card">
+  <div class="ficha-hero">
+    <div class="ficha-avatar">{{ (ficha.nombre or 'E')[0]|upper }}</div>
+    <div>
+      <h3 style="margin:0;">{{ ficha.nombre or 'Sin nombre' }}</h3>
+      <p class="muted" style="margin:.35rem 0 0;">{{ ficha.identificacion }}{% if ficha.programa %} · {{ ficha.programa }}{% endif %}</p>
+    </div>
+  </div>
+  {% for sec in ficha.secciones %}
+  <h3 style="margin-top:1.35rem;">{{ sec.titulo }}</h3>
+  <div class="ficha-grid">
+    {% for campo in sec.campos %}
+    <div class="campo">
+      <div class="e">{{ campo.etiqueta }}</div>
+      <div class="v">{{ campo.valor }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% elif q and not resultados %}
+<div class="card"><p class="muted">Sin resultados para «{{ q }}».</p></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Archivos{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Archivos fuente</h2>
+    <p class="sub">Suba o actualice los Excels. Al generar se abrirá el consolidado en Excel; las gráficas siguen en la web.</p>
+  </div>
+</div>
+
+<div class="grid grid-3">
+  <div class="stat"><div class="n">{{ estado.obligatorios_listos }}/{{ estado.obligatorios_total }}</div><div class="l">Obligatorios listos</div></div>
+  <div class="stat"><div class="n">{{ estado.num_versiones }}</div><div class="l">Versiones en SQL</div></div>
+  <div class="stat"><div class="n">{% if estado.listo_generar %}Sí{% else %}No{% endif %}</div><div class="l">Listo para generar</div></div>
+</div>
+
+{% for cat in estado.categorias %}
+<div class="card">
+  <h3>{{ cat.titulo }}</h3>
+  {% for slot in cat.slots %}
+  <div class="file-row">
+    <div>
+      <span class="dot {% if slot.cargado %}ok{% elif slot.requerido %}bad{% else %}opt{% endif %}"></span>
+      <strong>{{ slot.titulo }}</strong>
+      <span class="muted">{% if slot.requerido %}· obligatorio{% else %}· opcional{% endif %}</span>
+      <div class="muted" style="margin-left:1.1rem;font-size:.85rem;">
+        {% if slot.cargado %}Cargado · {{ slot.nombre_guardado }}{% else %}Sin cargar{% endif %}
+      </div>
+    </div>
+    <form method="post" action="/upload/{{ slot.id }}" enctype="multipart/form-data">
+      <input type="file" name="archivo" accept=".xlsx,.xlsm,.xls" required/>
+      <button class="btn sm secondary" type="submit">{% if slot.cargado %}Cambiar{% else %}Cargar{% endif %}</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<div class="card">
+  <h3>Documentos adicionales</h3>
+  {% if estado.documentos %}
+    {% for doc in estado.documentos %}
+    <div class="file-row">
+      <div>
+        <span class="dot {% if doc.cargado %}ok{% else %}opt{% endif %}"></span>
+        <strong>{{ doc.titulo }}</strong>
+        <span class="muted">· {{ doc.grupo_encabezado or doc.categoria or 'Extra' }} · {{ doc.num_columnas }} cols</span>
+      </div>
+      <span class="muted">{{ doc.nombre_guardado }}</span>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="muted">No hay documentos adicionales. Puede gestionarlos desde la app de escritorio o ampliar esta vista más adelante.</p>
+  {% endif %}
+</div>
+{% endblock %}

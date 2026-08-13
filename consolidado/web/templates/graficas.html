@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Gráficas{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Gráficas</h2>
+    <p class="sub">Elija columna y tipo. Puede exportar la imagen PNG de la gráfica.</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="form-row">
+    <div>
+      <label for="columna">Columna</label>
+      <select id="columna">
+        {% for c in columnas %}
+        <option value="{{ c }}" {% if c == 'Programa' or c == 'Nivel prioridad' %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="tipo">Tipo de gráfica</label>
+      <select id="tipo">
+        <option value="bar">Barras</option>
+        <option value="bar_horizontal">Barras horizontales</option>
+        <option value="pie">Pastel</option>
+        <option value="doughnut">Dona</option>
+        <option value="line">Líneas</option>
+      </select>
+    </div>
+    <div>
+      <label for="top">Top categorías</label>
+      <select id="top">
+        <option>10</option>
+        <option selected>20</option>
+        <option>25</option>
+        <option>40</option>
+      </select>
+    </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn" type="button" id="btn-generar">Generar gráfica</button>
+    <button class="btn secondary" type="button" id="btn-exportar" disabled>Exportar PNG</button>
+  </div>
+  <p id="chart-meta" class="muted" style="margin-top:.75rem;"></p>
+</div>
+
+<div class="chart-box">
+  <canvas id="chart"></canvas>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let chart;
+const colores = [
+  '#0c6b63','#128c82','#1aa39a','#2bb8ae','#5ecfc6',
+  '#0a4f4a','#146b8a','#1d7ea3','#2a6f97','#3d5a80',
+  '#415a77','#1b4332','#2d6a4f','#40916c','#52b788'
+];
+
+async function generar() {
+  const columna = document.getElementById('columna').value;
+  const tipo = document.getElementById('tipo').value;
+  const top = document.getElementById('top').value;
+  const meta = document.getElementById('chart-meta');
+  meta.textContent = 'Cargando…';
+  try {
+    const res = await fetch(`/api/grafica?columna=${encodeURIComponent(columna)}&tipo=${encodeURIComponent(tipo)}&top=${top}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Error');
+    meta.textContent = `${data.categorias} categorías · ${data.total_filas} valores · ${data.columna}`;
+    const ctx = document.getElementById('chart');
+    if (chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: data.chart_type,
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: data.columna,
+          data: data.values,
+          backgroundColor: data.labels.map((_, i) => colores[i % colores.length]),
+          borderColor: '#0f766e',
+          borderWidth: data.chart_type === 'line' ? 2 : 0,
+          tension: 0.25,
+        }]
+      },
+      options: {
+        indexAxis: data.horizontal ? 'y' : 'x',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: data.chart_type === 'pie' || data.chart_type === 'doughnut' },
+          title: { display: true, text: `${data.columna} · ${data.tipo}` }
+        }
+      }
+    });
+    document.getElementById('btn-exportar').disabled = false;
+  } catch (e) {
+    meta.textContent = e.message || String(e);
+    document.getElementById('btn-exportar').disabled = true;
+  }
+}
+
+function exportar() {
+  if (!chart) return;
+  const a = document.createElement('a');
+  a.href = chart.toBase64Image('image/png', 1);
+  const col = document.getElementById('columna').value.replace(/[^\w\-]+/g, '_');
+  a.download = `grafica_${col}.png`;
+  a.click();
+}
+
+document.getElementById('btn-generar').addEventListener('click', generar);
+document.getElementById('btn-exportar').addEventListener('click', exportar);
+{% if columnas %}generar();{% endif %}
+</script>
+{% endblock %}

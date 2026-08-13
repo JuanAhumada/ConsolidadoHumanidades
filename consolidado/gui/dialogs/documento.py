@@ -46,7 +46,7 @@ class DialogoDocumento(ctk.CTkToplevel):
         self.modo_edicion = documento is not None
         self.ruta_origen: Path | None = None
         self.columnas_origen: list[str] = []
-        self.filas_map: list[tuple[ctk.CTkEntry, ctk.CTkComboBox]] = []
+        self.filas_map: list[dict] = []
 
         self.title("Editar documento" if self.modo_edicion else "Añadir documento")
         self.geometry("760x640")
@@ -214,7 +214,8 @@ class DialogoDocumento(ctk.CTkToplevel):
         else:
             df = _leer_hoja_datos(ruta)
         self.columnas_origen = list(df.columns)
-        for _, combo in self.filas_map:
+        for item in self.filas_map:
+            combo = item["combo"]
             actual = combo.get()
             combo.configure(values=self.columnas_origen or [""])
             if actual in self.columnas_origen:
@@ -258,7 +259,7 @@ class DialogoDocumento(ctk.CTkToplevel):
         if not self.modo_edicion and len(self.filas_map) <= 1:
             # Si solo hay una fila vacía, ofrecer rellenar desde el Excel
             unica = self.filas_map[0] if self.filas_map else None
-            if unica and not unica[0].get().strip():
+            if unica and not unica["entrada"].get().strip():
                 if messagebox.askyesno(
                     "Columnas del Excel",
                     "¿Cargar las columnas del archivo para que pueda "
@@ -286,31 +287,45 @@ class DialogoDocumento(ctk.CTkToplevel):
             self._anadir_fila_columna(salida=col, origen=col)
 
     def _anadir_fila_columna(self, salida: str = "", origen: str = "") -> None:
-        fila = len(self.filas_map)
-        ctk.CTkLabel(self.marco_cols, text="Nombre columna:").grid(
-            row=fila, column=0, sticky="w", pady=2
-        )
-        ent = ctk.CTkEntry(self.marco_cols, width=220, placeholder_text="Nombre en consolidado")
-        ent.grid(row=fila, column=1, sticky="ew", padx=4, pady=2)
+        fila = ctk.CTkFrame(self.marco_cols, fg_color="transparent")
+        fila.pack(fill="x", pady=3)
+
+        ctk.CTkLabel(fila, text="Nombre:").pack(side="left")
+        ent = ctk.CTkEntry(fila, width=200, placeholder_text="Nombre en consolidado")
+        ent.pack(side="left", padx=(4, 8), fill="x", expand=True)
         if salida:
             ent.insert(0, salida)
-        ctk.CTkLabel(self.marco_cols, text="Del Excel:").grid(
-            row=fila, column=2, sticky="w", padx=(8, 0)
-        )
+
+        ctk.CTkLabel(fila, text="Excel:").pack(side="left")
         combo = ctk.CTkComboBox(
-            self.marco_cols,
+            fila,
             values=self.columnas_origen or [""],
-            width=220,
+            width=200,
             command=lambda val, e=ent: self._sugerir_nombre(e, val),
         )
-        combo.grid(row=fila, column=3, sticky="ew", padx=4, pady=2)
+        combo.pack(side="left", padx=(4, 8), fill="x", expand=True)
         if origen:
             combo.set(origen)
         elif self.columnas_origen:
             combo.set(self.columnas_origen[0])
-        self.filas_map.append((ent, combo))
-        self.marco_cols.grid_columnconfigure(1, weight=1)
-        self.marco_cols.grid_columnconfigure(3, weight=1)
+
+        btn_quitar = ctk.CTkButton(
+            fila,
+            text="Quitar",
+            width=70,
+            height=28,
+            command=lambda f=fila: self._quitar_fila_columna(f),
+            **estilo_boton_secundario(),
+        )
+        btn_quitar.pack(side="right", padx=(4, 0))
+
+        self.filas_map.append({"frame": fila, "entrada": ent, "combo": combo})
+
+    def _quitar_fila_columna(self, fila: ctk.CTkFrame) -> None:
+        self.filas_map = [item for item in self.filas_map if item["frame"] is not fila]
+        fila.destroy()
+        if not self.filas_map:
+            self._anadir_fila_columna()
 
     def _sugerir_nombre(self, entry: ctk.CTkEntry, valor: str) -> None:
         if entry.get().strip():
@@ -334,9 +349,9 @@ class DialogoDocumento(ctk.CTkToplevel):
             return
 
         columnas = []
-        for ent, combo in self.filas_map:
-            salida = ent.get().strip()
-            origen = combo.get().strip()
+        for item in self.filas_map:
+            salida = item["entrada"].get().strip()
+            origen = item["combo"].get().strip()
             if salida and origen:
                 columnas.append({"salida": salida, "aliases": [origen]})
         if not columnas:

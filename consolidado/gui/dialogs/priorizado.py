@@ -12,7 +12,7 @@ import consolidado as merge
 from consolidado.gui.theme import FONT_TEXTO
 from consolidado.storage.priorizados import (
     agregar_priorizado_propio,
-    quitar_priorizado_propio,
+    set_priorizado_activo,
 )
 
 
@@ -64,7 +64,9 @@ class DialogoPriorizadoPropio(ctk.CTkToplevel):
         barra = ctk.CTkFrame(marco, fg_color="transparent")
         barra.pack(fill="x", pady=(8, 0))
         ctk.CTkButton(barra, text="Cerrar", width=90, command=self.destroy).pack(side="right", padx=4)
-        ctk.CTkButton(barra, text="Quitar propio", width=110, command=self._quitar).pack(side="right", padx=4)
+        ctk.CTkButton(barra, text="Desactivar", width=110, command=self._desactivar).pack(
+            side="right", padx=4
+        )
         ctk.CTkButton(barra, text="Añadir seleccionado", width=140, command=self._anadir).pack(
             side="right", padx=4
         )
@@ -120,11 +122,15 @@ class DialogoPriorizadoPropio(ctk.CTkToplevel):
             parent=self,
         )
 
-    def _quitar(self) -> None:
+    def _desactivar(self) -> None:
         est = self._estudiante_seleccionado()
         if not est:
             messagebox.showwarning("Seleccione", "Elija un estudiante de la lista.", parent=self)
             return
-        quitar_priorizado_propio(est["identificacion"], self.base)
+        set_priorizado_activo(est["identificacion"], activo=False, base=self.base)
         self.callback()
-        messagebox.showinfo("Quitado", "Priorizado propio eliminado.", parent=self)
+        messagebox.showinfo(
+            "Desactivado",
+            "Priorizado propio desactivado (sigue en la base de datos).",
+            parent=self,
+        )

@@ -33,7 +33,6 @@ from consolidado.core.constants import (
 from consolidado.core.documentos import _unir_documentos_adicionales
 from consolidado.core.excel_io import abrir_archivo_en_sistema
 from consolidado.core.export import guardar_excel_consolidado
-from consolidado.core.html_export import guardar_html_consolidado, ruta_html_desde_excel
 from consolidado.core.fusion import fusionar_por_id
 from consolidado.core.priorizado_enriquecido import (
     _cargar_priorizado_enriquecido_cfg,
@@ -234,13 +233,6 @@ def ejecutar_consolidado(
         num_materias=max_materias,
         materias_repetidas=materias_repetidas,
     )
-    destino_html = guardar_html_consolidado(
-        consolidado,
-        ruta_html_desde_excel(destino),
-        cfg=cfg,
-        num_materias=max_materias,
-        titulo=f"Consolidado · {periodo} · {fecha_v.isoformat()}",
-    )
 
     # Mantener la carpeta de salida en config (no el archivo puntual)
     try:
@@ -262,5 +254,5 @@ def ejecutar_consolidado(
         )
 
     if abrir:
-        abrir_archivo_en_sistema(destino_html, parent=parent)
+        abrir_archivo_en_sistema(destino, parent=parent)
     return consolidado, destino

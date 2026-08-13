@@ -343,6 +343,8 @@ def _fusionar_entrada_vista(vista: list[dict], ids_vista: set[str], entrada: dic
             )
             if entrada.get("es_propio"):
                 v["es_propio"] = True
+            if "activo" in entrada:
+                v["activo"] = entrada["activo"]
             break
         return
     ids_vista.add(key)
@@ -407,7 +409,7 @@ def obtener_lista_priorizados_vista(cfg: dict, base: Path) -> list[dict]:
             except Exception:
                 pass
 
-    for p in cargar_priorizados_propios(base):
+    for p in cargar_priorizados_propios(base, solo_activos=False):
         key = normalizar_id(p.get("identificacion", ""))
         if not key:
             continue
@@ -421,6 +423,7 @@ def obtener_lista_priorizados_vista(cfg: dict, base: Path) -> list[dict]:
                 "detalle": p.get("detalle") or "",
                 "origen": "Priorizado propio",
                 "es_propio": True,
+                "activo": bool(p.get("activo", True)),
             },
         )
 
@@ -429,6 +432,7 @@ def obtener_lista_priorizados_vista(cfg: dict, base: Path) -> list[dict]:
             key = normalizar_id(v.get("identificacion", ""))
             v["nombre"] = id_to_name.get(key, "")
         v.setdefault("es_propio", v.get("origen") == "Priorizado propio")
+        v.setdefault("activo", True)
         key = normalizar_id(v.get("identificacion", ""))
         v["contactado"] = key in ids_contactados
     return vista
