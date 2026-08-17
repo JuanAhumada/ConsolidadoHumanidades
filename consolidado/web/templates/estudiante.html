@@ -4,17 +4,17 @@
 <div class="topbar">
   <div>
     <h2>Consulta individual</h2>
-    <p class="sub">Busque por cédula o nombre y revise la ficha completa del estudiante.</p>
+    <p class="sub">Busque por cédula o nombre. Si hay varias coincidencias, elija una ficha.</p>
   </div>
 </div>
 
 <div class="card">
   <form method="get" action="/estudiante" class="form-row" style="align-items:end;">
-    <div>
+    <div class="field">
       <label for="q">Cédula o nombre</label>
       <input id="q" type="search" name="q" value="{{ q or '' }}" placeholder="Ej. 521725 o Farfan"/>
     </div>
-    <div>
+    <div class="field">
       <button class="btn" type="submit">Buscar</button>
     </div>
   </form>
@@ -42,25 +42,161 @@
 {% endif %}
 
 {% if ficha %}
-<div class="card">
-  <div class="ficha-hero">
-    <div class="ficha-avatar">{{ (ficha.nombre or 'E')[0]|upper }}</div>
-    <div>
-      <h3 style="margin:0;">{{ ficha.nombre or 'Sin nombre' }}</h3>
-      <p class="muted" style="margin:.35rem 0 0;">{{ ficha.identificacion }}{% if ficha.programa %} · {{ ficha.programa }}{% endif %}</p>
+<div class="ficha-view">
+  <div class="ficha-board">
+    <aside class="ficha-side">
+      <p class="ficha-side-id">{{ ficha.identificacion }}</p>
+      <div class="ficha-side-avatar" aria-hidden="true">
+        <svg viewBox="0 0 64 64" width="72" height="72" fill="none">
+          <circle cx="32" cy="24" r="12" fill="#fff"/>
+          <path d="M12 54c3.5-12 11-18 20-18s16.5 6 20 18" fill="#fff"/>
+        </svg>
+      </div>
+      <h3 class="ficha-side-name">{{ ficha.nombre or 'Sin nombre' }}</h3>
+      <p class="ficha-side-meta">
+        {{ ficha.programa or 'Sin programa' }}{% if ficha.periodo_ingreso and ficha.periodo_ingreso != '—' %} · {{ ficha.periodo_ingreso }}{% endif %}
+      </p>
+      {% if ficha.nivel_prioridad %}
+      <p class="ficha-side-nivel">Nivel {{ ficha.nivel_prioridad }}{% if ficha.puntaje_prioridad %} · {{ ficha.puntaje_prioridad }} pts{% endif %}</p>
+      {% endif %}
+      <div class="ficha-chart" aria-label="Puntajes de prioridad">
+        {% for p in ficha.puntajes %}
+        <div class="ficha-chart-col" title="{{ p.etiqueta }}: {{ p.texto }}">
+          <div class="ficha-chart-track">
+            <div class="ficha-chart-fill" style="height: {{ p.pct }}%"></div>
+          </div>
+          <span class="ficha-chart-val">{{ p.texto }}</span>
+          <span class="ficha-chart-lbl">{{ p.etiqueta }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </aside>
+
+    <div class="ficha-main">
+      <section class="ficha-datos">
+        <h3>Datos estudiante</h3>
+        {% if ficha.datos %}
+        <div class="ficha-datos-grid">
+          {% for campo in ficha.datos %}
+          <div>
+            <div class="e">{{ campo.etiqueta }}</div>
+            <div class="v">{{ campo.valor }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="ficha-datos-vacio">Sin datos de contacto adicionales.</p>
+        {% endif %}
+      </section>
+
+      {% if ficha.categorias %}
+      <div class="ficha-cats" data-n="{{ ficha.n_categorias }}">
+        {% for cat in ficha.categorias %}
+        <section class="ficha-cat">
+          <h4>{{ cat.titulo }}</h4>
+          {% if cat.tipo == 'alertas' %}
+            {% if cat.inicial %}
+            <p class="ficha-fase">Inicial</p>
+            <ul class="ficha-alerta-lista">
+              {% for t in cat.inicial %}
+              <li>
+                <span>{{ t }}</span>
+                <form method="post" action="/alertas/fuente/quitar" onsubmit="return confirm('¿Descartar esta alerta? No volverá a aparecer al generar el consolidado.');">
+                  <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+                  <input type="hidden" name="fase" value="inicial"/>
+                  <input type="hidden" name="tipo" value="{{ t }}"/>
+                  <button class="btn sm danger" type="submit">Eliminar</button>
+                </form>
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if cat.final %}
+            <p class="ficha-fase">Final</p>
+            <ul class="ficha-alerta-lista">
+              {% for t in cat.final %}
+              <li>
+                <span>{{ t }}</span>
+                <form method="post" action="/alertas/fuente/quitar" onsubmit="return confirm('¿Descartar esta alerta? No volverá a aparecer al generar el consolidado.');">
+                  <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+                  <input type="hidden" name="fase" value="final"/>
+                  <input type="hidden" name="tipo" value="{{ t }}"/>
+                  <button class="btn sm danger" type="submit">Eliminar</button>
+                </form>
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            {% if cat.campos %}
+            <div class="ficha-cat-campos">
+              {% for campo in cat.campos %}
+              <div class="campo">
+                <div class="e">{{ campo.etiqueta }}</div>
+                <div class="v">{{ campo.valor }}</div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          {% else %}
+            <div class="ficha-cat-campos">
+              {% for campo in cat.campos %}
+              <div class="campo">
+                <div class="e">{{ campo.etiqueta }}</div>
+                <div class="v">{{ campo.valor }}</div>
+              </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </section>
+        {% endfor %}
+      </div>
+      {% endif %}
     </div>
   </div>
-  {% for sec in ficha.secciones %}
-  <h3 style="margin-top:1.35rem;">{{ sec.titulo }}</h3>
-  <div class="ficha-grid">
-    {% for campo in sec.campos %}
-    <div class="campo">
-      <div class="e">{{ campo.etiqueta }}</div>
-      <div class="v">{{ campo.valor }}</div>
+
+  {% if ficha.horario %}
+  <section class="ficha-horario" data-n="{{ ficha.horario.n_dias }}">
+    <header class="ficha-horario-head">
+      <h3>Horario</h3>
+      {% if ficha.horario.campos %}
+      <div class="ficha-horario-extra">
+        {% for campo in ficha.horario.campos %}
+        <span>{{ campo.etiqueta }}: <strong>{{ campo.valor }}</strong></span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </header>
+    {% if ficha.horario.dias %}
+    <div class="ficha-semana" data-n="{{ ficha.horario.dias|length }}">
+      {% for dia in ficha.horario.dias %}
+      <div class="ficha-dia">
+        <h4>{{ dia }}</h4>
+        {% for m in ficha.horario.por_dia[dia] %}
+        <article class="ficha-clase">
+          <p class="ficha-clase-hora">{{ m.inicio }} – {{ m.fin }}</p>
+          <p class="ficha-clase-nom">{{ m.nombre }}</p>
+          {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
+          {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
+        </article>
+        {% endfor %}
+      </div>
+      {% endfor %}
     </div>
-    {% endfor %}
-  </div>
-  {% endfor %}
+    {% endif %}
+    {% if ficha.horario.sin_dia %}
+    <div class="ficha-semana ficha-semana-extra" data-n="{{ [ficha.horario.sin_dia|length, 3]|min }}">
+      {% for m in ficha.horario.sin_dia %}
+      <article class="ficha-clase">
+        <p class="ficha-clase-hora">{{ m.horario }}</p>
+        <p class="ficha-clase-nom">{{ m.nombre }}</p>
+        {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
+        {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
+      </article>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
 </div>
 {% elif q and not resultados %}
 <div class="card"><p class="muted">Sin resultados para «{{ q }}».</p></div>

@@ -309,8 +309,10 @@ def _fusionar_enriquecidos(dataframes: list[pl.DataFrame]) -> pl.DataFrame:
     return _finalizar_mapa(mapa)
 
 
-def _cargar_priorizado_enriquecido_cfg(cfg: dict, base: Path) -> pl.DataFrame:
-    carpeta = carpeta_excels(cfg, base)
+def _cargar_priorizado_enriquecido_cfg(
+    cfg: dict, base: Path, carpeta: Path | None = None
+) -> pl.DataFrame:
+    carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
     partes: list[pl.DataFrame] = []
     for tipo, procesador in (
         ("bd_prio_psi", procesar_archivo_prio_psi),

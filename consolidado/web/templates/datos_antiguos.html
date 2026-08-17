@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Datos antiguos{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Datos antiguos</h2>
+    <p class="sub">Cree versiones de fechas pasadas sin tocar los Excel actuales de <strong>Archivos</strong>. El periodo se calcula solo: ene–jun → YYYY-1, jul–dic → YYYY-2.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Importar Excel consolidado</h3>
+  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Si ya tiene un consolidado generado en otra fecha, súbalo aquí. No modifica la carpeta de entrada.</p>
+  <form method="post" action="/datos-antiguos/importar" enctype="multipart/form-data" class="version-form">
+    <div class="field">
+      <label for="imp-fecha">Fecha de la versión</label>
+      <input id="imp-fecha" type="date" name="fecha_version" value="{{ hoy }}" required/>
+      <p class="muted periodo-hint" style="margin:.4rem 0 0;font-size:.8rem;">Periodo: —</p>
+    </div>
+    <div class="field">
+      <label for="imp-notas">Notas (opcional)</label>
+      <input id="imp-notas" type="text" name="notas" placeholder="Ej. importado del archivo de mayo"/>
+    </div>
+    <div class="field" style="grid-column:1 / -1;">
+      <label>Excel consolidado</label>
+      <div class="file-row" style="padding:.2rem 0 0;border:0;">
+        <label class="file-pick">
+          <input type="file" name="archivo" accept=".xlsx,.xlsm,.xls" required/>
+          <span class="file-pick-btn">Elegir Excel</span>
+          <span class="file-pick-name">Ningún archivo</span>
+        </label>
+        <button class="btn secondary" type="submit">Importar versión</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Montar fuentes viejas</h3>
+  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">
+    Suba los Excel de esa fecha. Se copian a una carpeta aislada (<code>datos/historico</code>) y se genera un snapshot nuevo.
+    Los archivos de <a href="/archivos">Archivos</a> no se reemplazan.
+  </p>
+  <form method="post" action="/datos-antiguos/generar" enctype="multipart/form-data">
+    <div class="version-form" style="margin-bottom:1rem;">
+      <div class="field">
+        <label for="gen-fecha">Fecha de la versión</label>
+        <input id="gen-fecha" type="date" name="fecha_version" value="{{ hoy }}" required/>
+        <p class="muted periodo-hint" style="margin:.4rem 0 0;font-size:.8rem;">Periodo: —</p>
+      </div>
+      <div class="field">
+        <label for="gen-notas">Notas (opcional)</label>
+        <input id="gen-notas" type="text" name="notas" placeholder="Ej. corte de mayo 2026-1"/>
+      </div>
+    </div>
+    {% for cat in estado.categorias %}
+    <h4 class="hist-cat">{{ cat.titulo }}</h4>
+    {% for slot in cat.slots %}
+    <div class="file-row">
+      <div>
+        <span class="dot {% if slot.requerido %}bad{% else %}opt{% endif %}"></span>
+        <strong>{{ slot.titulo }}</strong>
+        <span class="muted">{% if slot.requerido %}· obligatorio{% else %}· opcional{% endif %}</span>
+      </div>
+      <label class="file-pick">
+        <input type="file" name="archivo_{{ slot.id }}" accept=".xlsx,.xlsm,.xls" {% if slot.requerido %}required{% endif %}/>
+        <span class="file-pick-btn">Elegir Excel</span>
+        <span class="file-pick-name">Ningún archivo</span>
+      </label>
+    </div>
+    {% endfor %}
+    {% endfor %}
+    <div class="form-actions" style="margin-top:1rem;">
+      <button class="btn" type="submit">Generar versión histórica</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function periodoDe(iso) {
+  if (!iso) return "—";
+  const parts = iso.split("-").map(Number);
+  const y = parts[0], m = parts[1];
+  if (!y || !m) return "—";
+  return m <= 6 ? y + "-1" : y + "-2";
+}
+document.querySelectorAll("input[name=fecha_version]").forEach((inp) => {
+  const hint = inp.closest("form")?.querySelector(".periodo-hint") || inp.parentElement?.querySelector(".periodo-hint");
+  const upd = () => {
+    if (hint) hint.textContent = "Periodo: " + periodoDe(inp.value);
+  };
+  inp.addEventListener("input", upd);
+  inp.addEventListener("change", upd);
+  upd();
+});
+</script>
+{% endblock %}

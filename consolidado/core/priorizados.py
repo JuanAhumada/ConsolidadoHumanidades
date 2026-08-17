@@ -106,7 +106,9 @@ def procesar_priorizados_internos_psi(ruta: Path) -> list[dict]:
     return list(mapa.values())
 
 
-def cargar_priorizados_internos_psi(cfg: dict, base: Path) -> list[dict]:
+def cargar_priorizados_internos_psi(
+    cfg: dict, base: Path, carpeta: Path | None = None
+) -> list[dict]:
     """Priorizados internos desde la hoja de casos del Excel de Psicología."""
     slot = next(
         (s for s in cfg.get("archivos_fuente", []) if s.get("tipo") == "bd_prio_psi"),
@@ -114,7 +116,8 @@ def cargar_priorizados_internos_psi(cfg: dict, base: Path) -> list[dict]:
     )
     if not slot:
         return []
-    p = carpeta_excels(cfg, base) / slot.get("nombre_guardado", "")
+    origen = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
+    p = origen / slot.get("nombre_guardado", "")
     if not p.is_file():
         return []
     try:

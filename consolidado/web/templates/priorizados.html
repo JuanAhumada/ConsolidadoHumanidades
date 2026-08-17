@@ -15,11 +15,25 @@
 <div class="card">
   <h3>Añadir priorizado propio</h3>
   <form method="post" action="/priorizados/anadir" class="form-row">
-    <div><label>Identificación</label><input name="identificacion" required/></div>
-    <div><label>Nombre</label><input name="nombre"/></div>
-    <div><label>Motivo</label><input name="motivo" value="Priorizado propio"/></div>
-    <div><label>Detalle</label><input name="detalle"/></div>
-    <div style="grid-column:1/-1;"><button class="btn" type="submit">Guardar en SQL</button></div>
+    <div class="field">
+      <label for="prio-id">Identificación</label>
+      <input id="prio-id" type="text" name="identificacion" required placeholder="Cédula o documento"/>
+    </div>
+    <div class="field">
+      <label for="prio-nombre">Nombre</label>
+      <input id="prio-nombre" type="text" name="nombre" placeholder="Nombre del estudiante"/>
+    </div>
+    <div class="field">
+      <label for="prio-motivo">Motivo</label>
+      <input id="prio-motivo" type="text" name="motivo" value="Priorizado propio" placeholder="Motivo"/>
+    </div>
+    <div class="field">
+      <label for="prio-detalle">Detalle</label>
+      <input id="prio-detalle" type="text" name="detalle" placeholder="Nota adicional"/>
+    </div>
+    <div class="form-actions-row">
+      <button class="btn" type="submit">Guardar en SQL</button>
+    </div>
   </form>
 </div>
 
@@ -41,7 +55,7 @@
       {% for f in filas %}
         <tr>
           <td>
-            <form method="post" action="/priorizados/contactado">
+            <form method="post" action="/priorizados/contactado" onsubmit="return confirm(this.dataset.msg);"{% if f.contactado %} data-msg="¿Quitar la marca de contactado de {{ f.nombre or f.identificacion }}?"{% else %} data-msg="¿Marcar a {{ f.nombre or f.identificacion }} como contactado?"{% endif %}>
               <input type="hidden" name="identificacion" value="{{ f.identificacion }}"/>
               <input type="hidden" name="vista" value="{{ vista }}"/>
               <input type="hidden" name="contactado" value="{% if f.contactado %}0{% else %}1{% endif %}"/>

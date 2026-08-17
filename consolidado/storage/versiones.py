@@ -17,10 +17,13 @@ from consolidado.config.settings import (
 from consolidado.core.constants import HOJA_LISTADO, max_materias_en_dataframe
 from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.db import (
+    cargar_dataframe_version,
     contar_versiones,
     guardar_version,
     inicializar_db,
     nombre_excel_version,
+    obtener_version,
+    periodo_desde_fecha,
 )
 
 
@@ -152,7 +155,7 @@ def sembrar_version_inicial(
             return None
         excel_origen = candidatos[0]
 
-    fecha_version = fecha_version or date(2026, 5, 15)
+    fecha_version = fecha_version or date(2026, 5, 10)
     periodo = periodo or "2026-1"
 
     df, num_materias = leer_dataframe_desde_excel_consolidado(
@@ -183,6 +186,98 @@ def sembrar_version_inicial(
         ruta_excel=destino_excel,
         notas="Registro inicial importado del consolidado existente (periodo 2026-1, mayo).",
     )
+
+
+def importar_excel_como_version(
+    excel_origen: Path,
+    *,
+    fecha_version: date,
+    notas: str | None = None,
+    base: Path | None = None,
+) -> dict:
+    """Crea un snapshot SQL a partir de un Excel consolidado ya generado."""
+    from consolidado.core.export import guardar_excel_consolidado
+    from consolidado.core.pipeline import resolver_destino_versionado
+
+    base = base or PROJECT_ROOT
+    inicializar_db(base)
+    cfg = cargar_config(base)
+    origen = Path(excel_origen)
+    if not origen.is_file():
+        raise ValueError(f"No se encontró el Excel: {origen}")
+
+    df, num_materias = leer_dataframe_desde_excel_consolidado(
+        origen, cfg=cfg, base=base
+    )
+    if df.height == 0:
+        raise ValueError("El Excel no contiene estudiantes.")
+
+    destino, periodo, fecha_v = resolver_destino_versionado(
+        cfg, base, fecha_version=fecha_version
+    )
+    destino = guardar_excel_consolidado(
+        df, destino, cfg=cfg, num_materias=num_materias
+    )
+    texto_notas = (notas or "").strip() or (
+        f"Excel importado · periodo {periodo} · {fecha_v.isoformat()}"
+    )
+    return guardar_version(
+        df,
+        base=base,
+        fecha_version=fecha_v,
+        periodo=periodo,
+        num_materias=num_materias,
+        ruta_excel=destino,
+        notas=texto_notas,
+    )
+
+
+def ruta_excel_version(version_id: int, base: Path | None = None) -> Path | None:
+    """Ruta del Excel asociado si el archivo todavía existe."""
+    base = base or PROJECT_ROOT
+    meta = obtener_version(version_id, base)
+    if not meta or not meta.get("ruta_excel"):
+        return None
+    ruta = Path(str(meta["ruta_excel"]))
+    if not ruta.is_absolute():
+        ruta = base / ruta
+    return ruta if ruta.is_file() else None
+
+
+def exportar_excel_version(version_id: int, base: Path | None = None) -> Path:
+    """Regenera el Excel desde el snapshot SQL (no crea una versión nueva)."""
+    from consolidado.core.constants import max_materias_en_dataframe
+    from consolidado.core.export import guardar_excel_consolidado
+    from consolidado.core.repetidas import _cargar_materias_repetidas_cfg
+
+    base = base or PROJECT_ROOT
+    meta = obtener_version(version_id, base)
+    if meta is None:
+        raise ValueError(f"No existe la versión id={version_id}")
+    df = cargar_dataframe_version(version_id, base)
+    cfg = cargar_config(base)
+    num_materias = meta.get("num_materias") or max_materias_en_dataframe(df)
+    materias_repetidas = _cargar_materias_repetidas_cfg(cfg, base)
+    fecha = date.fromisoformat(str(meta["fecha_version"]))
+    periodo = str(meta.get("periodo") or periodo_desde_fecha(fecha))
+    carpeta = base / "salida"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    destino = carpeta / nombre_excel_version(periodo, fecha, sufijo_hora="export")
+    return guardar_excel_consolidado(
+        df,
+        destino,
+        cfg=cfg,
+        num_materias=num_materias,
+        materias_repetidas=materias_repetidas,
+    )
+
+
+def asegurar_excel_version(version_id: int, base: Path | None = None) -> Path:
+    """Devuelve el Excel de la versión; si falta, lo regenera desde SQL."""
+    existente = ruta_excel_version(version_id, base)
+    if existente is not None:
+        return existente
+    return exportar_excel_version(version_id, base)
 
 
 def asegurar_semilla_si_vacia(base: Path | None = None) -> dict | None:

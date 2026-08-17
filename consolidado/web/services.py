@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -10,36 +11,25 @@ from consolidado.config.settings import (
     ORDEN_CATEGORIAS_FUENTE,
     cargar_config,
     carpeta_excels,
-    guardar_config,
     guardar_excel_fuente,
-    restaurar_config_fabrica,
     slot_es_requerido,
 )
 from consolidado.core.constants import aplicar_config
-from consolidado.core.ficha_estudiante import obtener_ficha_estudiante
 from consolidado.core.pipeline import ejecutar_consolidado, generar_dataframe_consolidado
-from consolidado.core.priorizados import (
-    buscar_estudiantes_en_fuentes,
-    obtener_lista_priorizados_vista,
-)
 from consolidado.paths import PROJECT_ROOT
-from consolidado.storage.alertas_propias import (
-    agregar_alerta_propia,
-    cargar_alertas_propias,
-    quitar_alerta_propia,
-)
-from consolidado.storage.contactados import marcar_contactado
 from consolidado.storage.db import (
     cargar_dataframe_version,
+    contar_estudiantes_distintos,
     contar_versiones,
-    listar_versiones,
     ultima_version,
+    ultima_version_por_id,
 )
-from consolidado.storage.priorizados import (
-    agregar_priorizado_propio,
-    set_priorizado_activo,
+from consolidado.storage.modificaciones import comparar_versiones, registrar_modificacion
+from consolidado.storage.versiones import (
+    asegurar_excel_version,
+    asegurar_semilla_si_vacia,
+    importar_excel_como_version,
 )
-from consolidado.storage.versiones import asegurar_semilla_si_vacia
 
 
 def base_proyecto() -> Path:
@@ -93,8 +83,15 @@ def estado_archivos(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         "obligatorios_total": len(obligatorios),
         "listo_generar": listos == len(obligatorios) and len(obligatorios) > 0,
         "num_versiones": contar_versiones(PROJECT_ROOT),
+        "num_estudiantes_distintos": contar_estudiantes_distintos(PROJECT_ROOT),
         "ultima": ultima_version(PROJECT_ROOT),
     }
+
+
+def _id_version(meta: dict[str, Any] | None) -> int | None:
+    if not meta or meta.get("id") is None:
+        return None
+    return int(meta["id"])
 
 
 def subir_slot(slot_id: str, archivo_nombre: str, contenido: bytes) -> dict[str, Any]:
@@ -115,14 +112,52 @@ def subir_slot(slot_id: str, archivo_nombre: str, contenido: bytes) -> dict[str,
             except OSError:
                 pass
     aplicar_config(cfg, PROJECT_ROOT)
+    titulo = slot.get("titulo") or slot_id
+    registrar_modificacion(
+        accion="cargar_archivo",
+        resumen=f"Cargó «{titulo}»",
+        entidad="archivo",
+        identificacion=slot_id,
+        detalle={"archivo": archivo_nombre, "destino": str(destino)},
+    )
     return {"ok": True, "slot_id": slot_id, "destino": str(destino)}
 
 
-def generar() -> dict[str, Any]:
+def parse_fecha(texto: str | None) -> date:
+    raw = (texto or "").strip()
+    if not raw:
+        return date.today()
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError("Fecha inválida. Use el formato AAAA-MM-DD.") from exc
+
+
+def generar(
+    *,
+    fecha_version: date | None = None,
+    notas: str | None = None,
+    abrir: bool = True,
+) -> dict[str, Any]:
     cfg = cfg_actual()
     asegurar_semilla_si_vacia(PROJECT_ROOT)
+    antes = ultima_version_por_id(PROJECT_ROOT)
     consolidado, destino = ejecutar_consolidado(
-        cfg, base=PROJECT_ROOT, abrir=True
+        cfg,
+        base=PROJECT_ROOT,
+        abrir=abrir,
+        fecha_version=fecha_version,
+        notas=notas,
+    )
+    despues = ultima_version_por_id(PROJECT_ROOT)
+    fecha = (fecha_version or date.today()).isoformat()
+    registrar_modificacion(
+        accion="generar",
+        resumen=f"Generó consolidado {fecha} · {consolidado.height} estudiantes",
+        entidad="version",
+        version_antes=_id_version(antes),
+        version_despues=_id_version(despues),
+        detalle={"excel": str(destino), "estudiantes": consolidado.height},
     )
     return {
         "ok": True,
@@ -132,6 +167,102 @@ def generar() -> dict[str, Any]:
     }
 
 
+def importar_version(
+    excel_origen: Path,
+    fecha_version: date,
+    notas: str | None = None,
+) -> dict[str, Any]:
+    antes = ultima_version_por_id(PROJECT_ROOT)
+    meta = importar_excel_como_version(
+        excel_origen,
+        fecha_version=fecha_version,
+        notas=notas,
+        base=PROJECT_ROOT,
+    )
+    registrar_modificacion(
+        accion="importar",
+        resumen=(
+            f"Importó Excel como versión {fecha_version.isoformat()}"
+            f" · {meta.get('num_estudiantes', 0)} estudiantes"
+        ),
+        entidad="version",
+        version_antes=_id_version(antes),
+        version_despues=_id_version(meta),
+        detalle={"excel": str(excel_origen), "periodo": meta.get("periodo")},
+    )
+    return {"ok": True, "version": meta, "estudiantes": meta.get("num_estudiantes", 0)}
+
+
+def generar_version_historica(
+    archivos_por_slot: dict[str, tuple[str, bytes]],
+    fecha_version: date,
+    notas: str | None = None,
+) -> dict[str, Any]:
+    """Genera una versión SQL desde fuentes copiadas a una carpeta aislada."""
+    cfg = cfg_actual()
+    faltan: list[str] = []
+    slots = {s.get("id"): s for s in cfg.get("archivos_fuente", [])}
+    for slot in cfg.get("archivos_fuente", []):
+        if slot_es_requerido(slot) and slot.get("id") not in archivos_por_slot:
+            faltan.append(str(slot.get("titulo") or slot.get("id")))
+    if faltan:
+        raise ValueError(
+            "Faltan archivos obligatorios para la versión histórica: " + ", ".join(faltan)
+        )
+    desconocidos = [sid for sid in archivos_por_slot if sid not in slots]
+    if desconocidos:
+        raise ValueError("Archivo(s) no reconocidos: " + ", ".join(desconocidos))
+
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    carpeta = PROJECT_ROOT / "datos" / "historico" / f"{fecha_version.isoformat()}_{stamp}"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    for slot_id, (_nombre, contenido) in archivos_por_slot.items():
+        slot = slots[slot_id]
+        dest_name = slot.get("nombre_guardado") or f"{slot_id}.xlsx"
+        (carpeta / dest_name).write_bytes(contenido)
+
+    antes = ultima_version_por_id(PROJECT_ROOT)
+    texto_notas = (notas or "").strip() or (
+        f"Versión histórica desde fuentes aisladas · {fecha_version.isoformat()}"
+    )
+    consolidado, destino = ejecutar_consolidado(
+        cfg,
+        base=PROJECT_ROOT,
+        carpeta_fuentes=carpeta,
+        abrir=False,
+        fecha_version=fecha_version,
+        persistir_config=False,
+        notas=texto_notas,
+    )
+    despues = ultima_version_por_id(PROJECT_ROOT)
+    registrar_modificacion(
+        accion="generar_historico",
+        resumen=(
+            f"Montó datos antiguos {fecha_version.isoformat()}"
+            f" · {consolidado.height} estudiantes"
+        ),
+        entidad="version",
+        version_antes=_id_version(antes),
+        version_despues=_id_version(despues),
+        detalle={
+            "carpeta": str(carpeta),
+            "excel": str(destino),
+            "slots": list(archivos_por_slot),
+        },
+    )
+    return {
+        "ok": True,
+        "estudiantes": consolidado.height,
+        "excel": str(destino),
+        "carpeta": str(carpeta),
+        "version": despues,
+    }
+
+
+def excel_de_version(version_id: int) -> Path:
+    return asegurar_excel_version(version_id, PROJECT_ROOT)
+
+
 def df_ultima_version():
     ult = ultima_version(PROJECT_ROOT)
     if not ult:
@@ -139,3 +270,7 @@ def df_ultima_version():
         df, _ = generar_dataframe_consolidado(cfg, base=PROJECT_ROOT)
         return df, None
     return cargar_dataframe_version(ult["id"], PROJECT_ROOT), ult
+
+
+def comparar(version_de: int, version_a: int) -> dict[str, Any]:
+    return comparar_versiones(version_de, version_a, base=PROJECT_ROOT)

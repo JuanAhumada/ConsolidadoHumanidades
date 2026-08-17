@@ -4,7 +4,7 @@
 <div class="topbar">
   <div>
     <h2>Archivos fuente</h2>
-    <p class="sub">Suba o actualice los Excels. Al generar se abrirá el consolidado en Excel; las gráficas siguen en la web.</p>
+    <p class="sub">Suba o actualice los Excels actuales. Para montar fuentes de otra fecha sin reemplazar estos archivos, use <a href="/datos-antiguos">Datos antiguos</a>.</p>
   </div>
 </div>
 
@@ -28,8 +28,12 @@
       </div>
     </div>
     <form method="post" action="/upload/{{ slot.id }}" enctype="multipart/form-data">
-      <input type="file" name="archivo" accept=".xlsx,.xlsm,.xls" required/>
-      <button class="btn sm secondary" type="submit">{% if slot.cargado %}Cambiar{% else %}Cargar{% endif %}</button>
+      <label class="file-pick">
+        <input type="file" name="archivo" accept=".xlsx,.xlsm,.xls" required/>
+        <span class="file-pick-btn">Elegir Excel</span>
+        <span class="file-pick-name">Ningún archivo</span>
+      </label>
+      <button class="btn sm" type="submit">{% if slot.cargado %}Cambiar{% else %}Cargar{% endif %}</button>
     </form>
   </div>
   {% endfor %}
