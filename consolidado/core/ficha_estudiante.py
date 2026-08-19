@@ -18,10 +18,18 @@ from consolidado.core.constants import (
     COL_PERIODO_ACTUAL,
     COL_TIPO_ALERTA_FINAL,
     COL_TIPO_ALERTA_INICIAL,
+    COL_TOTAL_BECA,
     aplicar_config,
     es_columna_materia_horario,
 )
-from consolidado.core.normalizacion import _es_nulo, _es_valor_true, formatear_periodo_cod, normalizar_id
+from consolidado.core.normalizacion import (
+    _es_nulo,
+    _es_valor_true,
+    formatear_monto_beca_vista,
+    formatear_periodo_cod,
+    normalizar_id,
+)
+from consolidado.core.prioridad import fmt_pts
 from consolidado.core.colores_programa import color_programa, estilo_color
 from consolidado.core.pipeline import generar_dataframe_consolidado
 from consolidado.storage.alertas_fuente import aplicar_descartes_a_fila, partir_tipos_alerta
@@ -48,6 +56,7 @@ _PUNTAJES_GRAFICA = [
     ("Ptje Reintegro", "Reintegro"),
     ("Ptje Propio", "Propio"),
     ("Ptje Activacion", "Activacion"),
+    ("Ptje Ruta", "Ruta"),
 ]
 _DIAS_SEMANA = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado")
 _DIA_CANON = {
@@ -108,6 +117,10 @@ def _campos_no_vacios(fila: dict, columnas: list[str], *, omitir: set[str] | Non
         if col in omitir:
             continue
         valor = _formatear_valor_ficha(fila.get(col))
+        if col == COL_TOTAL_BECA:
+            monto = formatear_monto_beca_vista(fila.get(col))
+            if monto:
+                valor = monto
         if valor == "—":
             continue
         campos.append({"etiqueta": etiqueta_export_columna(col), "valor": valor, "columna": col})
@@ -343,7 +356,7 @@ def obtener_ficha_estudiante(
         "nivel_prioridad": None if _esta_vacio(nivel) else str(nivel).strip(),
         "puntaje_prioridad": None
         if _esta_vacio(fila.get("Puntaje prioridad"))
-        else _formatear_valor_ficha(fila.get("Puntaje prioridad")),
+        else fmt_pts(_numero(fila.get("Puntaje prioridad"))),
         "version_id": version_usada,
         "color": color,
         "estilo": estilo_color(color),

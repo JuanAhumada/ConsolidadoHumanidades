@@ -74,7 +74,7 @@ _CAMPOS_INDEXABLES: dict[str, str] = {
 }
 
 _PTJE_PRIORIZADO = frozenset({"Ptje Priorizado", "Ptje Propio", "Ptje Activacion"})
-_PTJE_RENDIMIENTO = frozenset({"Ptje Beca", "Ptje Repitiendo", "Ptje Reintegro"})
+_PTJE_RENDIMIENTO = frozenset({"Ptje Beca", "Ptje Repitiendo", "Ptje Reintegro", "Ptje Ruta"})
 
 COLUMNAS_CAT_BASE = frozenset(COLUMNAS_DATOS + COLUMNAS_PRIORIDAD)
 COLUMNAS_CAT_PRIORIZADO = (
@@ -1094,6 +1094,25 @@ def contar_versiones(base: Path | None = None) -> int:
     with conexion(base) as conn:
         row = conn.execute("SELECT COUNT(*) AS n FROM versiones").fetchone()
     return int(row["n"]) if row else 0
+
+
+def vaciar_versiones(base: Path | None = None) -> int:
+    """Borra snapshots y estudiantes. Conserva usuarios, marcas y alertas propias."""
+    inicializar_db(base)
+    with conexion(base) as conn:
+        row = conn.execute("SELECT COUNT(*) AS n FROM versiones").fetchone()
+        n = int(row["n"]) if row else 0
+        conn.execute("DELETE FROM versiones")
+        tablas = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "estudiantes" in tablas:
+            conn.execute("DELETE FROM estudiantes")
+        conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('versiones')")
+    return n
 
 
 def contar_estudiantes_distintos(base: Path | None = None) -> int:

@@ -227,6 +227,7 @@
     "naranja": "E67E22",
     "reintegro": "2980B9",
     "repitiendo": "5DADE2",
+    "ruta": "1ABC9C",
     "amarillo": "F1C40F",
     "verde": "2ECC71",
     "gris": "BDC3C7"
@@ -243,6 +244,7 @@
       "columnas": [
         "Identificación",
         "Nombre y apellidos",
+        "Activos",
         "Fecha de nacimiento",
         "Teléfono celular",
         "Programa",
@@ -264,6 +266,7 @@
         "Ptje Reintegro",
         "Ptje Propio",
         "Ptje Activacion",
+        "Ptje Ruta",
         "Puntaje prioridad",
         "Nivel prioridad",
         "Detalle prioridad"

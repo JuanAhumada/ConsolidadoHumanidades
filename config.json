@@ -55,6 +55,14 @@
       "categoria": "rendimiento"
     },
     {
+      "id": "bd_permanencia",
+      "categoria": "rendimiento",
+      "titulo": "Permanencia y ruta de grado",
+      "tipo": "bd_permanencia",
+      "nombre_guardado": "bd_permanencia.xlsx",
+      "requerido": false
+    },
+    {
       "id": "bd_alertas_com_1",
       "titulo": "Alertas — Comunicación y Entrenamiento",
       "tipo": "bd_alertas_com",
@@ -208,6 +216,7 @@
     "naranja": "E67E22",
     "reintegro": "2980B9",
     "repitiendo": "5DADE2",
+    "ruta": "1ABC9C",
     "amarillo": "F1C40F",
     "verde": "2ECC71",
     "gris": "BDC3C7"
@@ -224,6 +233,7 @@
       "columnas": [
         "Identificación",
         "Nombre y apellidos",
+        "Activos",
         "Fecha de nacimiento",
         "Teléfono celular",
         "Programa",
@@ -245,6 +255,7 @@
         "Ptje Reintegro",
         "Ptje Propio",
         "Ptje Activacion",
+        "Ptje Ruta",
         "Puntaje prioridad",
         "Nivel prioridad",
         "Detalle prioridad"
@@ -268,6 +279,16 @@
         "Tipo de beca o crédito",
         "Total beca",
         "Funcionario que tiene a cargo la beca"
+      ]
+    },
+    {
+      "nombre": "Ruta de grado",
+      "columnas": [
+        "% créditos aprobados",
+        "Estado opción de grado",
+        "Opción de grado",
+        "Estado de inglés",
+        "Saber Pro"
       ]
     },
     {

@@ -45,6 +45,7 @@ from consolidado.storage.db import (  # noqa: F401
     ruta_base_datos,
     ultima_version,
     ultima_version_por_id,
+    vaciar_versiones,
 )
 from consolidado.storage.modificaciones import (  # noqa: F401
     comparar_versiones,

@@ -13,6 +13,7 @@ import polars as pl
 from openpyxl import load_workbook
 
 from consolidado.config.settings import COLUMNAS_RUTA_GRADO, carpeta_excels
+from consolidado.core.constants import COL_ACTIVOS
 from consolidado.core.normalizacion import (
     _es_nulo,
     formatear_periodo_cod,
@@ -44,6 +45,12 @@ _ALIAS_CAMPOS: dict[str, tuple[str, ...]] = {
     "opcion": ("opcion de grado", "opcion a grado"),
     "estado_ingles": ("estado de ingles",),
     "saber_pro": ("saber pro2", "saber pro"),
+    "observaciones": (
+        "observacion de seguimiento",
+        "observaciones de seguimiento",
+        "observaciones",
+        "observacion",
+    ),
 }
 
 _SALIDA = {
@@ -72,6 +79,10 @@ def _texto(val: Any) -> str:
     if _es_nulo(val):
         return ""
     return " ".join(str(val).replace("\xa0", " ").replace("\n", " ").split())
+
+
+def _es_graduado_obs(val: Any) -> bool:
+    return "graduado" in _norm(val)
 
 
 def _es_vacio(val: Any) -> bool:
@@ -204,7 +215,11 @@ def _valor_de_indices(vals: list[Any], indices: list[int], formatear) -> str | N
 
 
 def _fusionar_valores(destino: dict[str, str | None], origen: dict[str, str | None]) -> None:
+    if origen.get("_graduado"):
+        destino["_graduado"] = True
     for clave, valor in origen.items():
+        if clave == "_graduado":
+            continue
         if valor is None or valor == "":
             continue
         destino[clave] = valor
@@ -255,6 +270,10 @@ def _filas_estudiante_hoja(ws, *, fallback_ingles: bool) -> dict[str, dict[str, 
             fila[_SALIDA["saber_pro"]] = _valor_de_indices(
                 vals, mapa["saber_pro"], _texto_campo
             )
+        if "observaciones" in mapa:
+            obs = _valor_de_indices(vals, mapa["observaciones"], _texto_campo)
+            if _es_graduado_obs(obs):
+                fila["_graduado"] = True
         previo = out.get(key, {})
         _fusionar_valores(previo, fila)
         out[key] = previo
@@ -263,7 +282,11 @@ def _filas_estudiante_hoja(ws, *, fallback_ingles: bool) -> dict[str, dict[str, 
 
 def leer_estudiantes_permanencia(ruta: Path) -> pl.DataFrame:
     """Devuelve identificación + columnas de ruta de grado, una fila por documento."""
-    schema = {"_id_key": pl.Utf8, **{c: pl.Utf8 for c in COLUMNAS_RUTA_GRADO}}
+    schema = {
+        "_id_key": pl.Utf8,
+        **{c: pl.Utf8 for c in COLUMNAS_RUTA_GRADO},
+        "_graduado": pl.Boolean,
+    }
     if not ruta.is_file():
         return pl.DataFrame(schema=schema)
 
@@ -292,6 +315,7 @@ def leer_estudiantes_permanencia(ruta: Path) -> pl.DataFrame:
         for col in COLUMNAS_RUTA_GRADO:
             val = data.get(col)
             fila[col] = str(val) if val is not None else None
+        fila["_graduado"] = bool(data.get("_graduado"))
         filas.append(fila)
     return pl.DataFrame(filas, schema=schema)
 
@@ -303,22 +327,35 @@ def aplicar_permanencia(
     carpeta: Path | None = None,
 ) -> pl.DataFrame:
     """Left join de ruta de grado; no añade estudiantes que no estén en el consolidado."""
-    for col in COLUMNAS_RUTA_GRADO:
+    for col in list(COLUMNAS_RUTA_GRADO) + [COL_ACTIVOS]:
         if col in consolidado.columns:
             consolidado = consolidado.drop(col)
 
     ruta = ruta_archivo_permanencia(cfg, base, carpeta)
-    extra = pl.DataFrame(schema={"_id_key": pl.Utf8, **{c: pl.Utf8 for c in COLUMNAS_RUTA_GRADO}})
+    extra = pl.DataFrame(
+        schema={
+            "_id_key": pl.Utf8,
+            **{c: pl.Utf8 for c in COLUMNAS_RUTA_GRADO},
+            "_graduado": pl.Boolean,
+        }
+    )
     if ruta:
         try:
             extra = leer_estudiantes_permanencia(ruta)
         except Exception:
             extra = pl.DataFrame(
-                schema={"_id_key": pl.Utf8, **{c: pl.Utf8 for c in COLUMNAS_RUTA_GRADO}}
+                schema={
+                    "_id_key": pl.Utf8,
+                    **{c: pl.Utf8 for c in COLUMNAS_RUTA_GRADO},
+                    "_graduado": pl.Boolean,
+                }
             )
 
     if extra.height == 0:
-        return consolidado.with_columns([pl.lit(None).alias(c) for c in COLUMNAS_RUTA_GRADO])
+        return consolidado.with_columns(
+            [pl.lit(None).alias(c) for c in COLUMNAS_RUTA_GRADO]
+            + [pl.lit(True).alias(COL_ACTIVOS)]
+        )
 
     resultado = consolidado.with_columns(
         pl.col("Identificación")
@@ -331,6 +368,12 @@ def aplicar_permanencia(
     for col in COLUMNAS_RUTA_GRADO:
         if col not in resultado.columns:
             resultado = resultado.with_columns(pl.lit(None).alias(col))
+    if "_graduado" in resultado.columns:
+        resultado = resultado.with_columns(
+            (~pl.col("_graduado").fill_null(False)).alias(COL_ACTIVOS)
+        ).drop("_graduado")
+    else:
+        resultado = resultado.with_columns(pl.lit(True).alias(COL_ACTIVOS))
     return resultado
 
 

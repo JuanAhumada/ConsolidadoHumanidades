@@ -5,7 +5,7 @@
   <div>
     <h2>Seguimiento</h2>
     <p class="sub">
-      Estudiantes con nivel de prioridad ≥ 1.
+      Estudiantes activos con nivel de prioridad ≥ 1.
       {{ visibles }} visibles de {{ total }} en {{ categoria.titulo|lower }}.
       {% if meta %}Versión {{ meta.periodo }} · {{ meta.fecha_version }}{% endif %}
     </p>
@@ -88,7 +88,7 @@
       <span class="seg-check-lbl">{% if f.contactado %}Marcado{% else %}Marcar{% endif %}</span>
     </button>
     <h3><a href="/estudiante/{{ f.identificacion }}">{{ f.nombre }}</a></h3>
-    <p class="seg-card-score"><strong>{{ f.puntaje|int }}</strong> pts</p>
+    <p class="seg-card-score"><strong>{{ f.puntaje_txt }}</strong> pts</p>
   </article>
   {% else %}
   <div class="card"><p class="muted">No hay estudiantes en esta categoría{% if vista=='pendientes' %} pendientes de marcar{% endif %}.</p></div>

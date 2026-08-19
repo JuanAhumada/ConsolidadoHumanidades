@@ -19,8 +19,14 @@ from consolidado.config.settings import (
     slot_es_requerido,
 )
 from consolidado.core.constants import aplicar_config
+from consolidado.core.colores_programa import colores_programas_fijos
 from consolidado.core.permanencia import cargar_metas
 from consolidado.core.pipeline import ejecutar_consolidado, generar_dataframe_consolidado
+from consolidado.core.prioridad import (
+    METADATA_NIVELES,
+    aplicar_colores_prioridad,
+    colores_fila_para_gui,
+)
 from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.db import (
     cargar_dataframe_version,
@@ -53,6 +59,43 @@ def metas_ruta_grado() -> dict[str, Any]:
         return cargar_metas(cfg, PROJECT_ROOT)
     except Exception:
         return vacio
+
+
+def _tinta_sobre_hex(hex_color: str) -> str:
+    h = str(hex_color or "").lstrip("#")
+    if len(h) != 6:
+        return "#0a1628"
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    luma = 0.299 * r + 0.587 * g + 0.114 * b
+    return "#0a1628" if luma >= 155 else "#ffffff"
+
+
+def leyenda_colores() -> dict[str, Any]:
+    cfg = cfg_actual()
+    aplicar_colores_prioridad(cfg)
+    excel = []
+    for item in colores_fila_para_gui():
+        hex_raw = str(item.get("color") or "").lstrip("#")
+        hex_css = f"#{hex_raw}" if hex_raw else "#BDC3C7"
+        excel.append({**item, "hex": hex_css, "ink": _tinta_sobre_hex(hex_css)})
+    programas = []
+    for item in colores_programas_fijos():
+        programas.append({**item, "ink": item.get("ink") or _tinta_sobre_hex(item.get("hex", ""))})
+    programas.append(
+        {
+            "clave": "neutro",
+            "hex": "#334155",
+            "soft": "#e2e8f0",
+            "ink": "#ffffff",
+            "corta": "Sin programa",
+            "nota": "Gris pizarra si el estudiante no tiene carrera o no está en Humanidades.",
+        }
+    )
+    return {
+        "excel": excel,
+        "programas": programas,
+        "niveles": list(METADATA_NIVELES),
+    }
 
 
 def estado_archivos(cfg: dict[str, Any] | None = None) -> dict[str, Any]:

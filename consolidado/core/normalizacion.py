@@ -164,6 +164,20 @@ def _es_valor_true(val) -> bool:
         return val == 1
     return str(val).strip().lower() in ("true", "verdadero", "si", "sí", "1")
 
+
+def es_estudiante_activo(val) -> bool:
+    """True si no está marcado como graduado/inactivo. Sin valor se asume activo."""
+    if _es_nulo(val):
+        return True
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return val != 0
+    texto = str(val).strip().lower()
+    if texto in {"false", "0", "no", "n", "f", "inactivo"}:
+        return False
+    return True
+
 def normalizar_id(val) -> str:
     if _es_nulo(val):
         return ""
@@ -321,6 +335,23 @@ def sumar_montos_beca(valores: list) -> int | float | None:
     if not encontrado:
         return None
     return int(total) if total == int(total) else total
+
+
+def formatear_monto_beca_vista(val) -> str | None:
+    """Muestra un monto de beca como '$ 1.234.567' (puntos de miles)."""
+    monto = parsear_monto_beca(val)
+    if monto is None:
+        return None
+    negativo = monto < 0
+    monto = abs(monto)
+    entero = int(monto)
+    frac = round(monto - entero, 2)
+    cuerpo = f"{entero:,}".replace(",", ".")
+    if frac:
+        centavos = f"{frac:.2f}".split(".")[1]
+        cuerpo = f"{cuerpo},{centavos}"
+    prefijo = "-$ " if negativo else "$ "
+    return f"{prefijo}{cuerpo}"
 
 def _digitos_a_entero_str(digits: str) -> str | None:
     if not digits:

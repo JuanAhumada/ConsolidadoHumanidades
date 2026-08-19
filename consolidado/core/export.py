@@ -14,6 +14,7 @@ from consolidado.core.columnas import alinear_dataframe_salida, formatear_datafr
 from consolidado.core.constants import (
     ANCHO_MAXIMO_COLUMNA_EXCEL,
     COL_ACTIVACION_RUTA,
+    COL_ACTIVOS,
     COL_ALERTA_PROPIA,
     COL_AJUSTE_RAZONABLE,
     COL_FECHA_NACIMIENTO,
@@ -34,6 +35,7 @@ from consolidado.core.excel_io import _longitud_visible_celda
 from consolidado.core.normalizacion import (
     _es_nulo,
     _es_valor_true,
+    es_estudiante_activo,
     formatear_fecha_nacimiento,
     formatear_periodo_cod,
     normalizar_id,
@@ -95,6 +97,8 @@ def _valor_excel_celda(col: str, val):
         return None
     if col == "Priorizado":
         return True if val is True or _es_valor_true(val) else None
+    if col == COL_ACTIVOS:
+        return es_estudiante_activo(val)
     if col == COL_TELEFONO_CELULAR:
         norm = normalizar_telefono_celda(val)
         if not norm:

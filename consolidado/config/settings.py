@@ -23,6 +23,7 @@ CARPETA_EXCELS_DEFAULT = "datos/entrada"
 COLUMNAS_DATOS = [
     "Identificación",
     "Nombre y apellidos",
+    "Activos",
     "Fecha de nacimiento",
     "Teléfono celular",
     "Programa",
@@ -51,6 +52,7 @@ COLUMNAS_PUNTAJE_COMPONENTES = [
     "Ptje Reintegro",
     "Ptje Propio",
     "Ptje Activacion",
+    "Ptje Ruta",
 ]
 
 COLUMNAS_PRIORIDAD = [
@@ -94,6 +96,7 @@ ETIQUETAS_EXPORT_COLUMNAS: dict[str, str] = {
     "Ptje Reintegro": "Reintegro",
     "Ptje Propio": "Propio",
     "Ptje Activacion": "Activacion",
+    "Ptje Ruta": "Ruta",
 }
 
 CATEGORIAS_FUENTE_DEFAULT: dict[str, str] = {
@@ -244,6 +247,7 @@ COLORES_PRIORIDAD_DEFAULT = {
     "naranja": "E67E22",
     "reintegro": "2980B9",
     "repitiendo": "5DADE2",
+    "ruta": "1ABC9C",
     "amarillo": "F1C40F",
     "verde": "2ECC71",
     "gris": "BDC3C7",

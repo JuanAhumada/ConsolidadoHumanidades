@@ -246,7 +246,7 @@ class DialogoInfoPrioridad(ctk.CTkToplevel):
         ).pack(anchor="w", pady=(8, 4))
         ctk.CTkLabel(
             master,
-            text="Precedencia: rojo → morado/naranja/reintegro/repitiendo (componente más alto) → "
+            text="Precedencia: rojo → morado/naranja/reintegro/repitiendo/ruta (componente más alto) → "
             "amarillo/verde (empates) → gris (solo beca 0/NO/Call Center sin otra señal). "
             "El tono varía con el puntaje del componente.",
             font=FONT_PEQUENA,

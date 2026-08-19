@@ -125,3 +125,8 @@ def estilo_color(color: dict[str, str]) -> str:
 
 def colores_para_etiquetas(labels: list[str]) -> list[str]:
     return [color_programa(lab)["hex"] for lab in labels]
+
+
+def colores_programas_fijos() -> list[dict[str, str]]:
+    """Paleta fija de carreras de Humanidades, para la leyenda."""
+    return [dict(item) for item in _FIJOS.values()]

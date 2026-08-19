@@ -36,7 +36,7 @@ Abre la web en el navegador. Usuario inicial: **admin** / **admin** (cámbielo e
 
 ## Roles
 
-- **consulta:** Inicio, Estudiante, Seguimiento, Gráficas, Versiones (listar/descargar).
+- **consulta:** Inicio, Estudiante, Seguimiento, Metas, Gráficas, Colores, Versiones (listar/descargar).
 - **admin:** lo anterior más Datos antiguos, Historial, Data, Configuración, Usuarios y generar/importar.
 
 ## Flujo de datos

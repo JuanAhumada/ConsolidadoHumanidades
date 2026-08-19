@@ -53,6 +53,7 @@ from consolidado.storage.contactados import marcar_contactado
 from consolidado.storage.db import (
     buscar_estudiantes,
     listar_versiones,
+    ultima_version,
 )
 from consolidado.storage.modificaciones import (
     comparar_versiones,
@@ -83,7 +84,7 @@ app = FastAPI(title="Consolidado de Humanidades")
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 _RUTAS_PUBLICAS = {"/login", "/logout"}
-# Rutas solo para rol admin. Consulta llega hasta Versiones (GET).
+# Rutas solo para rol admin. Consulta: hasta Versiones (GET), más Metas y Colores.
 _PREFIJOS_ADMIN = (
     "/config",
     "/usuarios",
@@ -245,7 +246,17 @@ async def cerrar_sesion(request: Request) -> RedirectResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def inicio(request: Request) -> HTMLResponse:
-    return _render(request, "inicio.html", nav="inicio", metas=services.metas_ruta_grado())
+    return _render(request, "inicio.html", nav="inicio")
+
+
+@app.get("/metas", response_class=HTMLResponse)
+async def pagina_metas(request: Request) -> HTMLResponse:
+    return _render(request, "metas.html", nav="metas", metas=services.metas_ruta_grado())
+
+
+@app.get("/colores", response_class=HTMLResponse)
+async def pagina_colores(request: Request) -> HTMLResponse:
+    return _render(request, "colores.html", nav="colores", leyenda=services.leyenda_colores())
 
 
 @app.get("/archivos", response_class=HTMLResponse)
@@ -645,6 +656,22 @@ async def pagina_versiones(request: Request) -> HTMLResponse:
         "versiones.html",
         nav="versiones",
         versiones=listar_versiones(PROJECT_ROOT),
+    )
+
+
+@app.get("/versiones/ultima/excel")
+async def descargar_ultimo_excel() -> FileResponse:
+    ult = ultima_version(PROJECT_ROOT)
+    if not ult:
+        raise HTTPException(404, "Aún no hay un Excel generado.")
+    try:
+        ruta = services.excel_de_version(int(ult["id"]))
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return FileResponse(
+        path=str(ruta.resolve()),
+        filename=ruta.name,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 

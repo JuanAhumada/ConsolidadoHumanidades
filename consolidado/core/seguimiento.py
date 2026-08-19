@@ -17,7 +17,8 @@ from consolidado.core.constants import (
     COL_TIPO_ALERTA_FINAL,
     COL_TIPO_ALERTA_INICIAL,
 )
-from consolidado.core.normalizacion import _es_nulo, _es_valor_true, normalizar_id
+from consolidado.core.prioridad import fmt_pts
+from consolidado.core.normalizacion import _es_nulo, _es_valor_true, es_estudiante_activo, normalizar_id
 from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.alertas_fuente import partir_tipos_alerta
 from consolidado.storage.alertas_propias import cargar_alertas_propias
@@ -32,6 +33,7 @@ CATEGORIAS_SEGUIMIENTO: tuple[dict[str, str], ...] = (
     {"id": "reintegro", "titulo": "Reintegro", "columna": "Ptje Reintegro", "grupo": "puntaje"},
     {"id": "propio", "titulo": "Propio", "columna": "Ptje Propio", "grupo": "puntaje"},
     {"id": "activacion", "titulo": "Activación", "columna": "Ptje Activacion", "grupo": "puntaje"},
+    {"id": "ruta", "titulo": "Ruta", "columna": "Ptje Ruta", "grupo": "puntaje"},
     {"id": "alertas", "titulo": "Alertas", "columna": "", "grupo": "alertas"},
 )
 
@@ -42,6 +44,7 @@ _DIVISIONES_PUNTAJE: tuple[dict[str, str], ...] = (
     {"id": "reintegro", "titulo": "Reintegro", "corto": "Reintegro", "campo": "ptje_reintegro"},
     {"id": "propio", "titulo": "Propio", "corto": "Propio", "campo": "ptje_propio"},
     {"id": "activacion", "titulo": "Activación", "corto": "Activacion", "campo": "ptje_activacion"},
+    {"id": "ruta", "titulo": "Ruta", "corto": "Ruta", "campo": "ptje_ruta"},
 )
 
 
@@ -84,6 +87,8 @@ def _fila_base(fila: dict[str, Any], ids_contactados: set[str]) -> dict[str, Any
     ident = normalizar_id(fila.get("Identificación"))
     if not ident:
         return None
+    if not es_estudiante_activo(fila.get("Activos")):
+        return None
     nivel = _entero(fila.get("Nivel prioridad"))
     if nivel < 1:
         return None
@@ -112,6 +117,8 @@ def _fila_base(fila: dict[str, Any], ids_contactados: set[str]) -> dict[str, Any
         "ptje_reintegro": _numero(fila.get("Ptje Reintegro")),
         "ptje_propio": _numero(fila.get("Ptje Propio")),
         "ptje_activacion": _numero(fila.get("Ptje Activacion")),
+        "ptje_ruta": _numero(fila.get("Ptje Ruta")),
+        "puntaje_txt": fmt_pts(puntaje),
         "priorizado": _es_valor_true(fila.get("Priorizado")),
         "motivo": _texto(fila.get("Motivo Prio.")),
         "detalle_gprio": _texto(fila.get("Detalle GPrio.")),
@@ -150,6 +157,7 @@ def _puntaje_categoria(item: dict[str, Any], cat: dict[str, str]) -> float:
         "reintegro": "ptje_reintegro",
         "propio": "ptje_propio",
         "activacion": "ptje_activacion",
+        "ruta": "ptje_ruta",
     }
     return float(item.get(mapa.get(cid, "puntaje"), 0) or 0)
 
@@ -237,7 +245,7 @@ def listar_seguimiento(
             {
                 "id": d["id"],
                 "titulo": d["corto"],
-                "valor": int(f[d["campo"]]),
+                "valor": fmt_pts(f[d["campo"]]),
                 "pct": round(min(float(f[d["campo"]]) / tope_div, 1.0) * 100) if tope_div else 0,
                 "activo": float(f[d["campo"]]) > 0,
             }

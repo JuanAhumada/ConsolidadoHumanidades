@@ -76,6 +76,8 @@ COL_FECHA_NACIMIENTO = "Fecha de nacimiento"
 
 COL_PERIODO_ACTUAL = "Periodo actual"
 
+COL_ACTIVOS = "Activos"
+
 COL_NUM_ALERTA_INICIAL = "Num Alerta inicial"
 COL_TIPO_ALERTA_INICIAL = "Tipo Alerta inicial"
 COL_NUM_ALERTA_FINAL = "Num Alerta final"
@@ -102,6 +104,7 @@ COL_PTJE_REPITIENDO = "Ptje Repitiendo"
 COL_PTJE_REINTEGRO = "Ptje Reintegro"
 COL_PTJE_PROPIO = "Ptje Propio"
 COL_PTJE_ACTIVACION = "Ptje Activacion"
+COL_PTJE_RUTA = "Ptje Ruta"
 
 COLUMNAS_PUNTAJE_COMPONENTES = (
     COL_PTJE_BECA,
@@ -110,6 +113,7 @@ COLUMNAS_PUNTAJE_COMPONENTES = (
     COL_PTJE_REINTEGRO,
     COL_PTJE_PROPIO,
     COL_PTJE_ACTIVACION,
+    COL_PTJE_RUTA,
 )
 
 COL_ALERTA_PROPIA = "Alerta Propia"

@@ -50,9 +50,17 @@
           <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h10M5 17h7"/><circle cx="18.2" cy="16.8" r="2.4"/></svg>
           Seguimiento
         </a>
+        <a href="/metas" class="{% if nav=='metas' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.8 14.6 9l5.7.8-4.1 4 1 5.6L12 16.7 6.8 19.4l1-5.6-4.1-4L9.4 9Z"/></svg>
+          Metas
+        </a>
         <a href="/graficas" class="{% if nav=='graficas' %}active{% endif %}">
           <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 19V9M12 19V5M19 19v-7"/></svg>
           Gráficas
+        </a>
+        <a href="/colores" class="{% if nav=='colores' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><circle cx="6.5" cy="8" r="2.1"/><circle cx="17.5" cy="8.2" r="2.1"/><circle cx="7.2" cy="16.6" r="2.1"/><circle cx="16.8" cy="16.5" r="2.1"/></svg>
+          Colores
         </a>
         <a href="/versiones" class="{% if nav=='versiones' %}active{% endif %}">
           <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7.5"/><path d="M12 8v4.5l3 1.8"/></svg>
@@ -89,11 +97,19 @@
         </form>
         {% endif %}
         {% if es_admin %}
-        <form method="post" action="/generar">
-          <label class="cta-date-lbl" for="fecha-gen">Fecha de la versión</label>
-          <input id="fecha-gen" type="date" name="fecha_version" value="{{ hoy }}"/>
-          <button class="btn" type="submit" style="width:100%" {% if not estado.listo_generar %}disabled title="Faltan archivos obligatorios"{% endif %}>
-            Generar consolidado
+        <form id="form-cta-admin" method="post" action="/generar">
+          <label class="cta-date-lbl" for="cta-accion">Acción</label>
+          <select id="cta-accion" name="accion">
+            <option value="descargar">Descargar último Excel</option>
+            <option value="nuevo">Generar nuevo consolidado</option>
+          </select>
+          <div id="cta-fecha-wrap" hidden>
+            <label class="cta-date-lbl" for="fecha-gen">Fecha de la versión</label>
+            <input id="fecha-gen" type="date" name="fecha_version" value="{{ hoy }}"/>
+          </div>
+          <button id="cta-btn" class="btn" type="submit" style="width:100%"
+                  {% if not estado.ultima %}disabled title="Aún no hay un Excel generado"{% endif %}>
+            Descargar último Excel
           </button>
         </form>
         {% set pct = ((estado.obligatorios_listos / estado.obligatorios_total * 100) if estado.obligatorios_total else 0)|int %}
@@ -101,6 +117,11 @@
         <p class="muted" style="font-size:.78rem;margin:.15rem .2rem 0;">
           {{ estado.obligatorios_listos }}/{{ estado.obligatorios_total }} obligatorios
         </p>
+        {% else %}
+        <a class="btn" href="/versiones/ultima/excel" style="width:100%;text-align:center;"
+           {% if not estado.ultima %}aria-disabled="true" onclick="return false;" title="Aún no hay un Excel generado"{% endif %}>
+          Descargar último Excel
+        </a>
         {% endif %}
       </div>
     </aside>
@@ -124,6 +145,35 @@
       wrap?.classList.toggle("has-file", Boolean(file));
     });
   });
+  (function () {
+    const form = document.getElementById("form-cta-admin");
+    const select = document.getElementById("cta-accion");
+    const fecha = document.getElementById("cta-fecha-wrap");
+    const btn = document.getElementById("cta-btn");
+    if (!form || !select || !btn) return;
+    const listo = {{ "true" if estado.listo_generar else "false" }};
+    const tiene = {{ "true" if estado.ultima else "false" }};
+    function sync() {
+      const nuevo = select.value === "nuevo";
+      if (fecha) fecha.hidden = !nuevo;
+      btn.textContent = nuevo ? "Generar consolidado" : "Descargar último Excel";
+      if (nuevo) {
+        btn.disabled = !listo;
+        btn.title = listo ? "" : "Faltan archivos obligatorios";
+      } else {
+        btn.disabled = !tiene;
+        btn.title = tiene ? "" : "Aún no hay un Excel generado";
+      }
+    }
+    select.addEventListener("change", sync);
+    form.addEventListener("submit", (ev) => {
+      if (select.value === "nuevo") return;
+      ev.preventDefault();
+      if (!tiene) return;
+      window.location.href = "/versiones/ultima/excel";
+    });
+    sync();
+  })();
   (function () {
     const KEY = "nav-hidden";
     function setHidden(hidden) {
