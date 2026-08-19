@@ -39,7 +39,7 @@ from consolidado.core.ficha_estudiante import obtener_ficha_estudiante
 from consolidado.core.priorizados import (
     buscar_estudiantes_en_fuentes,
 )
-from consolidado.core.seguimiento import listar_seguimiento
+from consolidado.core.seguimiento import CATEGORIAS_SEGUIMIENTO, listar_seguimiento
 from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.alertas_fuente import (
     descartar_alerta_fuente,
@@ -166,6 +166,11 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "hoy": date.today().isoformat(),
         "usuario": usuario,
         "es_admin": bool(usuario and usuario.get("es_admin")),
+        "categorias_seg": [
+            {"id": c["id"], "titulo": c["titulo"]} for c in CATEGORIAS_SEGUIMIENTO
+        ],
+        "cat": "",
+        "vista": "pendientes",
     }
     data.update(extra)
     return data

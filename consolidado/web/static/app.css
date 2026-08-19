@@ -122,6 +122,8 @@ html.nav-hidden .main {
   color: #d7e0ea;
 }
 
+.nav-hide .nav-hide-up { display: none; }
+
 .nav-hide:hover {
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
@@ -236,6 +238,81 @@ html.nav-hidden .nav-show {
 }
 
 .nav a.active .nav-ico { opacity: 1; }
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.nav-group-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.15rem;
+}
+
+.nav-group-row > a {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-group-toggle {
+  appearance: none;
+  flex-shrink: 0;
+  width: 2.15rem;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: #8fa3b8;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.22s var(--ease), color 0.22s var(--ease);
+}
+
+.nav-group-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.nav-group-toggle svg {
+  transition: transform 0.22s var(--ease);
+}
+
+.nav-group.is-open .nav-group-toggle svg {
+  transform: rotate(180deg);
+}
+
+.nav-sub {
+  display: none;
+  flex-direction: column;
+  gap: 0.08rem;
+  margin: 0.05rem 0 0.25rem 0.55rem;
+  padding: 0.12rem 0 0.12rem 0.55rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.nav-group.is-open .nav-sub {
+  display: flex;
+}
+
+.nav-sub a {
+  padding: 0.42rem 0.7rem;
+  font-size: 0.8rem;
+  border-radius: 10px;
+  color: #8fa3b8;
+}
+
+.nav-sub a.active {
+  box-shadow: 0 6px 14px var(--accent-glow);
+}
+
+.nav-group.is-current .nav-group-row > a:not(.active) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8eef4;
+}
 
 .sidebar .cta {
   margin-top: auto;
@@ -422,6 +499,11 @@ button:disabled {
   outline: none;
   border-color: var(--accent-bright);
   box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.sidebar .cta a.btn {
+  display: flex;
+  margin-bottom: 0.7rem;
 }
 
 .sidebar .cta a.btn[aria-disabled="true"] {
@@ -2257,30 +2339,141 @@ html.nav-hidden body.page-graficas .main {
     height: auto;
     flex-direction: column;
     flex-wrap: nowrap;
-    align-items: stretch;
+    align-items: center;
+    text-align: center;
+    padding: 1.15rem 1rem 0.85rem;
   }
-  .brand { width: 100%; border-bottom: 0; margin-bottom: 0.4rem; padding-bottom: 0.5rem; }
-  .sidebar-head { width: 100%; }
-  .sidebar-head .brand { width: auto; flex: 1; margin-bottom: 0; padding-bottom: 0.5rem; }
+  .sidebar-head {
+    display: contents;
+  }
+  .brand {
+    order: 0;
+    width: 100%;
+    flex: none;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 0.55rem;
+    padding: 0.2rem 0.5rem 0.85rem;
+  }
+  .brand-mark {
+    margin-left: auto;
+    margin-right: auto;
+  }
   .nav {
+    order: 1;
     display: flex;
     flex-direction: column;
     flex-wrap: nowrap;
+    align-items: center;
     width: 100%;
+    max-width: 22rem;
     gap: 0.2rem;
   }
   .nav a {
     width: 100%;
+    justify-content: center;
     transform: none !important;
   }
-  .sidebar .cta { margin-top: 0.5rem; width: 100%; border-top: 0; }
+  .nav-group {
+    width: 100%;
+    align-items: center;
+  }
+  .nav-group-row {
+    width: 100%;
+  }
+  .nav-group-row > a {
+    width: auto;
+  }
+  .nav-sub {
+    width: 100%;
+    margin: 0.1rem 0 0.3rem;
+    padding: 0.1rem 0;
+    border-left: 0;
+    align-items: center;
+  }
+  .nav-sub a {
+    width: min(16rem, 100%);
+    justify-content: center;
+  }
+  .sidebar .cta {
+    order: 2;
+    margin-top: 0.65rem;
+    width: min(22rem, 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: center;
+  }
+  .nav-hide {
+    order: 3;
+    margin: 0.75rem auto 0.15rem;
+    width: 2.45rem;
+    height: 2.45rem;
+    border-radius: 999px;
+  }
+  .nav-hide .nav-hide-side { display: none; }
+  .nav-hide .nav-hide-up { display: grid; }
+  .nav-show {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .nav-show:hover {
+    transform: translateX(-50%);
+  }
   .grid-2, .grid-3, .form-row, .version-form, .hub-grid,
   .land-steps, .land-showcase { grid-template-columns: 1fr; }
   .leyenda-row,
   .leyenda-row-app { grid-template-columns: 1fr; }
   .main { padding: 1.2rem 1rem 2rem; }
-  html.nav-hidden .main { padding-left: 3.6rem; }
-  .file-row { flex-direction: column; align-items: stretch; }
+  html.nav-hidden .main {
+    padding-left: 1rem;
+    padding-top: 4.2rem;
+  }
+  .topbar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .topbar .sub {
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .topbar-actions,
+  .segment {
+    justify-content: center;
+  }
+  .stat {
+    text-align: center;
+  }
+  .land-hero,
+  .hub-hero {
+    text-align: center;
+  }
+  .land-hero h2,
+  .land-lead,
+  .land-hero .hub-search,
+  .land-hero-actions,
+  .hub-search {
+    margin-left: auto;
+    margin-right: auto;
+    justify-content: center;
+  }
+  .land-steps article {
+    justify-content: center;
+    text-align: center;
+    flex-direction: column;
+    align-items: center;
+  }
+  .land-card .land-copy {
+    text-align: center;
+  }
+  .file-row {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .file-row form { justify-content: center; }
   .file-pick { max-width: 100%; }
   .file-pick-name { max-width: none; }
   .hub-search { flex-direction: column; }
@@ -2288,6 +2481,7 @@ html.nav-hidden body.page-graficas .main {
   .ficha-cats[data-n="2"],
   .ficha-cats[data-n="3"] { grid-template-columns: 1fr; }
   .seg-lista { grid-template-columns: 1fr; }
+  .seg-switch { justify-content: center; }
   .seg-switch a { flex: 1 1 calc(25% - 0.2rem); }
   .ficha-semana[data-n="3"],
   .ficha-semana[data-n="4"],
@@ -2298,13 +2492,17 @@ html.nav-hidden body.page-graficas .main {
     height: 100vh;
   }
   .page-graficas .sidebar {
-    max-height: 26vh;
+    max-height: 42vh;
     overflow: auto;
   }
   .page-graficas .main {
     height: auto;
     min-height: 0;
     padding: 0.6rem 0.7rem;
+  }
+  html.nav-hidden body.page-graficas .main {
+    padding-left: 0.7rem;
+    padding-top: 3.6rem;
   }
   .page-graficas .graficas-workspace {
     grid-template-columns: 1fr;

@@ -34,7 +34,8 @@
           <p>Consolidado académico</p>
         </a>
         <button type="button" class="nav-hide" id="nav-hide" title="Ocultar menú" aria-label="Ocultar menú">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="16" height="16"><path d="M15 6 9 12l6 6"/></svg>
+          <svg class="nav-hide-side" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="16" height="16"><path d="M15 6 9 12l6 6"/></svg>
+          <svg class="nav-hide-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="16" height="16"><path d="M6 15l6-6 6 6"/></svg>
         </button>
       </div>
       <nav class="nav">
@@ -46,10 +47,22 @@
           <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19c1.6-3.2 4-4.8 6.5-4.8S16.9 15.8 18.5 19"/></svg>
           Estudiante
         </a>
-        <a href="/seguimiento" class="{% if nav=='seguimiento' %}active{% endif %}">
-          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h10M5 17h7"/><circle cx="18.2" cy="16.8" r="2.4"/></svg>
-          Seguimiento
-        </a>
+        <div class="nav-group {% if nav=='seguimiento' %}is-current is-open{% endif %}" id="nav-seg">
+          <div class="nav-group-row">
+            <a href="/seguimiento?cat=general&amp;vista={{ vista }}">
+              <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h10M5 17h7"/><circle cx="18.2" cy="16.8" r="2.4"/></svg>
+              Seguimiento
+            </a>
+            <button type="button" class="nav-group-toggle" id="nav-seg-toggle" aria-expanded="{% if nav=='seguimiento' %}true{% else %}false{% endif %}" aria-controls="nav-seg-sub" title="Vistas de seguimiento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" width="14" height="14"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+          </div>
+          <div class="nav-sub" id="nav-seg-sub" role="list">
+            {% for c in categorias_seg %}
+            <a role="listitem" href="/seguimiento?cat={{ c.id }}&amp;vista={{ vista }}" class="{% if nav=='seguimiento' and (cat==c.id or (c.id=='general' and cat in ['general', ''])) %}active{% endif %}">{{ c.titulo }}</a>
+            {% endfor %}
+          </div>
+        </div>
         <a href="/metas" class="{% if nav=='metas' %}active{% endif %}">
           <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.8 14.6 9l5.7.8-4.1 4 1 5.6L12 16.7 6.8 19.4l1-5.6-4.1-4L9.4 9Z"/></svg>
           Metas
@@ -97,19 +110,16 @@
         </form>
         {% endif %}
         {% if es_admin %}
-        <form id="form-cta-admin" method="post" action="/generar">
-          <label class="cta-date-lbl" for="cta-accion">Acción</label>
-          <select id="cta-accion" name="accion">
-            <option value="descargar">Descargar último Excel</option>
-            <option value="nuevo">Generar nuevo consolidado</option>
-          </select>
-          <div id="cta-fecha-wrap" hidden>
-            <label class="cta-date-lbl" for="fecha-gen">Fecha de la versión</label>
-            <input id="fecha-gen" type="date" name="fecha_version" value="{{ hoy }}"/>
-          </div>
-          <button id="cta-btn" class="btn" type="submit" style="width:100%"
-                  {% if not estado.ultima %}disabled title="Aún no hay un Excel generado"{% endif %}>
-            Descargar último Excel
+        <a class="btn secondary" href="/versiones/ultima/excel" style="width:100%;text-align:center;"
+           {% if not estado.ultima %}aria-disabled="true" onclick="return false;" title="Aún no hay un Excel generado"{% endif %}>
+          Descargar último Excel
+        </a>
+        <form method="post" action="/generar">
+          <label class="cta-date-lbl" for="fecha-gen">Fecha de la versión</label>
+          <input id="fecha-gen" type="date" name="fecha_version" value="{{ hoy }}"/>
+          <button class="btn" type="submit" style="width:100%"
+                  {% if not estado.listo_generar %}disabled title="Faltan archivos obligatorios"{% endif %}>
+            Generar nuevo consolidado
           </button>
         </form>
         {% set pct = ((estado.obligatorios_listos / estado.obligatorios_total * 100) if estado.obligatorios_total else 0)|int %}
@@ -146,35 +156,6 @@
     });
   });
   (function () {
-    const form = document.getElementById("form-cta-admin");
-    const select = document.getElementById("cta-accion");
-    const fecha = document.getElementById("cta-fecha-wrap");
-    const btn = document.getElementById("cta-btn");
-    if (!form || !select || !btn) return;
-    const listo = {{ "true" if estado.listo_generar else "false" }};
-    const tiene = {{ "true" if estado.ultima else "false" }};
-    function sync() {
-      const nuevo = select.value === "nuevo";
-      if (fecha) fecha.hidden = !nuevo;
-      btn.textContent = nuevo ? "Generar consolidado" : "Descargar último Excel";
-      if (nuevo) {
-        btn.disabled = !listo;
-        btn.title = listo ? "" : "Faltan archivos obligatorios";
-      } else {
-        btn.disabled = !tiene;
-        btn.title = tiene ? "" : "Aún no hay un Excel generado";
-      }
-    }
-    select.addEventListener("change", sync);
-    form.addEventListener("submit", (ev) => {
-      if (select.value === "nuevo") return;
-      ev.preventDefault();
-      if (!tiene) return;
-      window.location.href = "/versiones/ultima/excel";
-    });
-    sync();
-  })();
-  (function () {
     const KEY = "nav-hidden";
     function setHidden(hidden) {
       document.documentElement.classList.toggle("nav-hidden", hidden);
@@ -182,6 +163,17 @@
     }
     document.getElementById("nav-hide")?.addEventListener("click", () => setHidden(true));
     document.getElementById("nav-show")?.addEventListener("click", () => setHidden(false));
+  })();
+  (function () {
+    const group = document.getElementById("nav-seg");
+    const btn = document.getElementById("nav-seg-toggle");
+    if (!group || !btn) return;
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const open = !group.classList.contains("is-open");
+      group.classList.toggle("is-open", open);
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
   })();
   </script>
   {% block scripts %}{% endblock %}
