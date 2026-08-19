@@ -1,4 +1,10 @@
-"""Ficha consolidada de un estudiante para consulta en la interfaz."""
+"""
+Ficha de un estudiante para la web.
+
+Lee SQL (última versión o la pedida). El badge del horario usa Periodo actual
+del alumno; si falta, el periodo de la versión.
+El grupo Puntaje no se lista: va como gráfica en el sidebar.
+"""
 
 from __future__ import annotations
 
@@ -9,15 +15,22 @@ from consolidado.config.settings import construir_grupos_encabezado, etiqueta_ex
 from consolidado.core.constants import (
     COL_NUM_ALERTA_FINAL,
     COL_NUM_ALERTA_INICIAL,
+    COL_PERIODO_ACTUAL,
     COL_TIPO_ALERTA_FINAL,
     COL_TIPO_ALERTA_INICIAL,
     aplicar_config,
     es_columna_materia_horario,
 )
-from consolidado.core.normalizacion import _es_nulo, _es_valor_true, normalizar_id
+from consolidado.core.normalizacion import _es_nulo, _es_valor_true, formatear_periodo_cod, normalizar_id
+from consolidado.core.colores_programa import color_programa, estilo_color
 from consolidado.core.pipeline import generar_dataframe_consolidado
 from consolidado.storage.alertas_fuente import aplicar_descartes_a_fila, partir_tipos_alerta
-from consolidado.storage.db import obtener_fila_estudiante, obtener_version
+from consolidado.storage.db import (
+    obtener_fila_estudiante,
+    obtener_version,
+    periodo_desde_fecha,
+    ultima_version,
+)
 
 _CAMPOS_HERO = frozenset({"Identificación", "Nombre y apellidos", "Programa"})
 _COLS_TIPO_ALERTA = frozenset(
@@ -286,6 +299,8 @@ def obtener_ficha_estudiante(
 
     fila = None
     max_materias = 1
+    meta = None
+    version_usada = None
     fila_sql = obtener_fila_estudiante(id_key, version_id=version_id, base=base)
     if fila_sql:
         fila = fila_sql
@@ -306,17 +321,31 @@ def obtener_ficha_estudiante(
 
     fila = aplicar_descartes_a_fila(fila, id_key, base)
     nombre = str(fila.get("Nombre y apellidos") or "").strip()
+    programa = str(fila.get("Programa") or "").strip()
+    color = color_programa(programa)
     vista = construir_vista_ficha(cfg, fila, num_materias=max_materias)
+    periodo_est = formatear_periodo_cod(fila.get(COL_PERIODO_ACTUAL))
+    periodo = periodo_est or ""
+    if not periodo and meta:
+        periodo = str(meta.get("periodo") or "").strip()
+    if not periodo:
+        ult = ultima_version(base)
+        periodo = str((ult or {}).get("periodo") or periodo_desde_fecha())
+    if vista.get("horario"):
+        vista["horario"]["periodo"] = periodo
     nivel = fila.get("Nivel prioridad")
     return {
         "identificacion": id_key,
         "nombre": nombre,
-        "programa": str(fila.get("Programa") or "").strip(),
+        "programa": programa,
         "periodo_ingreso": _formatear_valor_ficha(fila.get("Periodo ingreso")),
+        "periodo": periodo,
         "nivel_prioridad": None if _esta_vacio(nivel) else str(nivel).strip(),
         "puntaje_prioridad": None
         if _esta_vacio(fila.get("Puntaje prioridad"))
         else _formatear_valor_ficha(fila.get("Puntaje prioridad")),
         "version_id": version_usada,
+        "color": color,
+        "estilo": estilo_color(color),
         **vista,
     }

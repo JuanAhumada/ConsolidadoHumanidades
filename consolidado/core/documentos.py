@@ -1,3 +1,4 @@
+"""Documentos adicionales configurables: se unen por identificación al consolidado."""
 from __future__ import annotations
 
 from pathlib import Path

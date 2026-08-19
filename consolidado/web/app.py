@@ -1,4 +1,10 @@
-"""Interfaz web HTML del consolidado (FastAPI)."""
+"""
+Rutas FastAPI, sesión y control de acceso.
+
+Consultor: hasta /versiones (GET). Admin: Data, Historial, Config, Usuarios,
+Datos antiguos y POST de generar/importar.
+Las plantillas reciben es_admin y el usuario de sesión vía _render.
+"""
 
 from __future__ import annotations
 
@@ -28,15 +34,15 @@ from consolidado.core.charts import (
     preparar_datos_grafica,
 )
 from consolidado.core.constants import aplicar_config
+from consolidado.core.colores_programa import color_programa, estilo_color
 from consolidado.core.ficha_estudiante import obtener_ficha_estudiante
 from consolidado.core.priorizados import (
     buscar_estudiantes_en_fuentes,
-    obtener_lista_priorizados_vista,
 )
+from consolidado.core.seguimiento import listar_seguimiento
 from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.alertas_fuente import (
     descartar_alerta_fuente,
-    listar_alertas_fuente,
 )
 from consolidado.storage.alertas_propias import (
     agregar_alerta_propia,
@@ -55,6 +61,7 @@ from consolidado.storage.modificaciones import (
     reset_usuario_log,
     set_usuario_log,
 )
+from consolidado.storage.periodos import sincronizar_periodo_actual_ultima_version
 from consolidado.storage.priorizados import agregar_priorizado_propio, set_priorizado_activo
 from consolidado.storage.usuarios import (
     asegurar_admin_inicial,
@@ -76,7 +83,17 @@ app = FastAPI(title="Consolidado de Humanidades")
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 _RUTAS_PUBLICAS = {"/login", "/logout"}
-_PREFIJOS_ADMIN = ("/config", "/usuarios")
+# Rutas solo para rol admin. Consulta llega hasta Versiones (GET).
+_PREFIJOS_ADMIN = (
+    "/config",
+    "/usuarios",
+    "/archivos",
+    "/upload",
+    "/datos-antiguos",
+    "/modificaciones",
+    "/generar",
+)
+_RUTAS_ADMIN_EXTRA = {"/versiones/importar", "/versiones/generar"}
 
 
 def _es_publico(path: str) -> bool:
@@ -84,6 +101,8 @@ def _es_publico(path: str) -> bool:
 
 
 def _es_admin_ruta(path: str) -> bool:
+    if path in _RUTAS_ADMIN_EXTRA:
+        return True
     return any(path == p or path.startswith(p + "/") for p in _PREFIJOS_ADMIN)
 
 
@@ -161,13 +180,28 @@ def _redir(path: str, *, msg: str | None = None, err: str | None = None) -> Redi
         params.append(f"msg={quote(msg)}")
     if err:
         params.append(f"err={quote(err)}")
-    url = f"{path}?{'&'.join(params)}" if params else path
-    return RedirectResponse(url, status_code=303)
+    if not params:
+        return RedirectResponse(path, status_code=303)
+    sep = "&" if "?" in path else "?"
+    return RedirectResponse(f"{path}{sep}{'&'.join(params)}", status_code=303)
+
+
+def _pintar_programas(filas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for f in filas:
+        color = color_programa(f.get("programa"))
+        f["color"] = color
+        f["estilo"] = estilo_color(color)
+    return filas
 
 
 @app.on_event("startup")
 def _startup() -> None:
+    # Semilla SQL, Periodo actual desde BD1/BD12 (solo última versión) y admin inicial.
     asegurar_semilla_si_vacia(PROJECT_ROOT)
+    try:
+        sincronizar_periodo_actual_ultima_version(PROJECT_ROOT)
+    except Exception as exc:
+        print(f"No se pudo actualizar Periodo actual: {exc}")
     if asegurar_admin_inicial(PROJECT_ROOT):
         print("Usuario inicial creado: admin / admin. Cámbielo en Usuarios.")
 
@@ -211,7 +245,7 @@ async def cerrar_sesion(request: Request) -> RedirectResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def inicio(request: Request) -> HTMLResponse:
-    return _render(request, "inicio.html", nav="inicio")
+    return _render(request, "inicio.html", nav="inicio", metas=services.metas_ruta_grado())
 
 
 @app.get("/archivos", response_class=HTMLResponse)
@@ -262,6 +296,7 @@ async def pagina_estudiante(request: Request, q: str = "") -> HTMLResponse:
         resultados = buscar_estudiantes(q.strip(), base=PROJECT_ROOT, limite=40)
         if not resultados:
             resultados = buscar_estudiantes_en_fuentes(cfg, PROJECT_ROOT, q.strip(), limite=40)
+        _pintar_programas(resultados)
         if len(resultados) == 1:
             ficha = obtener_ficha_estudiante(cfg, PROJECT_ROOT, resultados[0]["identificacion"])
         elif q.strip().isdigit() or len(q.strip()) >= 5:
@@ -300,22 +335,62 @@ async def ficha_estudiante(request: Request, identificacion: str) -> HTMLRespons
     )
 
 
-@app.get("/priorizados", response_class=HTMLResponse)
-async def pagina_priorizados(request: Request, vista: str = "primer_plano") -> HTMLResponse:
-    cfg = services.cfg_actual()
-    filas = obtener_lista_priorizados_vista(cfg, PROJECT_ROOT)
-    if vista == "primer_plano":
-        visibles = [f for f in filas if not f.get("contactado") and f.get("activo", True)]
-    else:
-        visibles = filas
+@app.get("/seguimiento", response_class=HTMLResponse)
+async def pagina_seguimiento(
+    request: Request,
+    cat: str = "general",
+    vista: str = "pendientes",
+) -> HTMLResponse:
+    data = listar_seguimiento(cat_id=cat, vista=vista, base=PROJECT_ROOT)
     return _render(
         request,
-        "priorizados.html",
-        nav="priorizados",
-        filas=visibles,
-        vista=vista,
-        total=len(filas),
-        visibles=len(visibles),
+        "seguimiento.html",
+        nav="seguimiento",
+        cat=data["categoria"]["id"],
+        categorias=data["categorias"],
+        categoria=data["categoria"],
+        filas=data["filas"],
+        total=data["total"],
+        visibles=data["visibles"],
+        vista=data["vista"],
+        meta=data["meta"],
+        alertas_propias=cargar_alertas_propias(PROJECT_ROOT) if data["categoria"]["id"] == "alertas" else [],
+    )
+
+
+@app.get("/priorizados", response_class=HTMLResponse)
+async def pagina_priorizados(vista: str = "primer_plano") -> RedirectResponse:
+    destino = "pendientes" if vista == "primer_plano" else "todos"
+    return RedirectResponse(f"/seguimiento?cat=priorizado&vista={destino}", status_code=303)
+
+
+@app.get("/alertas", response_class=HTMLResponse)
+async def pagina_alertas() -> RedirectResponse:
+    return RedirectResponse("/seguimiento?cat=alertas", status_code=303)
+
+
+@app.post("/seguimiento/marcar")
+async def marcar_seguimiento(
+    identificacion: str = Form(...),
+    contactado: str = Form("1"),
+    cat: str = Form("general"),
+    vista: str = Form("pendientes"),
+) -> RedirectResponse:
+    marcar_contactado(
+        identificacion,
+        contactado=contactado in {"1", "true", "on"},
+        base=PROJECT_ROOT,
+    )
+    estado = "contactado" if contactado in {"1", "true", "on"} else "pendiente"
+    registrar_modificacion(
+        accion="contactado",
+        resumen=f"Marcó {identificacion} como {estado}",
+        entidad="estudiante",
+        identificacion=identificacion,
+    )
+    return RedirectResponse(
+        f"/seguimiento?cat={quote(cat)}&vista={quote(vista)}",
+        status_code=303,
     )
 
 
@@ -333,7 +408,10 @@ async def toggle_contactado(
         entidad="estudiante",
         identificacion=identificacion,
     )
-    return RedirectResponse(f"/priorizados?vista={vista}", status_code=303)
+    return RedirectResponse(
+        f"/seguimiento?cat=priorizado&vista={'todos' if vista == 'completo' else 'pendientes'}",
+        status_code=303,
+    )
 
 
 @app.post("/priorizados/activo")
@@ -350,7 +428,7 @@ async def toggle_activo(
         entidad="estudiante",
         identificacion=identificacion,
     )
-    return RedirectResponse(f"/priorizados?vista={vista}&msg=Estado+actualizado", status_code=303)
+    return RedirectResponse("/seguimiento?cat=priorizado&vista=todos&msg=Estado+actualizado", status_code=303)
 
 
 @app.post("/priorizados/anadir")
@@ -376,18 +454,7 @@ async def anadir_propio(
         identificacion=identificacion,
         detalle={"motivo": motivo, "nombre": nombre},
     )
-    return RedirectResponse("/priorizados?vista=completo&msg=Priorizado+guardado", status_code=303)
-
-
-@app.get("/alertas", response_class=HTMLResponse)
-async def pagina_alertas(request: Request) -> HTMLResponse:
-    return _render(
-        request,
-        "alertas.html",
-        nav="alertas",
-        estudiantes_alertas=listar_alertas_fuente(PROJECT_ROOT),
-        alertas=cargar_alertas_propias(PROJECT_ROOT),
-    )
+    return RedirectResponse("/seguimiento?cat=priorizado&vista=todos&msg=Priorizado+guardado", status_code=303)
 
 
 @app.post("/alertas/fuente/quitar")
@@ -397,7 +464,13 @@ async def quitar_alerta_fuente(
     tipo: str = Form(...),
     volver: str = Form(""),
 ) -> RedirectResponse:
-    destino = "/alertas" if volver.strip() == "/alertas" else f"/estudiante/{identificacion}"
+    raw = volver.strip()
+    if raw.startswith("/estudiante"):
+        destino = raw
+    elif raw.startswith("/seguimiento"):
+        destino = raw
+    else:
+        destino = "/seguimiento?cat=alertas"
     try:
         descartar_alerta_fuente(identificacion, fase, tipo, PROJECT_ROOT)
     except ValueError as exc:
@@ -428,7 +501,7 @@ async def anadir_alerta(
         entidad="alerta",
         identificacion=identificacion,
     )
-    return RedirectResponse("/alertas?msg=Alerta+guardada", status_code=303)
+    return RedirectResponse("/seguimiento?cat=alertas&msg=Alerta+guardada", status_code=303)
 
 
 @app.post("/alertas/quitar")
@@ -440,7 +513,7 @@ async def quitar_alerta(identificacion: str = Form(...)) -> RedirectResponse:
         entidad="alerta",
         identificacion=identificacion,
     )
-    return RedirectResponse("/alertas?msg=Alerta+eliminada", status_code=303)
+    return RedirectResponse("/seguimiento?cat=alertas&msg=Alerta+eliminada", status_code=303)
 
 
 @app.get("/config", response_class=HTMLResponse)
@@ -774,6 +847,7 @@ async def api_buscar(q: str = "") -> JSONResponse:
     if not resultados:
         cfg = services.cfg_actual()
         resultados = buscar_estudiantes_en_fuentes(cfg, PROJECT_ROOT, q, limite=30)
+    _pintar_programas(resultados)
     return JSONResponse(resultados)
 
 

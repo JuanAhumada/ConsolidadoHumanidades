@@ -1,3 +1,10 @@
+"""
+Mapeo de encabezados de Excel a columnas canónicas de salida.
+
+construir_mapa_columnas usa aliases de config. Periodo actual formatea
+COD_PERIODO/COD_PENSUM (5 dígitos → YYYY-N); no use esa lógica para
+Periodo ingreso.
+"""
 from __future__ import annotations
 
 import polars as pl
@@ -6,6 +13,7 @@ from consolidado.config.settings import COLUMNAS_PRIORIZADO
 from consolidado.core.constants import (
     COL_FECHA_NACIMIENTO,
     COL_NOMBRE,
+    COL_PERIODO_ACTUAL,
     COL_TELEFONO_CELULAR,
     FORMATO_FECHA_DMY,
     _ALIASES_RUNTIME,
@@ -14,6 +22,7 @@ from consolidado.core.constants import (
 from consolidado.core.normalizacion import (
     _mapa_norm_a_real,
     formatear_fecha_nacimiento,
+    formatear_periodo_cod,
     normalizar_encabezado,
     normalizar_id,
     normalizar_telefono_celda,
@@ -140,6 +149,41 @@ def _expr_fecha_nacimiento(df: pl.DataFrame, m: dict[str, str], orden: str) -> p
         .alias(COL_FECHA_NACIMIENTO)
     )
 
+
+_ALIAS_FUENTE_PERIODO_ACTUAL = (
+    "cod periodo",
+    "codigo periodo",
+    "cod_periodo",
+    "ultimo periodo inscrito",
+    "periodo ultima matricula",
+    "cod pensum",
+    "codigo pensum",
+    "cod_pensum",
+)
+
+
+def _expr_periodo_actual(df: pl.DataFrame, m: dict[str, str], nr: dict[str, str]) -> pl.Expr:
+    """COD_PERIODO gana sobre COD_PENSUM; formatea YYYY-N o deja vacío."""
+    candidatos: list[pl.Expr] = []
+    vistos: set[str] = set()
+    for alias in _ALIAS_FUENTE_PERIODO_ACTUAL:
+        col = nr.get(normalizar_encabezado(alias))
+        if col and col not in vistos:
+            vistos.add(col)
+            candidatos.append(
+                pl.col(col).map_elements(formatear_periodo_cod, return_dtype=pl.Utf8)
+            )
+    if "periodo_actual" in m and m["periodo_actual"] not in vistos:
+        candidatos.append(
+            pl.col(m["periodo_actual"]).map_elements(formatear_periodo_cod, return_dtype=pl.Utf8)
+        )
+    if not candidatos:
+        return pl.lit(None).cast(pl.Utf8).alias(COL_PERIODO_ACTUAL)
+    expr = candidatos[0]
+    for extra in candidatos[1:]:
+        expr = pl.coalesce(expr, extra)
+    return expr.alias(COL_PERIODO_ACTUAL)
+
 def renombrar_y_filtrar(
     df: pl.DataFrame,
     *,
@@ -174,6 +218,8 @@ def renombrar_y_filtrar(
             pl.col(m[canon]).alias(salida) if canon in m else pl.lit(None).alias(salida)
         )
 
+    exprs.append(_expr_periodo_actual(df, m, nr))
+
     exprs.append(_expr_funcionario_beca(df, m, nr))
     exprs.append(_expr_tipo_beca(df, m, nr))
     exprs.append(_expr_total_beca(df, m, nr))
@@ -188,6 +234,12 @@ def formatear_dataframe_salida(df: pl.DataFrame) -> pl.DataFrame:
         if col in ("Identificación", "Periodo ingreso", "Reintegros"):
             exprs.append(
                 pl.col(col).map_elements(_entero_o_texto, return_dtype=pl.String).alias(col)
+            )
+        elif col == COL_PERIODO_ACTUAL:
+            exprs.append(
+                pl.col(col)
+                .map_elements(formatear_periodo_cod, return_dtype=pl.Utf8)
+                .alias(col)
             )
         elif col == COL_TELEFONO_CELULAR:
             exprs.append(

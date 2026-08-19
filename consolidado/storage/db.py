@@ -1,4 +1,13 @@
-"""Base de datos SQLite del consolidado (versiones, estudiantes y marcaciones)."""
+"""
+SQLite del consolidado: versiones (snapshots) y estudiantes por categoría.
+
+guardar_version nunca pisa un corte anterior. La ficha se arma desde fila_json
+de las cuatro tablas (base, priorizado, rendimiento, alertas).
+Periodo de la versión = periodo_desde_fecha (mes del corte).
+Periodo del alumno = columna Periodo actual (COD_PERIODO).
+
+Al cambiar tablas, incremente SCHEMA_VERSION y migre en inicializar_db.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +35,7 @@ from consolidado.paths import PROJECT_ROOT
 
 DB_FILENAME = "consolidado.db"
 CARPETA_DATOS = "datos"
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9  # última: Periodo actual en estudiantes_base
 
 # Columnas canónicas → campos indexables (identidad en `estudiantes_base`).
 _CAMPOS_INDEXABLES: dict[str, str] = {
@@ -34,6 +43,7 @@ _CAMPOS_INDEXABLES: dict[str, str] = {
     "nombre": "Nombre y apellidos",
     "programa": "Programa",
     "periodo_ingreso": "Periodo ingreso",
+    "periodo_actual": "Periodo actual",
     "fecha_nacimiento": "Fecha de nacimiento",
     "telefono": "Teléfono celular",
     "correo_institucional": "Correo institucional",
@@ -213,6 +223,7 @@ def _crear_tablas_categorias(conn: sqlite3.Connection) -> None:
             nombre TEXT,
             programa TEXT,
             periodo_ingreso TEXT,
+            periodo_actual TEXT,
             fecha_nacimiento TEXT,
             telefono TEXT,
             correo_institucional TEXT,
@@ -576,10 +587,10 @@ def _insertar_estudiante_categorias(
         """
         INSERT OR REPLACE INTO estudiantes_base (
             identificacion, version_id, nombre, programa, periodo_ingreso,
-            fecha_nacimiento, telefono, correo_institucional, correo_personal,
-            reintegros, lugar_nacimiento, lugar_residencia,
+            periodo_actual, fecha_nacimiento, telefono, correo_institucional,
+            correo_personal, reintegros, lugar_nacimiento, lugar_residencia,
             nivel_prioridad, puntaje_prioridad, detalle_prioridad, fila_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             ident,
@@ -587,6 +598,7 @@ def _insertar_estudiante_categorias(
             campos.get("nombre"),
             campos.get("programa"),
             campos.get("periodo_ingreso"),
+            campos.get("periodo_actual"),
             campos.get("fecha_nacimiento"),
             campos.get("telefono"),
             campos.get("correo_institucional"),
@@ -691,6 +703,12 @@ def _migrar_estudiantes_a_categorias(conn: sqlite3.Connection) -> None:
     conn.execute("DROP TABLE IF EXISTS estudiantes")
 
 
+def _asegurar_periodo_actual(conn: sqlite3.Connection) -> None:
+    cols = _columnas_tabla(conn, "estudiantes_base")
+    if cols and "periodo_actual" not in cols:
+        conn.execute("ALTER TABLE estudiantes_base ADD COLUMN periodo_actual TEXT")
+
+
 def inicializar_db(base: Path | None = None) -> Path:
     """Crea o migra el schema. Devuelve la ruta del archivo .db."""
     base = base or PROJECT_ROOT
@@ -718,6 +736,7 @@ def inicializar_db(base: Path | None = None) -> Path:
         _crear_tablas_alertas_descartadas(conn)
         _crear_tablas_usuarios(conn)
         _crear_tablas_modificaciones(conn)
+        _asegurar_periodo_actual(conn)
         _marcar_schema_version(conn)
     return ruta_base_datos(base)
 

@@ -1,4 +1,9 @@
-"""Persistencia de estado «contactado» en priorizados."""
+"""
+Check de Seguimiento (contactado).
+
+Es global por identificación: marcar en una categoría vale para todas.
+No depende de la versión SQL.
+"""
 
 from __future__ import annotations
 

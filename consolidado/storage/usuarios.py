@@ -1,4 +1,9 @@
-"""Usuarios de la interfaz web y credenciales."""
+"""
+Usuarios de la web.
+
+Roles: admin y consulta. Si la tabla está vacía se crea admin/admin.
+Las claves van con PBKDF2; no las guarde en texto plano.
+"""
 
 from __future__ import annotations
 

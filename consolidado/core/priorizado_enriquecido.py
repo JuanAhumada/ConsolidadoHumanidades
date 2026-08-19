@@ -1,4 +1,4 @@
-"""Procesamiento de archivos de priorizado enriquecido (adaptación y activación de ruta)."""
+"""Adaptación y activación de ruta (archivos bd_prio_*). Suman al puntaje de priorizado/activación."""
 
 from __future__ import annotations
 

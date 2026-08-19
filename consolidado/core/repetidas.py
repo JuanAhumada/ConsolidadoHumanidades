@@ -1,3 +1,4 @@
+"""Materias repetidas (bd_rep): marcan celdas de horario, no filas nuevas."""
 from __future__ import annotations
 
 import re

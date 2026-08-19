@@ -1,4 +1,8 @@
-"""Servicios compartidos de la interfaz web."""
+"""
+Servicios de la web: inventario de archivos fuente y generación del consolidado.
+
+No ponga lógica de negocio pesada aquí; delegue a core.pipeline y storage.
+"""
 
 from __future__ import annotations
 
@@ -15,6 +19,7 @@ from consolidado.config.settings import (
     slot_es_requerido,
 )
 from consolidado.core.constants import aplicar_config
+from consolidado.core.permanencia import cargar_metas
 from consolidado.core.pipeline import ejecutar_consolidado, generar_dataframe_consolidado
 from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.db import (
@@ -39,6 +44,15 @@ def base_proyecto() -> Path:
 def cfg_actual() -> dict[str, Any]:
     cfg = cargar_config(PROJECT_ROOT)
     return aplicar_config(cfg, PROJECT_ROOT)
+
+
+def metas_ruta_grado() -> dict[str, Any]:
+    vacio = {"disponible": False, "graduacion": [], "permanencia": []}
+    try:
+        cfg = cfg_actual()
+        return cargar_metas(cfg, PROJECT_ROOT)
+    except Exception:
+        return vacio
 
 
 def estado_archivos(cfg: dict[str, Any] | None = None) -> dict[str, Any]:

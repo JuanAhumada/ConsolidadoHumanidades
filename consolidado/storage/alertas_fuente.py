@@ -1,4 +1,9 @@
-"""Alertas provenientes de las bases fuente y descartes persistentes."""
+"""
+Alertas de las bases fuente y descartes.
+
+Descartar en la ficha/Seguimiento quita el tipo para no volver a aparecer
+al generar. No borra el Excel origen.
+"""
 
 from __future__ import annotations
 

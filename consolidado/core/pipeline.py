@@ -1,3 +1,11 @@
+"""
+Pipeline: de los Excel fuente al consolidado (DataFrame + Excel + versión SQL).
+
+Entradas típicas: generar_dataframe_consolidado (solo memoria) y
+ejecutar_consolidado (guarda Excel y llama a guardar_version).
+carpeta_fuentes aísla Datos antiguos (historico) de datos/entrada.
+persistir_config=False en histórico para no pisar la config viva.
+"""
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -46,6 +54,7 @@ from consolidado.core.priorizados import (
 )
 from consolidado.core.repetidas import _cargar_materias_repetidas_cfg, _cargar_repitiendo_cfg, aplicar_repitiendo
 from consolidado.core.normalizacion import normalizar_id
+from consolidado.core.permanencia import aplicar_permanencia
 from consolidado.storage.alertas_fuente import aplicar_alertas_descartadas
 from consolidado.storage.alertas_propias import cargar_alertas_propias
 from consolidado.storage.db import (
@@ -180,6 +189,7 @@ def generar_dataframe_consolidado(
         tipos_partes=tipos_partes,
     )
     consolidado = _unir_documentos_adicionales(consolidado, cfg, base, carpeta=carpeta)
+    consolidado = aplicar_permanencia(consolidado, cfg, base, carpeta=carpeta)
     consolidado = _limpiar_becas_programa_no_permitido(consolidado)
     consolidado = aplicar_priorizado_enriquecido(
         consolidado, _cargar_priorizado_enriquecido_cfg(cfg, base, carpeta=carpeta)

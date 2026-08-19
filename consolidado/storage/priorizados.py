@@ -1,4 +1,8 @@
-"""Persistencia de priorizados propios (SQLite)."""
+"""
+Priorizados propios (marca interna, global por identificación).
+
+No es el puntaje de BD grupos priorizados; ese viene de bd2 en el pipeline.
+"""
 
 from __future__ import annotations
 

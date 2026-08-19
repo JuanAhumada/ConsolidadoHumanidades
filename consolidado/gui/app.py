@@ -1,4 +1,4 @@
-"""Ventana principal — interfaz tipo aplicación web (CustomTkinter)."""
+"""Ventana principal CustomTkinter. Preferir la web salvo mantenimiento de este cliente."""
 
 from __future__ import annotations
 

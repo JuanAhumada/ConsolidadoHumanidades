@@ -1,4 +1,9 @@
-"""Cálculo de puntaje y nivel de prioridad por estudiante."""
+"""
+Puntaje y nivel de prioridad.
+
+Suma componentes (beca, priorizado, repitiendo, reintegro, propio, activación)
+y asigna color de fila. Cambiar pesos o umbrales solo aquí.
+"""
 
 from __future__ import annotations
 

@@ -1,3 +1,9 @@
+"""
+Normalización de celdas: id, teléfonos, fechas, programas, periodo.
+
+formatear_periodo_cod: 20261 → 2026-1 (año 1990–2099, último dígito 1 o 2).
+normalizar_id quita espacios y decimales de Excel.
+"""
 from __future__ import annotations
 
 import re
@@ -167,6 +173,58 @@ def normalizar_id(val) -> str:
     s = str(val).strip()
     s = re.sub(r"\s+", "", s)
     return s
+
+
+_RE_PERIODO_ETIQUETA = re.compile(r"^(19|20)\d{2}\s*[-–/\s]\s*([12])$")
+_ANIO_PERIODO_MIN = 1990
+_ANIO_PERIODO_MAX = 2099
+
+
+def formatear_periodo_cod(val) -> str | None:
+    """COD_PERIODO / COD_PENSUM de 5 dígitos (YYYY + 1|2) → 'YYYY-N'."""
+    if _es_nulo(val):
+        return None
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, float) and val == int(val):
+        val = int(val)
+    texto = str(val).strip()
+    if not texto or texto.lower() in ("nan", "none", "-", "—"):
+        return None
+    m = _RE_PERIODO_ETIQUETA.match(texto)
+    if m:
+        anio = int(texto[:4])
+        if _ANIO_PERIODO_MIN <= anio <= _ANIO_PERIODO_MAX:
+            return f"{anio}-{m.group(2)}"
+    digitos = re.sub(r"\D", "", texto)
+    if len(digitos) == 5:
+        anio = int(digitos[:4])
+        per = digitos[4]
+        if _ANIO_PERIODO_MIN <= anio <= _ANIO_PERIODO_MAX and per in "12":
+            return f"{anio}-{per}"
+    return None
+
+
+def _clave_periodo(periodo: str) -> tuple[int, int] | None:
+    m = re.match(r"^(\d{4})-([12])$", periodo or "")
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2))
+
+
+def periodo_mas_reciente(valores: list) -> str | None:
+    """Elige el periodo YYYY-N más reciente entre varios orígenes."""
+    mejores: list[tuple[tuple[int, int], str]] = []
+    for v in valores:
+        f = formatear_periodo_cod(v)
+        if not f:
+            continue
+        clave = _clave_periodo(f)
+        if clave:
+            mejores.append((clave, f))
+    if not mejores:
+        return None
+    return max(mejores, key=lambda item: item[0])[1]
 
 def _mapa_norm_a_real(columns: list[str]) -> dict[str, str]:
     return {normalizar_encabezado(c): c for c in columns}

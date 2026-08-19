@@ -239,8 +239,10 @@ async function aplicar(index, persistControls = true) {
         datasets: [{
           label: data.columna,
           data: data.values,
-          backgroundColor: data.labels.map((_, k) => colores[k % colores.length]),
-          borderColor: '#0f766e',
+          backgroundColor: (data.colores && data.colores.length)
+            ? data.colores
+            : data.labels.map((_, k) => colores[k % colores.length]),
+          borderColor: (data.colores && data.colores.length) ? data.colores : '#64748b',
           borderWidth: data.chart_type === 'line' ? 2 : 0,
           tension: 0.25,
         }]

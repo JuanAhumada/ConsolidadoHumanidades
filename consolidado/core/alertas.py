@@ -1,3 +1,4 @@
+"""Alertas de Comunicación y Psicología: se cruzan al listado, no crean filas nuevas."""
 from __future__ import annotations
 
 import re

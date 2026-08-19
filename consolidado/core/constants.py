@@ -1,3 +1,10 @@
+"""
+Constantes de columnas, runtime de config y detección de materias.
+
+aplicar_config carga aliases y programas a variables de módulo. Otros archivos
+importan esas referencias (`from ... import _ALIASES_RUNTIME`); hay que mutar
+en sitio, no reasignar el dict.
+"""
 from __future__ import annotations
 
 import re
@@ -18,6 +25,7 @@ from consolidado.config.settings import (
     COLUMNAS_DATOS,
     COLUMNAS_PRIORIZADO,
     COLUMNAS_PRIORIZADO_ENRIQUECIDO,
+    COLUMNAS_RUTA_GRADO,
     cargar_config,
     construir_columnas_salida,
 )
@@ -65,6 +73,8 @@ COL_DATOS_CONTACTO = (
 _CARACTERES_TILDE = "áéíóúüÁÉÍÓÚÜñÑ"
 
 COL_FECHA_NACIMIENTO = "Fecha de nacimiento"
+
+COL_PERIODO_ACTUAL = "Periodo actual"
 
 COL_NUM_ALERTA_INICIAL = "Num Alerta inicial"
 COL_TIPO_ALERTA_INICIAL = "Tipo Alerta inicial"
@@ -141,10 +151,14 @@ _TIPOS_FUENTE_AUXILIARES = {
     "bd_alertas_psi",
     "bd_prio_psi",
     "bd_prio_lic",
+    "bd_permanencia",
 }
 
 COLUMNAS_EXCLUIDAS_LISTADO = frozenset(
-    COLUMNAS_ALERTAS + COLUMNAS_ALERTAS_PROPIAS + COLUMNAS_PRIORIZADO_ENRIQUECIDO
+    COLUMNAS_ALERTAS
+    + COLUMNAS_ALERTAS_PROPIAS
+    + COLUMNAS_PRIORIZADO_ENRIQUECIDO
+    + COLUMNAS_RUTA_GRADO
 )
 
 FORMATO_FECHA_DMY = "dmy"

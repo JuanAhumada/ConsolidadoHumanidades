@@ -146,6 +146,16 @@
       "año ingreso",
       "ano ingreso"
     ],
+    "periodo_actual": [
+      "cod periodo",
+      "codigo periodo",
+      "cod_periodo",
+      "ultimo periodo inscrito",
+      "periodo ultima matricula",
+      "cod pensum",
+      "codigo pensum",
+      "cod_pensum"
+    ],
     "periodo_ultima_matricula": [
       "periodo ultima matricula"
     ],
@@ -239,6 +249,7 @@
         "Correo institucional",
         "Correo personal",
         "Periodo ingreso",
+        "Periodo actual",
         "Reintegros",
         "Lugar de nacimiento",
         "Lugar de residencia"

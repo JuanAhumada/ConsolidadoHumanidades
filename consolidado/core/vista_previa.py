@@ -1,4 +1,4 @@
-"""Vista previa de columnas origen → consolidado para cada archivo fuente."""
+"""Vista previa Data: encabezado origen → columna del consolidado, por slot de archivo."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from consolidado.config.settings import (
     COLUMNAS_ALERTAS,
     COLUMNAS_PRIORIZADO,
     COLUMNAS_PRIORIZADO_ENRIQUECIDO,
+    COLUMNAS_RUTA_GRADO,
     carpeta_excels,
 )
 from consolidado.core.alertas import _columna_num_alertas
@@ -38,6 +39,7 @@ _CANON_A_SALIDA: dict[str, str] = {
     "correo_institucional": "Correo institucional",
     "correo_personal": "Correo personal",
     "periodo_ingreso": "Periodo ingreso",
+    "periodo_actual": "Periodo actual",
     "reintegros": "Reintegros",
     "lugar_nacimiento": "Lugar de nacimiento",
     "lugar_residencia": "Lugar de residencia",
@@ -189,6 +191,22 @@ def obtener_vista_previa_slot(slot: dict, cfg: dict, base: Path) -> tuple[list[d
         return [], "Aún no hay archivo cargado. Use «Cargar» primero."
 
     tipo = slot.get("tipo", "")
+    if tipo == "bd_permanencia":
+        origenes = [
+            "% CREDITOS APROBADOS / % APROBADOS",
+            "ESTADO DE OPCIÓN DE GRADO",
+            "OPCIÓN DE GRADO / OPCION A GRADO",
+            "ESTADO DE INGLÉS",
+            "SABER PRO / SABER PRO2",
+        ]
+        return [
+            _fila_mapa("Identificación (clave)", "DOCUMENTO", "Cruce por cédula"),
+            *[
+                _fila_mapa(salida, origen, "Cohortes + base general")
+                for salida, origen in zip(COLUMNAS_RUTA_GRADO, origenes)
+            ],
+        ], None
+
     hoja = slot.get("hoja")
     try:
         df = _leer_hoja_datos(p, tipo=tipo, hoja=hoja)

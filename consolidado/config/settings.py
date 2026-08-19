@@ -1,4 +1,10 @@
-"""Carga y guardado de configuración JSON para el consolidado de estudiantes."""
+"""
+Carga y guardado de config.json.
+
+COLUMNAS_* alimentan grupos_salida. ALIASES_DEFAULT mapea encabezados de Excel.
+_fusionar_grupos_salida añade columnas nuevas del default al JSON existente
+(por eso Periodo actual aparece sin reescribir a mano el archivo).
+"""
 
 from __future__ import annotations
 
@@ -23,6 +29,7 @@ COLUMNAS_DATOS = [
     "Correo institucional",
     "Correo personal",
     "Periodo ingreso",
+    "Periodo actual",
     "Reintegros",
     "Lugar de nacimiento",
     "Lugar de residencia",
@@ -70,6 +77,14 @@ COLUMNAS_ALERTAS = [
 COLUMNAS_ALERTAS_PROPIAS = [
     "Alerta Propia",
     "Detalle Propio",
+]
+
+COLUMNAS_RUTA_GRADO = [
+    "% créditos aprobados",
+    "Estado opción de grado",
+    "Opción de grado",
+    "Estado de inglés",
+    "Saber Pro",
 ]
 
 ETIQUETAS_EXPORT_COLUMNAS: dict[str, str] = {
@@ -153,6 +168,16 @@ ALIASES_DEFAULT: dict[str, list[str]] = {
         "cohorte",
         "año ingreso",
         "ano ingreso",
+    ],
+    "periodo_actual": [
+        "cod periodo",
+        "codigo periodo",
+        "cod_periodo",
+        "ultimo periodo inscrito",
+        "periodo ultima matricula",
+        "cod pensum",
+        "codigo pensum",
+        "cod_pensum",
     ],
     "periodo_ultima_matricula": ["periodo ultima matricula"],
     "reintegros": ["reintegros"],
@@ -291,6 +316,14 @@ ARCHIVOS_FUENTE_DEFAULT = [
         "hoja": "Hoja1",
     },
     {
+        "id": "bd_permanencia",
+        "categoria": "rendimiento",
+        "titulo": "Permanencia y ruta de grado",
+        "tipo": "bd_permanencia",
+        "nombre_guardado": "bd_permanencia.xlsx",
+        "requerido": False,
+    },
+    {
         "id": "bd_alertas_com_1",
         "categoria": "alertas",
         "titulo": "Alertas Comunicación — inicial",
@@ -350,6 +383,7 @@ def config_default(base: Path | None = None) -> dict[str, Any]:
                 "columnas": list(COLUMNAS_PRIORIZADO) + list(COLUMNAS_PRIORIZADO_ENRIQUECIDO),
             },
             {"nombre": "Becas", "columnas": list(COLUMNAS_BECAS)},
+            {"nombre": "Ruta de grado", "columnas": list(COLUMNAS_RUTA_GRADO)},
             {
                 "nombre": "Alertas",
                 "columnas": list(COLUMNAS_ALERTAS) + list(COLUMNAS_ALERTAS_PROPIAS),
@@ -486,7 +520,7 @@ def _fusionar_grupos_salida(
             continue
         if nombre in por_nombre:
             existente = por_nombre[nombre]
-            if nombre in ("Alertas", "Priorizados", "Prioridad", "Puntaje", "Becas"):
+            if nombre in ("Alertas", "Priorizados", "Prioridad", "Puntaje", "Becas", "Ruta de grado"):
                 existente["columnas"] = list(grupo.get("columnas", []))
             else:
                 cols = [c for c in existente.get("columnas", []) if c not in _COLUMNAS_ALERTAS_LEGACY]
@@ -619,6 +653,7 @@ ALIAS_ETIQUETAS: dict[str, str] = {
     "correo_institucional": "Correo institucional",
     "correo_personal": "Correo personal",
     "periodo_ingreso": "Periodo ingreso",
+    "periodo_actual": "Periodo actual",
     "periodo_ultima_matricula": "Periodo última matrícula",
     "reintegros": "Reintegros",
     "lugar_nacimiento": "Lugar de nacimiento",

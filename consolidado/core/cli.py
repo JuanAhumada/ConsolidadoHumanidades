@@ -1,3 +1,4 @@
+"""CLI: generar el consolidado sin interfaz (`python main.py generar`)."""
 from __future__ import annotations
 
 import argparse

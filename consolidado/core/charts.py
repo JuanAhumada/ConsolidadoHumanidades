@@ -1,4 +1,4 @@
-"""Agregación de datos para gráficas (Chart.js en el frontend)."""
+"""Agregación para Chart.js. Si la columna es Programa, usa colores de colores_programa."""
 
 from __future__ import annotations
 
@@ -6,6 +6,8 @@ import re
 from collections import Counter
 from io import BytesIO
 from typing import Any
+
+from consolidado.core.colores_programa import colores_para_etiquetas
 
 import polars as pl
 from openpyxl import Workbook
@@ -79,6 +81,7 @@ def preparar_datos_grafica(
     mas = cont.most_common(max(1, min(top, 50)))
     labels = [k for k, _ in mas]
     data = [n for _, n in mas]
+    es_programa = columna.strip().casefold() in {"programa"}
 
     return {
         "columna": columna,
@@ -87,6 +90,7 @@ def preparar_datos_grafica(
         "horizontal": False,
         "labels": labels,
         "values": data,
+        "colores": colores_para_etiquetas(labels) if es_programa else None,
         "total_filas": len(valores),
         "categorias": len(labels),
     }

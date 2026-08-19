@@ -28,10 +28,10 @@
       <thead><tr><th>Identificación</th><th>Nombre</th><th>Programa</th><th></th></tr></thead>
       <tbody>
       {% for r in resultados %}
-        <tr>
+        <tr style="{{ r.estilo }}">
           <td>{{ r.identificacion }}</td>
           <td>{{ r.nombre }}</td>
-          <td>{{ r.programa or '—' }}</td>
+          <td><span class="seg-prog">{{ r.programa or '—' }}</span></td>
           <td><a class="btn sm secondary" href="/estudiante/{{ r.identificacion }}">Ver ficha</a></td>
         </tr>
       {% endfor %}
@@ -42,7 +42,7 @@
 {% endif %}
 
 {% if ficha %}
-<div class="ficha-view">
+<div class="ficha-view" {% if ficha.estilo %}style="{{ ficha.estilo }}"{% endif %}>
   <div class="ficha-board">
     <aside class="ficha-side">
       <p class="ficha-side-id">{{ ficha.identificacion }}</p>
@@ -157,7 +157,7 @@
   {% if ficha.horario %}
   <section class="ficha-horario" data-n="{{ ficha.horario.n_dias }}">
     <header class="ficha-horario-head">
-      <h3>Horario</h3>
+      <h3>Horario{% if ficha.horario.periodo %}<span class="ficha-horario-periodo">{{ ficha.horario.periodo }}</span>{% elif ficha.periodo %}<span class="ficha-horario-periodo">{{ ficha.periodo }}</span>{% endif %}</h3>
       {% if ficha.horario.campos %}
       <div class="ficha-horario-extra">
         {% for campo in ficha.horario.campos %}

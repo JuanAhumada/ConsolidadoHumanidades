@@ -1,3 +1,8 @@
+"""
+Punto de entrada del consolidado.
+
+Sin argumentos abre la web. --gui abre CustomTkinter. El resto se delega a la CLI.
+"""
 from __future__ import annotations
 
 import sys

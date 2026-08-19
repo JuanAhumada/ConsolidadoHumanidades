@@ -1,3 +1,4 @@
+"""Escritura del Excel de salida (estilos, colores de fila, anchos)."""
 from __future__ import annotations
 
 import re
@@ -18,6 +19,7 @@ from consolidado.core.constants import (
     COL_FECHA_NACIMIENTO,
     COL_NUM_ALERTA_FINAL,
     COL_NUM_ALERTA_INICIAL,
+    COL_PERIODO_ACTUAL,
     COL_TELEFONO_CELULAR,
     COL_TIPO_ALERTA_FINAL,
     COL_TIPO_ALERTA_INICIAL,
@@ -33,6 +35,7 @@ from consolidado.core.normalizacion import (
     _es_nulo,
     _es_valor_true,
     formatear_fecha_nacimiento,
+    formatear_periodo_cod,
     normalizar_id,
     normalizar_telefono_celda,
 )
@@ -115,6 +118,8 @@ def _valor_excel_celda(col: str, val):
     if col == "Periodo ingreso" and isinstance(val, (int, float)) and not _es_nulo(val):
         if isinstance(val, float) and val == int(val):
             return int(val)
+    if col == COL_PERIODO_ACTUAL:
+        return formatear_periodo_cod(val) or val
     if col == COL_FECHA_NACIMIENTO:
         return formatear_fecha_nacimiento(val, FORMATO_FECHA_DMY) or val
     if col in (COL_NUM_ALERTA_INICIAL, COL_NUM_ALERTA_FINAL) and not _es_nulo(val):

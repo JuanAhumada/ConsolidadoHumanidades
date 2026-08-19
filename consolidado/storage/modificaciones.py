@@ -1,4 +1,9 @@
-"""Historial de modificaciones y comparación entre versiones."""
+"""
+Historial (antes Modificaciones): bitácora y diff entre dos versiones.
+
+comparar_versiones alimenta la pantalla de Historial. registrar_modificacion
+se llama desde las rutas web (marcar, generar, usuarios, etc.).
+"""
 
 from __future__ import annotations
 

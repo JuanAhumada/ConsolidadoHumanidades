@@ -1,4 +1,9 @@
-"""Semilla e importación del consolidado Excel hacia la base SQL."""
+"""
+Importar/exportar Excel de versión y semilla inicial.
+
+asegurar_semilla_si_vacia corre al arrancar la web si no hay versiones.
+Datos antiguos usa carpeta_fuentes=datos/historico para no tocar entrada.
+"""
 
 from __future__ import annotations
 

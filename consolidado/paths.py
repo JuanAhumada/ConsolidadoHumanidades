@@ -1,4 +1,9 @@
-"""Rutas base del proyecto (directorio que contiene config.json)."""
+"""
+Raíz del proyecto.
+
+En desarrollo: carpeta del repo (config.json). En .exe: carpeta del ejecutable,
+para que datos/ y config viajen junto al binario.
+"""
 
 from __future__ import annotations
 

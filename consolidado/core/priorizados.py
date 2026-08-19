@@ -1,3 +1,4 @@
+"""Priorizados propios y cruce con el listado (motivo/detalle en la ficha)."""
 from __future__ import annotations
 
 from pathlib import Path

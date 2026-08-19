@@ -1,4 +1,10 @@
-"""Persistencia auxiliar del consolidado."""
+"""
+Persistencia del consolidado.
+
+db.py es el schema y las versiones. El resto son tablas/marcas globales
+(priorizados propios, alertas propias, contactados, usuarios, historial).
+Periodo actual del estudiante: periodos.py (no confundir con periodo de versión).
+"""
 
 from consolidado.storage.priorizados import *  # noqa: F403
 from consolidado.storage.alertas_propias import (  # noqa: F401
@@ -44,6 +50,10 @@ from consolidado.storage.modificaciones import (  # noqa: F401
     comparar_versiones,
     listar_modificaciones,
     registrar_modificacion,
+)
+from consolidado.storage.periodos import (  # noqa: F401
+    mapa_periodos_desde_fuentes,
+    sincronizar_periodo_actual_ultima_version,
 )
 from consolidado.storage.versiones import (  # noqa: F401
     asegurar_excel_version,
