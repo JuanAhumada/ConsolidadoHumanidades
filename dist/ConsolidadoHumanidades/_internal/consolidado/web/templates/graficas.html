@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+{% block title %}Gráficas{% endblock %}
+{% block body_class %}page-graficas{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<div class="graficas-workspace">
+  <aside class="charts-tools">
+    <h2>Gráficas</h2>
+    <p class="muted charts-tools-lead">Seleccione un espacio y aplique columna y tipo. Puede tener hasta 4.</p>
+
+    <p class="charts-slot-label">Editando <strong id="slot-label">gráfica 1</strong></p>
+
+    <div class="field">
+      <label for="columna">Columna</label>
+      <select id="columna" {% if not columnas %}disabled{% endif %}>
+        {% for c in columnas %}
+        <option value="{{ c }}" {% if c == 'Programa' or c == 'Nivel prioridad' %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="tipo">Tipo</label>
+      <select id="tipo" {% if not columnas %}disabled{% endif %}>
+        <option value="bar">Barras</option>
+        <option value="pie">Torta</option>
+        <option value="line">Línea</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="top">Top categorías</label>
+      <select id="top" {% if not columnas %}disabled{% endif %}>
+        <option>10</option>
+        <option selected>20</option>
+        <option>25</option>
+        <option>40</option>
+      </select>
+    </div>
+
+    <div class="charts-tools-actions">
+      <button class="btn" type="button" id="btn-aplicar" {% if not columnas %}disabled{% endif %}>Aplicar a esta gráfica</button>
+      <button class="btn secondary" type="button" id="btn-agregar" {% if not columnas %}disabled{% endif %}>Agregar gráfica</button>
+      <button class="btn secondary" type="button" id="btn-quitar" disabled>Quitar seleccionada</button>
+    </div>
+    <p class="charts-export-label">Llevar a Power BI</p>
+    <div class="charts-tools-actions charts-export-actions">
+      <button class="btn secondary" type="button" id="btn-copiar" disabled>Copiar datos</button>
+      <button class="btn secondary" type="button" id="btn-powerbi" disabled>Excel para Power BI</button>
+      <button class="btn secondary" type="button" id="btn-exportar" disabled>PNG</button>
+    </div>
+    <p class="muted charts-tools-meta">Copiar: en Power BI use Introducir datos y Ctrl+V. Excel: Obtener datos → Excel.</p>
+    <p id="chart-meta" class="muted charts-tools-meta"></p>
+    {% if not columnas %}
+    <p class="muted">No hay datos. Genere un consolidado primero.</p>
+    {% elif meta %}
+    <p class="muted charts-tools-meta">Versión {{ meta.periodo }} · {{ meta.fecha_version }} · {{ meta.num_estudiantes }} estudiantes</p>
+    {% endif %}
+  </aside>
+
+  <section class="charts-stage">
+    <div class="charts-board" id="charts-board" data-count="1">
+      {% for i in range(4) %}
+      <article class="chart-slot{% if i == 0 %} is-selected{% endif %}{% if i > 0 %} is-hidden{% endif %}" data-i="{{ i }}" tabindex="0">
+        <header class="chart-slot-head">
+          <span class="chart-slot-title">Gráfica {{ i + 1 }}</span>
+          <span class="chart-slot-badge">{% if i == 0 %}Seleccionada{% else %}Vacía{% endif %}</span>
+        </header>
+        <div class="chart-slot-canvas">
+          <canvas id="chart-{{ i }}"></canvas>
+        </div>
+      </article>
+      {% endfor %}
+      <button type="button" class="chart-add-tile is-hidden" id="chart-add-tile">
+        <span>+</span>
+        Agregar gráfica
+      </button>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const MAX_SLOTS = 4;
+const colores = [
+  '#0c6b63','#128c82','#1aa39a','#2bb8ae','#5ecfc6',
+  '#0a4f4a','#146b8a','#1d7ea3','#2a6f97','#3d5a80',
+  '#415a77','#1b4332','#2d6a4f','#40916c','#52b788'
+];
+
+const defaultCol = (() => {
+  const sel = document.getElementById('columna');
+  return sel && sel.options.length ? sel.value : '';
+})();
+
+const slots = Array.from({ length: MAX_SLOTS }, (_, i) => ({
+  chart: null,
+  config: { columna: defaultCol, tipo: 'bar', top: '20' },
+  ready: false,
+}));
+let visible = 1;
+let selected = 0;
+
+const board = document.getElementById('charts-board');
+const metaEl = document.getElementById('chart-meta');
+const slotLabel = document.getElementById('slot-label');
+const addTile = document.getElementById('chart-add-tile');
+const btnAgregar = document.getElementById('btn-agregar');
+const btnQuitar = document.getElementById('btn-quitar');
+const btnExportar = document.getElementById('btn-exportar');
+const btnCopiar = document.getElementById('btn-copiar');
+const btnPowerbi = document.getElementById('btn-powerbi');
+
+function el(id) { return document.getElementById(id); }
+
+function readControls() {
+  return {
+    columna: el('columna').value,
+    tipo: el('tipo').value,
+    top: el('top').value,
+  };
+}
+
+function writeControls(cfg) {
+  if (!cfg.columna) return;
+  el('columna').value = cfg.columna;
+  el('tipo').value = cfg.tipo;
+  el('top').value = cfg.top;
+}
+
+function slotEls() {
+  return [...board.querySelectorAll('.chart-slot')];
+}
+
+function resizeAll() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      slots.forEach((s) => s.chart && s.chart.resize());
+    });
+  });
+}
+
+function refreshBoard() {
+  board.dataset.count = String(visible);
+  slotEls().forEach((node, i) => {
+    node.classList.toggle('is-hidden', i >= visible);
+    node.classList.toggle('is-selected', i === selected);
+    const badge = node.querySelector('.chart-slot-badge');
+    if (i === selected) badge.textContent = 'Seleccionada';
+    else if (slots[i].ready) badge.textContent = 'Lista';
+    else badge.textContent = 'Vacía';
+  });
+  addTile.classList.toggle('is-hidden', visible !== 3);
+  btnAgregar.disabled = visible >= MAX_SLOTS || !defaultCol;
+  btnQuitar.disabled = visible <= 1;
+  btnExportar.disabled = !slots[selected].ready;
+  btnCopiar.disabled = !slots[selected].ready;
+  btnPowerbi.disabled = !slots.slice(0, visible).some((s) => s.ready);
+  slotLabel.textContent = `gráfica ${selected + 1}`;
+  resizeAll();
+}
+
+function selectSlot(i) {
+  if (i < 0 || i >= visible) return;
+  selected = i;
+  writeControls(slots[i].config);
+  metaEl.textContent = slots[i].ready
+    ? (slots[i].metaText || '')
+    : 'Espacio vacío. Elija columna y tipo, luego aplique.';
+  refreshBoard();
+}
+
+function addSlot() {
+  if (visible >= MAX_SLOTS) return;
+  visible += 1;
+  selected = visible - 1;
+  slots[selected].config = readControls();
+  writeControls(slots[selected].config);
+  refreshBoard();
+  aplicar(selected, false);
+}
+
+function removeSelected() {
+  if (visible <= 1) return;
+  const kept = slots
+    .filter((_, i) => i !== selected && i < visible)
+    .map((s) => ({
+      config: { ...s.config },
+      ready: s.ready,
+      metaText: s.metaText,
+    }));
+  slots.forEach((s) => {
+    if (s.chart) {
+      s.chart.destroy();
+      s.chart = null;
+    }
+    s.ready = false;
+    s.metaText = '';
+  });
+  kept.forEach((s, i) => {
+    slots[i].config = s.config;
+    slots[i].metaText = s.metaText;
+  });
+  for (let i = kept.length; i < MAX_SLOTS; i++) {
+    slots[i].config = { columna: defaultCol, tipo: 'bar', top: '20' };
+  }
+  visible = kept.length;
+  selected = Math.min(selected, visible - 1);
+  writeControls(slots[selected].config);
+  refreshBoard();
+  kept.forEach((s, i) => {
+    if (s.ready) aplicar(i, false);
+  });
+}
+
+async function aplicar(index, persistControls = true) {
+  const i = index ?? selected;
+  if (persistControls) slots[i].config = readControls();
+  const cfg = slots[i].config;
+  if (!cfg.columna) return;
+  metaEl.textContent = 'Cargando…';
+  try {
+    const res = await fetch(`/api/grafica?columna=${encodeURIComponent(cfg.columna)}&tipo=${encodeURIComponent(cfg.tipo)}&top=${cfg.top}`);
+    const data = await res.json();
+    if (!res.ok) {
+      const detail = data.detail;
+      const msg = typeof detail === "string"
+        ? detail
+        : (Array.isArray(detail) ? detail.map((x) => x.msg || x).join("; ") : "Error al generar la gráfica");
+      throw new Error(msg);
+    }
+    const ctx = el(`chart-${i}`);
+    if (slots[i].chart) slots[i].chart.destroy();
+    slots[i].chart = new Chart(ctx, {
+      type: data.chart_type,
+      data: {
+        labels: data.labels,
+        datasets: [{
+          label: data.columna,
+          data: data.values,
+          backgroundColor: (data.colores && data.colores.length)
+            ? data.colores
+            : data.labels.map((_, k) => colores[k % colores.length]),
+          borderColor: (data.colores && data.colores.length) ? data.colores : '#64748b',
+          borderWidth: data.chart_type === 'line' ? 2 : 0,
+          tension: 0.25,
+        }]
+      },
+      options: {
+        indexAxis: data.horizontal ? 'y' : 'x',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: data.chart_type === 'pie' },
+          title: { display: true, text: `${data.columna}` }
+        }
+      }
+    });
+    slots[i].ready = true;
+    slots[i].data = data;
+    slots[i].metaText = `${data.categorias} categorías · ${data.columna}`;
+    if (i === selected) metaEl.textContent = slots[i].metaText;
+    refreshBoard();
+  } catch (e) {
+    if (i === selected) metaEl.textContent = e.message || String(e);
+    btnExportar.disabled = !slots[selected].ready;
+  }
+}
+
+function tsvSeleccionado() {
+  const data = slots[selected].data;
+  if (!data) return '';
+  const col = data.columna || 'Categoria';
+  const lineas = [`${col}\tConteo`];
+  (data.labels || []).forEach((lab, i) => {
+    lineas.push(`${String(lab).replace(/\t/g, ' ')}\t${data.values[i]}`);
+  });
+  return lineas.join('\r\n');
+}
+
+async function copiarDatos() {
+  const tsv = tsvSeleccionado();
+  if (!tsv) return;
+  try {
+    await navigator.clipboard.writeText(tsv);
+    metaEl.textContent = 'Datos copiados. En Power BI: Introducir datos → Ctrl+V.';
+  } catch (e) {
+    metaEl.textContent = 'No se pudo copiar. Permita el portapapeles e inténtelo de nuevo.';
+  }
+}
+
+async function excelPowerBI() {
+  const graficas = slots
+    .slice(0, visible)
+    .filter((s) => s.ready)
+    .map((s) => ({
+      columna: s.config.columna,
+      tipo: s.config.tipo,
+      top: Number(s.config.top),
+    }));
+  if (!graficas.length) return;
+  metaEl.textContent = 'Preparando Excel para Power BI…';
+  try {
+    const res = await fetch('/api/grafica/powerbi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ graficas }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'No se pudo generar el Excel.');
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'graficas_powerbi.xlsx';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    metaEl.textContent = 'Excel listo. En Power BI: Obtener datos → Excel.';
+  } catch (e) {
+    metaEl.textContent = e.message || String(e);
+  }
+}
+
+function exportar() {
+  const ch = slots[selected].chart;
+  if (!ch) return;
+  const a = document.createElement('a');
+  a.href = ch.toBase64Image('image/png', 1);
+  const col = (slots[selected].config.columna || 'grafica').replace(/[^\w\-]+/g, '_');
+  a.download = `grafica_${selected + 1}_${col}.png`;
+  a.click();
+}
+
+slotEls().forEach((node) => {
+  node.addEventListener('click', () => selectSlot(Number(node.dataset.i)));
+  node.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      selectSlot(Number(node.dataset.i));
+    }
+  });
+});
+el('btn-aplicar').addEventListener('click', () => aplicar(selected, true));
+el('btn-exportar').addEventListener('click', exportar);
+el('btn-copiar').addEventListener('click', copiarDatos);
+el('btn-powerbi').addEventListener('click', excelPowerBI);
+btnAgregar.addEventListener('click', addSlot);
+addTile.addEventListener('click', addSlot);
+btnQuitar.addEventListener('click', removeSelected);
+window.addEventListener('resize', resizeAll);
+
+refreshBoard();
+{% if columnas %}
+aplicar(0, true);
+{% endif %}
+</script>
+{% endblock %}

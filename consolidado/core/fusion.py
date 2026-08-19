@@ -99,6 +99,41 @@ def filtrar_filas_consolidado(df: pl.DataFrame) -> pl.DataFrame:
     df = filtrar_filas_con_telefono(df)
     return df
 
+def _combinar_programa(valores: list) -> str | None:
+    """Unifica programa: variantes con/sin tilde quedan en un solo valor."""
+    candidatos: list[str] = []
+    for v in valores:
+        if _es_nulo(v):
+            continue
+        s = str(v).strip()
+        if not s:
+            continue
+        for parte in s.split("|"):
+            p = parte.strip()
+            if p:
+                candidatos.append(p)
+    if not candidatos:
+        return None
+    mejor_por_clave: dict[str, str] = {}
+    for s in candidatos:
+        clave = normalizar_encabezado(s)
+        if not clave:
+            continue
+        prev = mejor_por_clave.get(clave)
+        if prev is None or _cuenta_tildes(s) > _cuenta_tildes(prev) or (
+            _cuenta_tildes(s) == _cuenta_tildes(prev) and len(s) > len(prev)
+        ):
+            mejor_por_clave[clave] = s
+    if not mejor_por_clave:
+        return None
+    elegidos = list(mejor_por_clave.values())
+    permitidos = [p for p in elegidos if programa_es_permitido(p)]
+    usar = permitidos or elegidos
+    if len(usar) == 1:
+        return usar[0]
+    return " | ".join(usar)
+
+
 def _combinar_nombre(valores: list) -> str | None:
     """Unifica nombres: un solo valor, el más largo entre equivalentes."""
     candidatos: list[str] = []
@@ -175,6 +210,8 @@ def _fusionar_bloques_por_id(
                 continue
             if col == COL_NOMBRE:
                 merged = _combinar_nombre(grp[col].to_list())
+            elif col == "Programa":
+                merged = _combinar_programa(grp[col].to_list())
             elif col in COL_DATOS_CONTACTO:
                 merged = _combinar_contacto(grp, col)
             elif col == COL_TOTAL_BECA:
@@ -192,7 +229,7 @@ def _fusionar_bloques_por_id(
             fila[col] = merged if merged else None
         filas.append(fila)
 
-    return pl.DataFrame(filas)
+    return pl.from_dicts(filas, infer_schema_length=None)
 
 def fusionar_por_id(
     partes: list[pl.DataFrame],

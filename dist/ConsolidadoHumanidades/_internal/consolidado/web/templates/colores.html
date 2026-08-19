@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Colores{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Leyenda de colores</h2>
+    <p class="sub">El Excel pinta la fila según el componente de prioridad. En la aplicación, el acento sigue el programa académico.</p>
+  </div>
+</div>
+
+<section class="leyenda-block">
+  <h3>En el Excel consolidado</h3>
+  <p class="muted">Cada fila del listado se rellena con este color. El tono se oscurece un poco si el puntaje de ese componente es más alto. Si no hay ninguna señal, la fila queda blanca.</p>
+  <ul class="leyenda-list">
+    {% for c in leyenda.excel %}
+    <li class="leyenda-row" style="--swatch: {{ c.hex }}; --swatch-ink: {{ c.ink }};">
+      <span class="leyenda-row-name">{{ c.etiqueta }}</span>
+      <span class="leyenda-row-note">{{ c.nota }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="leyenda-extra">
+    <p><strong>Materias repetidas:</strong> en el horario del Excel, la materia va en <span class="leyenda-repite">negrita y subrayado</span>.</p>
+    <p><strong>Niveles de prioridad</strong> (columna numérica, no color de fila):</p>
+    <ul class="leyenda-niveles">
+      {% for n in leyenda.niveles %}
+      <li><span class="leyenda-nivel">{{ n.nivel }}</span> {{ n.nombre }} · {{ n.rango }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+<section class="leyenda-block">
+  <h3>Dentro de la aplicación</h3>
+  <p class="muted">Ficha, seguimiento y gráficas usan el color del programa. No reutilizan el semáforo del Excel, para no mezclar “qué carrera es” con “qué tan prioritario es”.</p>
+  <ul class="leyenda-list leyenda-list-app">
+    {% for p in leyenda.programas %}
+    <li class="leyenda-row leyenda-row-app" style="--swatch: {{ p.hex }}; --swatch-soft: {{ p.soft }}; --swatch-ink: {{ p.ink }};">
+      <span class="leyenda-row-name">{{ p.corta }}</span>
+      <span class="leyenda-row-note">{% if p.clave == 'neutro' %}Si el estudiante no tiene carrera o no está en Humanidades.{% else %}Acento de ficha, listas y gráficas de este programa.{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="leyenda-extra">
+    <p><strong>Metas:</strong> <span class="meta-estado cumple">CUMPLE</span> en verde y <span class="meta-estado no-cumple">NO CUMPLE</span> en rojo, según el estado del Excel de Permanencia.</p>
+    <p><strong>Contactados</strong> en Seguimiento: el check no cambia el color de prioridad; solo marca que ya se habló con la persona.</p>
+  </div>
+</section>
+{% endblock %}

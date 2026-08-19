@@ -6,6 +6,7 @@ Sin argumentos abre la web. --gui abre CustomTkinter. El resto se delega a la CL
 from __future__ import annotations
 
 import sys
+from multiprocessing import freeze_support
 
 
 def _run() -> None:
@@ -35,4 +36,5 @@ def _run() -> None:
 
 
 if __name__ == "__main__":
+    freeze_support()
     _run()

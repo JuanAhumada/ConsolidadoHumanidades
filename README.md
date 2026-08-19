@@ -135,8 +135,16 @@ No mezcle el periodo de la **versión** (`periodo_desde_fecha`) con el **Periodo
 
 ## Ejecutable
 
+En el repositorio está el paquete Windows listo para usar:
+
+`dist/ConsolidadoHumanidades/ConsolidadoHumanidades.exe`
+
+Descargue o clone esa carpeta **completa** (`_internal` incluida). Al abrir el `.exe` arranca la web en el navegador (usuario inicial `admin` / `admin`).
+
+Para regenerarlo:
+
 ```bat
 build_exe.bat
 ```
 
-Salida en `dist\ConsolidadoHumanidades\`. Comparta la carpeta completa (`_internal` incluida). No suba `dist/` ni `build/`.
+Los binarios grandes (`.exe`, `.dll`, `.pyd`) van con Git LFS. No suba `build/` (es temporal).

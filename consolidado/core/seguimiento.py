@@ -239,6 +239,7 @@ def listar_seguimiento(
     for f in filtradas:
         valor = _puntaje_categoria(f, cat)
         f["puntaje_lista"] = valor
+        f["puntaje_txt"] = fmt_pts(valor)
         f["pct"] = round(min(valor / tope, 1.0) * 100) if tope else 0
         tope_div = max((float(f[d["campo"]]) for d in _DIVISIONES_PUNTAJE), default=1.0) or 1.0
         f["divisiones"] = [

@@ -149,11 +149,17 @@ def programa_esta_excluido(val) -> bool:
 def programa_es_permitido(val) -> bool:
     if _es_nulo(val):
         return False
-    if programa_esta_excluido(val):
-        return False
     if not _PROGRAMAS_PERMITIDOS_RUNTIME:
         aplicar_config()
-    return normalizar_encabezado(str(val)) in _PROGRAMAS_PERMITIDOS_RUNTIME
+    partes = [p.strip() for p in str(val).split("|") if p.strip()]
+    if not partes:
+        return False
+    for parte in partes:
+        if programa_esta_excluido(parte):
+            continue
+        if normalizar_encabezado(parte) in _PROGRAMAS_PERMITIDOS_RUNTIME:
+            return True
+    return False
 
 def _es_valor_true(val) -> bool:
     if _es_nulo(val):

@@ -8,6 +8,7 @@ Las plantillas reciben es_admin y el usuario de sesión vía _render.
 
 from __future__ import annotations
 
+import sys
 import tempfile
 import webbrowser
 from datetime import date
@@ -40,7 +41,7 @@ from consolidado.core.priorizados import (
     buscar_estudiantes_en_fuentes,
 )
 from consolidado.core.seguimiento import CATEGORIAS_SEGUIMIENTO, listar_seguimiento
-from consolidado.paths import PROJECT_ROOT
+from consolidado.paths import BUNDLE_DIR, PROJECT_ROOT
 from consolidado.storage.alertas_fuente import (
     descartar_alerta_fuente,
 )
@@ -77,7 +78,15 @@ from consolidado.storage.usuarios import (
 from consolidado.storage.versiones import asegurar_semilla_si_vacia
 from consolidado.web import services
 
-WEB_DIR = Path(__file__).resolve().parent
+def _web_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        bundled = BUNDLE_DIR / "consolidado" / "web"
+        if (bundled / "templates").is_dir():
+            return bundled
+    return Path(__file__).resolve().parent
+
+
+WEB_DIR = _web_dir()
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
 app = FastAPI(title="Consolidado de Humanidades")
@@ -886,6 +895,10 @@ async def api_buscar(q: str = "") -> JSONResponse:
 def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:
     if open_browser:
         webbrowser.open(f"http://{host}:{port}/")
+    empaquetado = bool(getattr(sys, "frozen", False))
+    if empaquetado:
+        uvicorn.run(app, host=host, port=port, log_level="info")
+        return
     uvicorn.run(
         "consolidado.web.app:app",
         host=host,

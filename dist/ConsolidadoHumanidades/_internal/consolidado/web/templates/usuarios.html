@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Usuarios</h2>
+    <p class="sub">Solo el administrador crea cuentas y asigna el rol. La configuración del consolidado también queda restringida.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Crear usuario</h3>
+  <form method="post" action="/usuarios/crear" class="form-row">
+    <div class="field">
+      <label for="nuevo-usuario">Usuario</label>
+      <input id="nuevo-usuario" type="text" name="usuario" required minlength="3" placeholder="sin espacios"/>
+    </div>
+    <div class="field">
+      <label for="nuevo-nombre">Nombre</label>
+      <input id="nuevo-nombre" type="text" name="nombre" placeholder="Nombre para mostrar"/>
+    </div>
+    <div class="field">
+      <label for="nuevo-clave">Contraseña</label>
+      <input id="nuevo-clave" type="password" name="clave" required minlength="4"/>
+    </div>
+    <div class="field">
+      <label for="nuevo-rol">Rol</label>
+      <select id="nuevo-rol" name="rol">
+        <option value="consulta">Consulta</option>
+        <option value="admin">Administrador</option>
+      </select>
+    </div>
+    <div class="form-actions-row">
+      <button class="btn" type="submit">Crear</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Cuentas</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nombre</th>
+          <th>Rol</th>
+          <th>Estado</th>
+          <th>Contraseña</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for u in usuarios %}
+        <tr>
+          <td>{{ u.usuario }}</td>
+          <td>{{ u.nombre }}</td>
+          <td>{% if u.es_admin %}Administrador{% else %}Consulta{% endif %}</td>
+          <td>{% if u.activo %}Activo{% else %}Inactivo{% endif %}</td>
+          <td>
+            <form method="post" action="/usuarios/clave" class="usuarios-inline">
+              <input type="hidden" name="user_id" value="{{ u.id }}"/>
+              <input type="password" name="clave" required minlength="4" placeholder="Nueva clave"/>
+              <button class="btn sm secondary" type="submit">Cambiar</button>
+            </form>
+          </td>
+          <td>
+            {% if usuario and u.id == usuario.id %}
+            <span class="muted">Usted</span>
+            {% else %}
+            <form method="post" action="/usuarios/activo">
+              <input type="hidden" name="user_id" value="{{ u.id }}"/>
+              <input type="hidden" name="activo" value="{% if u.activo %}0{% else %}1{% endif %}"/>
+              <button class="btn sm {% if u.activo %}danger{% else %}secondary{% endif %}" type="submit">
+                {% if u.activo %}Desactivar{% else %}Activar{% endif %}
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="muted">No hay usuarios.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

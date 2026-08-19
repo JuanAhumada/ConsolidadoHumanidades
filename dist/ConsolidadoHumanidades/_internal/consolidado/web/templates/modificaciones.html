@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Historial{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Historial</h2>
+    <p class="sub">Bitácora de lo que se hace en la app y diferencia entre dos versiones del consolidado.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Comparar versiones</h3>
+  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Altas, bajas y cambios de nombre, programa, prioridad, puntaje, priorizado y alertas.</p>
+  {% if cmp_error %}
+  <div class="flash err">{{ cmp_error }}</div>
+  {% endif %}
+  <form method="get" action="/modificaciones" class="version-form">
+    <div class="field">
+      <label for="de">De (origen)</label>
+      <select id="de" name="de" required>
+        {% for v in versiones %}
+        <option value="{{ v.id }}" {% if de_id is not none and de_id|int == v.id|int %}selected{% endif %}>
+          #{{ v.id }} · {{ v.fecha_version }} · {{ v.periodo }} ({{ v.num_estudiantes }})
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="a">A (destino)</label>
+      <select id="a" name="a" required>
+        {% for v in versiones %}
+        <option value="{{ v.id }}" {% if a_id is not none and a_id|int == v.id|int %}selected{% endif %}>
+          #{{ v.id }} · {{ v.fecha_version }} · {{ v.periodo }} ({{ v.num_estudiantes }})
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-actions" style="align-self:end;">
+      <button class="btn" type="submit" {% if versiones|length < 2 %}disabled{% endif %}>Comparar</button>
+    </div>
+  </form>
+  {% if versiones|length < 2 %}
+  <p class="muted" style="margin:.8rem 0 0;">Hace falta al menos dos versiones para ver el paso de una a otra.</p>
+  {% endif %}
+</div>
+
+{% if comparacion %}
+<div class="grid grid-3">
+  <div class="stat"><div class="n">{{ comparacion.n_altas }}</div><div class="l">Altas</div></div>
+  <div class="stat"><div class="n">{{ comparacion.n_bajas }}</div><div class="l">Bajas</div></div>
+  <div class="stat"><div class="n">{{ comparacion.n_cambios }}</div><div class="l">Con cambios</div></div>
+</div>
+<p class="muted" style="margin:-.4rem 0 1rem;">
+  De #{{ comparacion.de.id }} ({{ comparacion.de.fecha_version }}) a #{{ comparacion.a.id }} ({{ comparacion.a.fecha_version }}).
+  {% if comparacion.truncado %}Se muestran como máximo 150 filas por lista.{% endif %}
+</p>
+
+<div class="grid grid-2">
+  <div class="card card-table">
+    <h3>Altas</h3>
+    <div class="table-wrap" style="max-height:18rem;">
+      <table>
+        <thead><tr><th>Identificación</th><th>Nombre</th></tr></thead>
+        <tbody>
+        {% for f in comparacion.altas %}
+          <tr>
+            <td><a href="/estudiante/{{ f.identificacion }}">{{ f.identificacion }}</a></td>
+            <td>{{ f.nombre or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="muted">Ninguna.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card card-table">
+    <h3>Bajas</h3>
+    <div class="table-wrap" style="max-height:18rem;">
+      <table>
+        <thead><tr><th>Identificación</th><th>Nombre</th></tr></thead>
+        <tbody>
+        {% for f in comparacion.bajas %}
+          <tr>
+            <td>{{ f.identificacion }}</td>
+            <td>{{ f.nombre or '—' }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="muted">Ninguna.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card card-table">
+  <h3>Cambios</h3>
+  <div class="table-wrap" style="max-height:22rem;">
+    <table>
+      <thead><tr><th>Identificación</th><th>Nombre</th><th>Campo</th><th>Antes</th><th>Después</th></tr></thead>
+      <tbody>
+      {% for c in comparacion.cambios %}
+        {% for campo in c.campos %}
+        <tr>
+          {% if loop.first %}
+          <td rowspan="{{ c.campos|length }}"><a href="/estudiante/{{ c.identificacion }}">{{ c.identificacion }}</a></td>
+          <td rowspan="{{ c.campos|length }}">{{ c.nombre or '—' }}</td>
+          {% endif %}
+          <td>{{ campo.campo }}</td>
+          <td class="diff-antes">{{ campo.antes }}</td>
+          <td class="diff-despues">{{ campo.despues }}</td>
+        </tr>
+        {% endfor %}
+      {% else %}
+        <tr><td colspan="5" class="muted">Sin cambios en los campos clave.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="card card-table">
+  <h3>Bitácora</h3>
+  <div class="table-wrap" style="max-height:calc(100vh - 22rem);">
+    <table>
+      <thead>
+        <tr>
+          <th>Cuándo</th>
+          <th>Quién</th>
+          <th>Acción</th>
+          <th>Resumen</th>
+          <th>Versiones</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for m in modificaciones %}
+        <tr>
+          <td>{{ m.creado_en }}</td>
+          <td>{{ m.usuario or '—' }}</td>
+          <td>{{ m.accion_etiqueta }}</td>
+          <td title="{{ m.identificacion or '' }}">{{ m.resumen }}</td>
+          <td class="muted">
+            {% if m.version_antes or m.version_despues %}
+              {% if m.version_antes %}#{{ m.version_antes }}{% else %}—{% endif %}
+              →
+              {% if m.version_despues %}#{{ m.version_despues }}{% else %}—{% endif %}
+              {% if m.version_antes and m.version_despues %}
+              <a class="btn sm secondary" href="/modificaciones?de={{ m.version_antes }}&amp;a={{ m.version_despues }}">Ver</a>
+              {% endif %}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="muted">Todavía no hay modificaciones registradas.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

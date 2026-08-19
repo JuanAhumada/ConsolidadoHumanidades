@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Metas{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Metas</h2>
+    <p class="sub">Graduación y permanencia según el Excel de Permanencia y ruta de grado. Las columnas de ruta de grado se cruzan al generar el consolidado.</p>
+  </div>
+</div>
+
+{% if metas and metas.disponible %}
+<section class="hub-metas">
+  {% for bloque_tipo in [
+    ("graduacion", "Metas de graduación", metas.graduacion),
+    ("permanencia", "Metas de permanencia", metas.permanencia)
+  ] %}
+  {% set clave, titulo, bloques = bloque_tipo %}
+  {% if bloques %}
+  <div class="metas-block" data-metas-tabs>
+    <h3>{{ titulo }}</h3>
+    <p class="muted metas-lead">Periodos que trae el archivo cargado. Las filas marcadas como proyección salen de bloques estimados del Excel.</p>
+    {% if bloques|length > 1 %}
+    <div class="seg-switch metas-switch" role="tablist">
+      {% for b in bloques %}
+      <button type="button" class="{% if loop.first %}active{% endif %}" data-periodo="{{ clave }}-{{ b.periodo }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">
+        <span class="seg-switch-lbl">{{ b.periodo }}</span>
+        {% if b.proyeccion %}<span class="seg-switch-n">Proyección</span>{% endif %}
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% for b in bloques %}
+    <div class="table-wrap metas-tabla" data-periodo="{{ clave }}-{{ b.periodo }}" {% if not loop.first and bloques|length > 1 %}hidden{% endif %}>
+      {% if bloques|length == 1 %}
+      <p class="metas-periodo-lbl">Periodo {{ b.periodo }}{% if b.proyeccion %} · proyección{% endif %}</p>
+      {% endif %}
+      <table>
+        <thead>
+          <tr>
+            <th>Programa</th>
+            <th>Periodo inicio</th>
+            <th>Población</th>
+            <th>Meta #</th>
+            <th># Alcanzado</th>
+            <th># Faltante</th>
+            <th>Meta %</th>
+            <th>% Alcanzado</th>
+            <th>% Faltante</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in b.filas %}
+          <tr>
+            <td>{{ f.programa }}</td>
+            <td>{{ f.periodo_inicio or "—" }}</td>
+            <td>{{ f.poblacion or "—" }}</td>
+            <td>{{ f.meta_num or "—" }}</td>
+            <td>{{ f.alcanzado_num or "—" }}</td>
+            <td>{{ f.faltante_num or "—" }}</td>
+            <td>{{ f.meta_pct or "—" }}</td>
+            <td>{{ f.alcanzado_pct or "—" }}</td>
+            <td>{{ f.faltante_pct or "—" }}</td>
+            <td>
+              {% if f.estado %}
+              <span class="meta-estado {% if f.cumple == true %}cumple{% elif f.cumple == false %}no-cumple{% endif %}">{{ f.estado }}</span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endfor %}
+</section>
+{% else %}
+<div class="card">
+  <h3>Sin archivo de metas</h3>
+  <p class="muted">Cargue el Excel de Permanencia y ruta de grado en Data para ver graduación y permanencia por periodo.</p>
+  {% if es_admin %}
+  <p><a class="btn sm" href="/archivos">Ir a Data</a></p>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll("[data-metas-tabs]").forEach(function (block) {
+  const buttons = block.querySelectorAll(".metas-switch [data-periodo]");
+  const panels = block.querySelectorAll(".metas-tabla[data-periodo]");
+  if (!buttons.length) return;
+  buttons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const periodo = btn.getAttribute("data-periodo");
+      buttons.forEach(function (b) {
+        const on = b === btn;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      panels.forEach(function (p) {
+        p.hidden = p.getAttribute("data-periodo") !== periodo;
+      });
+    });
+  });
+});
+</script>
+{% endblock %}

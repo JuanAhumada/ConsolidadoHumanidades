@@ -1,7 +1,8 @@
 """
 Color de acento por programa (ficha, listas, gráficas).
 
-Psicología índigo, Comunicación terracota, Licenciatura azul.
+Psicología rojo oscuro, Comunicación azul rey, Licenciatura verde militar,
+Entrenamiento amarillo opaco.
 estilo_color() escribe variables CSS --accent* en el inline style de la fila.
 """
 
@@ -15,30 +16,39 @@ from consolidado.core.normalizacion import normalizar_encabezado
 _FIJOS: dict[str, dict[str, str]] = {
     "psicologia": {
         "clave": "psicologia",
-        "hex": "#4f46e5",
-        "bright": "#6366f1",
-        "soft": "#e0e7ff",
-        "ink": "#312e81",
-        "glow": "rgba(79, 70, 229, 0.30)",
+        "hex": "#7A1212",
+        "bright": "#A31D1D",
+        "soft": "#FCE8E8",
+        "ink": "#4A0A0A",
+        "glow": "rgba(122, 18, 18, 0.32)",
         "corta": "Psicología",
     },
     "comunicacion social y medios digitales": {
         "clave": "comunicacion",
-        "hex": "#c2410c",
-        "bright": "#ea580c",
-        "soft": "#ffedd5",
-        "ink": "#7c2d12",
-        "glow": "rgba(194, 65, 12, 0.30)",
+        "hex": "#1B3A8C",
+        "bright": "#4169E1",
+        "soft": "#DBEAFE",
+        "ink": "#0F2166",
+        "glow": "rgba(27, 58, 140, 0.32)",
         "corta": "Comunicación",
     },
     "licenciatura en educacion basica primaria": {
         "clave": "licenciatura",
-        "hex": "#0369a1",
-        "bright": "#0284c7",
-        "soft": "#e0f2fe",
-        "ink": "#0c4a6e",
-        "glow": "rgba(3, 105, 161, 0.30)",
+        "hex": "#4B5320",
+        "bright": "#6B7435",
+        "soft": "#E6E9D4",
+        "ink": "#2A3012",
+        "glow": "rgba(75, 83, 32, 0.32)",
         "corta": "Licenciatura",
+    },
+    "tecnico profesional en entrenamiento deportivo": {
+        "clave": "entrenamiento",
+        "hex": "#B3942E",
+        "bright": "#C4A83A",
+        "soft": "#F3E9C6",
+        "ink": "#5C4A14",
+        "glow": "rgba(179, 148, 46, 0.32)",
+        "corta": "Entrenamiento",
     },
 }
 
@@ -106,6 +116,12 @@ def color_programa(programa: Any) -> dict[str, str]:
         out = dict(_FIJOS[clave])
         out.setdefault("corta", texto)
         return out
+    for fija, paleta in _FIJOS.items():
+        token = (paleta.get("clave") or fija).strip()
+        if token and token in clave:
+            out = dict(paleta)
+            out.setdefault("corta", texto)
+            return out
     indice = int(hashlib.md5(clave.encode("utf-8")).hexdigest(), 16) % len(_PALETA)
     out = dict(_PALETA[indice])
     out["corta"] = texto
