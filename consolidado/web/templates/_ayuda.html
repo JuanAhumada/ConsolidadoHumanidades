@@ -1,0 +1,215 @@
+<aside class="ayuda-panel" id="ayuda-panel" aria-hidden="true" aria-labelledby="ayuda-titulo">
+  <header class="ayuda-panel-head">
+    <p class="ayuda-kicker">Manual de uso</p>
+    <button type="button" class="ayuda-cerrar" id="ayuda-cerrar" aria-label="Cerrar ayuda">×</button>
+  </header>
+  <h3 id="ayuda-titulo">Ayuda</h3>
+  <p class="ayuda-resumen" id="ayuda-resumen"></p>
+  <ol class="ayuda-pasos" id="ayuda-pasos"></ol>
+</aside>
+<script type="application/json" id="manual-json">{{ manual_usuario | default({}) | tojson }}</script>
+<script>
+(function () {
+  const KEY = "humanidades-nav";
+  const EST_KEY = "humanidades-estudiantes";
+  const SKIP = "humanidades-nav-skip";
+  const panel = document.getElementById("ayuda-panel");
+  const titulo = document.getElementById("ayuda-titulo");
+  const resumen = document.getElementById("ayuda-resumen");
+  const pasos = document.getElementById("ayuda-pasos");
+  const btnAyuda = document.getElementById("btn-ayuda");
+  const btnAtras = document.getElementById("nav-atras");
+  const btnAdelante = document.getElementById("nav-adelante");
+  const raw = document.getElementById("manual-json");
+  let manual = {};
+  try { manual = JSON.parse(raw.textContent || "{}"); } catch (e) { manual = {}; }
+
+  function claveActual() {
+    return document.body.getAttribute("data-ayuda") || "inicio";
+  }
+
+  function pintarAyuda() {
+    const dato = manual[claveActual()] || {
+      titulo: "Ayuda",
+      resumen: "No hay una guía para esta pantalla.",
+      pasos: ["Use el menú de la izquierda para ir a otra sección."]
+    };
+    titulo.textContent = dato.titulo || "Ayuda";
+    resumen.textContent = dato.resumen || "";
+    pasos.innerHTML = "";
+    (dato.pasos || []).forEach((t, i) => {
+      const li = document.createElement("li");
+      const n = document.createElement("span");
+      n.className = "ayuda-paso-n";
+      n.textContent = String(i + 1);
+      const p = document.createElement("span");
+      p.textContent = t;
+      li.appendChild(n);
+      li.appendChild(p);
+      pasos.appendChild(li);
+    });
+  }
+
+  function ayudaAbierta() {
+    return document.documentElement.classList.contains("ayuda-abierta");
+  }
+
+  function abrirAyuda() {
+    pintarAyuda();
+    document.documentElement.classList.add("ayuda-abierta");
+    panel.setAttribute("aria-hidden", "false");
+    btnAyuda?.setAttribute("aria-expanded", "true");
+    btnAyuda?.classList.add("is-on");
+  }
+
+  function cerrarAyuda() {
+    document.documentElement.classList.remove("ayuda-abierta");
+    panel.setAttribute("aria-hidden", "true");
+    btnAyuda?.setAttribute("aria-expanded", "false");
+    btnAyuda?.classList.remove("is-on");
+  }
+
+  function alternarAyuda() {
+    if (ayudaAbierta()) cerrarAyuda();
+    else abrirAyuda();
+  }
+
+  function ahora() {
+    return location.pathname + location.search;
+  }
+
+  function leerHist() {
+    try {
+      const rawH = sessionStorage.getItem(KEY);
+      const h = rawH ? JSON.parse(rawH) : null;
+      if (h && Array.isArray(h.stack) && typeof h.index === "number") return h;
+    } catch (e) {}
+    return { stack: [], index: -1 };
+  }
+
+  function guardarHist(h) {
+    try { sessionStorage.setItem(KEY, JSON.stringify(h)); } catch (e) {}
+  }
+
+  function idEstudianteActual() {
+    const m = location.pathname.match(/^\/estudiante\/([^/]+)$/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  function recordarEstudiante() {
+    const id = idEstudianteActual();
+    if (!id) return;
+    let ids = [];
+    try { ids = JSON.parse(sessionStorage.getItem(EST_KEY) || "[]"); } catch (e) { ids = []; }
+    ids = ids.filter((x) => x !== id);
+    ids.push(id);
+    if (ids.length > 40) ids = ids.slice(-40);
+    try { sessionStorage.setItem(EST_KEY, JSON.stringify(ids)); } catch (e) {}
+  }
+
+  function estudiantesRecientes() {
+    try { return JSON.parse(sessionStorage.getItem(EST_KEY) || "[]"); } catch (e) { return []; }
+  }
+
+  function estudianteVecino(delta) {
+    const id = idEstudianteActual();
+    if (!id) return null;
+    const ids = estudiantesRecientes();
+    const i = ids.lastIndexOf(id);
+    if (i < 0) return null;
+    const j = i + delta;
+    if (j < 0 || j >= ids.length) return null;
+    return ids[j];
+  }
+
+  function irEstudiante(id) {
+    sessionStorage.setItem(SKIP, "1");
+    location.href = "/estudiante/" + encodeURIComponent(id);
+  }
+
+  function puedeAtras(h) {
+    if (estudianteVecino(-1)) return true;
+    if (h.index > 0) return true;
+    return Boolean(idEstudianteActual());
+  }
+
+  function puedeAdelante(h) {
+    if (estudianteVecino(1)) return true;
+    return h.index >= 0 && h.index < h.stack.length - 1;
+  }
+
+  function actualizarBotones(h) {
+    if (btnAtras) btnAtras.disabled = !puedeAtras(h);
+    if (btnAdelante) btnAdelante.disabled = !puedeAdelante(h);
+  }
+
+  function registrarPagina() {
+    const url = ahora();
+    const skip = sessionStorage.getItem(SKIP) === "1";
+    if (skip) sessionStorage.removeItem(SKIP);
+    let h = leerHist();
+    if (skip) {
+      const i = h.stack.indexOf(url);
+      if (i >= 0) h.index = i;
+      guardarHist(h);
+      actualizarBotones(h);
+      return;
+    }
+    if (h.stack[h.index] === url) {
+      actualizarBotones(h);
+      recordarEstudiante();
+      return;
+    }
+    h.stack = h.stack.slice(0, h.index + 1);
+    h.stack.push(url);
+    if (h.stack.length > 80) h.stack = h.stack.slice(-80);
+    h.index = h.stack.length - 1;
+    guardarHist(h);
+    actualizarBotones(h);
+    recordarEstudiante();
+  }
+
+  function ir(delta) {
+    const h = leerHist();
+    const dest = h.index + delta;
+    if (dest < 0 || dest >= h.stack.length) return;
+    h.index = dest;
+    guardarHist(h);
+    sessionStorage.setItem(SKIP, "1");
+    location.href = h.stack[dest];
+  }
+
+  function atras() {
+    const vecino = estudianteVecino(-1);
+    if (vecino) {
+      irEstudiante(vecino);
+      return;
+    }
+    const h = leerHist();
+    if (h.index > 0) {
+      ir(-1);
+      return;
+    }
+    if (idEstudianteActual()) location.href = "/estudiante";
+  }
+
+  function adelante() {
+    const vecino = estudianteVecino(1);
+    if (vecino) {
+      irEstudiante(vecino);
+      return;
+    }
+    const h = leerHist();
+    if (h.index >= 0 && h.index < h.stack.length - 1) ir(1);
+  }
+
+  registrarPagina();
+  btnAyuda?.addEventListener("click", alternarAyuda);
+  document.getElementById("ayuda-cerrar")?.addEventListener("click", cerrarAyuda);
+  btnAtras?.addEventListener("click", atras);
+  btnAdelante?.addEventListener("click", adelante);
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && ayudaAbierta()) cerrarAyuda();
+  });
+})();
+</script>

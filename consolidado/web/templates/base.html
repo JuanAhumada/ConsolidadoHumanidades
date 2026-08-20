@@ -21,10 +21,19 @@
   </script>
   {% block head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}" data-ayuda="{{ ayuda_clave or nav or 'inicio' }}">
   <button type="button" class="nav-show" id="nav-show" title="Mostrar menú" aria-label="Mostrar menú">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="18" height="18"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
   </button>
+  <div class="page-tools" role="toolbar" aria-label="Navegación y ayuda">
+    <button type="button" class="page-tool" id="nav-atras" title="Atrás" aria-label="Atrás" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 6 9 12l6 6"/></svg>
+    </button>
+    <button type="button" class="page-tool" id="nav-adelante" title="Adelante" aria-label="Adelante" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <button type="button" class="page-tool page-tool-help" id="btn-ayuda" title="Ayuda de esta pantalla" aria-label="Ayuda de esta pantalla" aria-expanded="false" aria-controls="ayuda-panel">?</button>
+  </div>
   <div class="layout">
     <aside class="sidebar">
       <div class="sidebar-head">
@@ -137,10 +146,22 @@
     </aside>
     <main class="main">
       {% if flash %}
-      <div class="flash ok">{{ flash }}</div>
+      <article class="flash-card ok" role="status">
+        <span class="flash-card-mark" aria-hidden="true">✓</span>
+        <div>
+          <strong>Listo</strong>
+          <p>{{ flash }}</p>
+        </div>
+      </article>
       {% endif %}
       {% if error %}
-      <div class="flash err">{{ error }}</div>
+      <article class="flash-card err" role="alert">
+        <span class="flash-card-mark" aria-hidden="true">!</span>
+        <div>
+          <strong>No se pudo completar</strong>
+          <p>{{ error }}</p>
+        </div>
+      </article>
       {% endif %}
       {% block content %}{% endblock %}
     </main>
@@ -176,6 +197,7 @@
     });
   })();
   </script>
+  {% include "_ayuda.html" %}
   {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -27,9 +27,18 @@ dist/ConsolidadoHumanidades/salida/*.xlsx
 dist/ConsolidadoHumanidades/salida/*.xls
 dist/ConsolidadoHumanidades/salida/*.xlsm
 
-# Excel: datos de entrada, salidas y ejemplos locales
+# ZIP de distribución: se versiona ConsolidadoHumanidades-Windows.zip
+# (sin Git LFS, para que «Download ZIP» del repo lo traiga de verdad)
+release/*
+!release/.gitkeep
+!release/README.md
+!release/ConsolidadoHumanidades-Windows.zip
 
-# Excel: datos de entrada, salidas y ejemplos locales
+# Paquete de Excels de prueba (raíz). GitHub admite hasta 100 MB por archivo.
+!ArchivosPrueba2026-1.zip
+
+# Residuos locales
+installed.txt
 
 # Excel: datos de entrada, salidas y ejemplos locales
 *.xlsx

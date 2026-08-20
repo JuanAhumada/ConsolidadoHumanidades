@@ -12,7 +12,13 @@
   <h3>Comparar versiones</h3>
   <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Altas, bajas y cambios de nombre, programa, prioridad, puntaje, priorizado y alertas.</p>
   {% if cmp_error %}
-  <div class="flash err">{{ cmp_error }}</div>
+  <article class="flash-card err" role="alert">
+    <span class="flash-card-mark" aria-hidden="true">!</span>
+    <div>
+      <strong>No se pudo completar</strong>
+      <p>{{ cmp_error }}</p>
+    </div>
+  </article>
   {% endif %}
   <form method="get" action="/modificaciones" class="version-form">
     <div class="field">

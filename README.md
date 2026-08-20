@@ -4,6 +4,11 @@ Aplicación para fusionar Excels de estudiantes (matriculados, becas, priorizado
 
 La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI.
 
+**Usuarios (Windows, sin Python):** doble clic en `ConsolidadoHumanidades.exe`.
+
+- Si bajó [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Windows.zip), extraiga y pulse el `.exe` de la **raíz** de lo extraído.
+- Si bajó el ZIP del código, pulse el `ConsolidadoHumanidades.exe` de la **raíz del repo** (es un lanzador de 7 KB; localiza o descomprime el paquete). Usuario inicial: `admin` / `admin`.
+
 ## Requisitos
 
 - Python 3.11+ (recomendado 3.13)
@@ -91,9 +96,11 @@ Al cargar, los defaults se fusionan con el JSON: columnas nuevas del código se 
 | `datos/historico/` | Fuentes de Datos antiguos (no toca `entrada`) |
 | `datos/consolidado.db` | SQLite |
 | `salida/` | Excel generado por versión |
+| `docs/` | Manual técnico |
+| `empaque/` | Lanzador Windows (sin consola) |
 | `consolidado/` | Código |
 
-Los `.xlsx` y la `.db` **no van al repositorio** (datos de estudiantes).
+Los `.xlsx` sueltos y la `.db` **no van al repositorio** (datos de estudiantes). El paquete de prueba `ArchivosPrueba2026-1.zip` (~19 MB) **sí se versiona** para poder subirlo a GitHub (límite 100 MB por archivo; no hace falta Git LFS).
 
 ## Mapa del código
 
@@ -120,7 +127,11 @@ consolidado/
   web/                  FastAPI + plantillas Jinja + CSS
     app.py              Rutas y permisos
     services.py         Generar / estado de archivos
+    manual_usuario.py   Textos del «?» por pestaña
+    avisos.py           Tarjetas si el .exe no arranca
   gui/                  CustomTkinter (legado, aún usable)
+docs/MANUAL_TECNICO.md  Arquitectura y reglas
+empaque/                Lanzador Windows (sin consola)
 ```
 
 Para seguir un cambio:
@@ -135,16 +146,14 @@ No mezcle el periodo de la **versión** (`periodo_desde_fecha`) con el **Periodo
 
 ## Ejecutable
 
-En el repositorio está el paquete Windows listo para usar:
+Doble clic en **`ConsolidadoHumanidades.exe`**. No se abre una terminal. Si falla el arranque, aparece una tarjeta.
 
-`dist/ConsolidadoHumanidades/ConsolidadoHumanidades.exe`
+El manual de uso está dentro de la web: signo **?** (esquina superior derecha).
 
-Descargue o clone esa carpeta **completa** (`_internal` incluida). Al abrir el `.exe` arranca la web en el navegador (usuario inicial `admin` / `admin`).
-
-Para regenerarlo:
+Para regenerar el paquete (sin publicarlo a git):
 
 ```bat
 build_exe.bat
 ```
 
-Los binarios grandes (`.exe`, `.dll`, `.pyd`) van con Git LFS. No suba `build/` (es temporal).
+Fuentes del lanzador: `empaque/`. Manual técnico: `docs/MANUAL_TECNICO.md`.

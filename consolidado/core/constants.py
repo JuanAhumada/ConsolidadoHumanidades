@@ -156,6 +156,7 @@ _TIPOS_FUENTE_AUXILIARES = {
     "bd_prio_psi",
     "bd_prio_lic",
     "bd_permanencia",
+    "bd_graduacion",
 }
 
 COLUMNAS_EXCLUIDAS_LISTADO = frozenset(

@@ -8,6 +8,12 @@
   </div>
 </div>
 
+{% if estado.listo_generar %}
+<article class="hub-banner ok" role="status">Listo para generar el consolidado. Los archivos obligatorios ya están cargados. Use «Generar nuevo consolidado» en el menú.</article>
+{% else %}
+<article class="hub-banner warn" role="status">Aún no está listo para generar: faltan {{ estado.obligatorios_total - estado.obligatorios_listos }} de {{ estado.obligatorios_total }} archivos obligatorios.</article>
+{% endif %}
+
 <div class="grid grid-3">
   <div class="stat"><div class="n">{{ estado.obligatorios_listos }}/{{ estado.obligatorios_total }}</div><div class="l">Obligatorios listos</div></div>
   <div class="stat"><div class="n">{{ estado.num_versiones }}</div><div class="l">Versiones en SQL</div></div>

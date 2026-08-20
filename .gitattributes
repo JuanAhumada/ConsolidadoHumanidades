@@ -4,6 +4,11 @@
 *.json text eol=lf
 *.md text eol=lf
 
+# Lanzador pequeño (no LFS): debe viajar como binario en el ZIP del código
+/ConsolidadoHumanidades.exe binary
+empaque/Lanzador.exe binary
+ArchivosPrueba2026-1.zip binary
+
 # Binarios del paquete Windows (GitHub limita a 100 MB por archivo)
 dist/**/*.exe filter=lfs diff=lfs merge=lfs -text
 dist/**/*.dll filter=lfs diff=lfs merge=lfs -text

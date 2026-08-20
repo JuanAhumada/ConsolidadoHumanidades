@@ -352,6 +352,9 @@ def obtener_ficha_estudiante(
         "nombre": nombre,
         "programa": programa,
         "periodo_ingreso": _formatear_valor_ficha(fila.get("Periodo ingreso")),
+        "periodo_grado": _formatear_valor_ficha(fila.get("Periodo grado")),
+        "cohorte_graduacion": _formatear_valor_ficha(fila.get("Cohorte de graduación")),
+        "estado_graduacion": _formatear_valor_ficha(fila.get("Estado graduación")),
         "periodo": periodo,
         "nivel_prioridad": None if _esta_vacio(nivel) else str(nivel).strip(),
         "puntaje_prioridad": None

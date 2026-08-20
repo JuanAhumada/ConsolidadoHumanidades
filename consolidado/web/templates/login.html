@@ -10,7 +10,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/static/app.css"/>
 </head>
-<body class="page-login">
+<body class="page-login" data-ayuda="{{ ayuda_clave or 'login' }}">
+  <div class="page-tools" role="toolbar" aria-label="Navegación y ayuda">
+    <button type="button" class="page-tool" id="nav-atras" title="Atrás" aria-label="Atrás" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M15 6 9 12l6 6"/></svg>
+    </button>
+    <button type="button" class="page-tool" id="nav-adelante" title="Adelante" aria-label="Adelante" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 6l6 6-6 6"/></svg>
+    </button>
+    <button type="button" class="page-tool page-tool-help" id="btn-ayuda" title="Ayuda de esta pantalla" aria-label="Ayuda de esta pantalla" aria-expanded="false" aria-controls="ayuda-panel">?</button>
+  </div>
   <main class="login-shell">
     <section class="login-card">
       <header class="login-brand">
@@ -21,8 +30,18 @@
       </header>
       <form class="login-form" method="post" action="/login">
         <input type="hidden" name="siguiente" value="{{ siguiente or '/' }}"/>
-        {% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
-        {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+        {% if flash %}
+        <article class="flash-card ok" role="status">
+          <span class="flash-card-mark" aria-hidden="true">✓</span>
+          <div><strong>Listo</strong><p>{{ flash }}</p></div>
+        </article>
+        {% endif %}
+        {% if error %}
+        <article class="flash-card err" role="alert">
+          <span class="flash-card-mark" aria-hidden="true">!</span>
+          <div><strong>No se pudo completar</strong><p>{{ error }}</p></div>
+        </article>
+        {% endif %}
         <div class="field">
           <label for="usuario">Usuario</label>
           <input id="usuario" type="text" name="usuario" required autocomplete="username" autofocus placeholder="Su usuario"/>
@@ -35,5 +54,6 @@
       </form>
     </section>
   </main>
+  {% include "_ayuda.html" %}
 </body>
 </html>

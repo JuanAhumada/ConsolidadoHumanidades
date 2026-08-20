@@ -55,6 +55,22 @@
       "hoja": "Hoja1"
     },
     {
+      "id": "bd_permanencia",
+      "categoria": "rendimiento",
+      "titulo": "Permanencia y ruta de grado",
+      "tipo": "bd_permanencia",
+      "nombre_guardado": "bd_permanencia.xlsx",
+      "requerido": false
+    },
+    {
+      "id": "bd_graduacion",
+      "categoria": "rendimiento",
+      "titulo": "Gestión de graduación",
+      "tipo": "bd_graduacion",
+      "nombre_guardado": "bd_graduacion.xlsx",
+      "requerido": false
+    },
+    {
       "id": "bd_alertas_com_1",
       "categoria": "alertas",
       "titulo": "Alertas Comunicación — inicial",
