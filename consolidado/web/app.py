@@ -77,6 +77,7 @@ from consolidado.storage.usuarios import (
 )
 from consolidado.storage.versiones import asegurar_semilla_si_vacia
 from consolidado.web import services
+from consolidado.web.manual_usuario import MANUAL_USUARIO
 
 def _web_dir() -> Path:
     if getattr(sys, "frozen", False):
@@ -180,8 +181,10 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
         ],
         "cat": "",
         "vista": "pendientes",
+        "manual_usuario": MANUAL_USUARIO,
     }
     data.update(extra)
+    data["ayuda_clave"] = data.get("ayuda_clave") or data.get("nav") or "inicio"
     return data
 
 
@@ -216,8 +219,13 @@ def _startup() -> None:
     try:
         sincronizar_periodo_actual_ultima_version(PROJECT_ROOT)
     except Exception as exc:
-        print(f"No se pudo actualizar Periodo actual: {exc}")
-    if asegurar_admin_inicial(PROJECT_ROOT):
+        if getattr(sys, "frozen", False):
+            import logging
+
+            logging.getLogger("consolidado").warning("No se pudo actualizar Periodo actual: %s", exc)
+        else:
+            print(f"No se pudo actualizar Periodo actual: {exc}")
+    if asegurar_admin_inicial(PROJECT_ROOT) and not getattr(sys, "frozen", False):
         print("Usuario inicial creado: admin / admin. Cámbielo en Usuarios.")
 
 
@@ -232,6 +240,8 @@ async def pagina_login(request: Request) -> HTMLResponse:
             "error": request.query_params.get("err"),
             "flash": request.query_params.get("msg"),
             "siguiente": request.query_params.get("next") or "/",
+            "manual_usuario": MANUAL_USUARIO,
+            "ayuda_clave": "login",
         },
     )
 
@@ -893,12 +903,11 @@ async def api_buscar(q: str = "") -> JSONResponse:
 
 
 def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:
+    if getattr(sys, "frozen", False):
+        _run_empaquetado(host, port, open_browser=open_browser)
+        return
     if open_browser:
         webbrowser.open(f"http://{host}:{port}/")
-    empaquetado = bool(getattr(sys, "frozen", False))
-    if empaquetado:
-        uvicorn.run(app, host=host, port=port, log_level="info")
-        return
     uvicorn.run(
         "consolidado.web.app:app",
         host=host,
@@ -906,6 +915,71 @@ def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True
         reload=True,
         log_level="info",
     )
+
+
+def _puerto_libre(host: str, port: int, intentos: int = 10) -> int | None:
+    import socket
+
+    for candidato in range(port, port + intentos):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.bind((host, candidato))
+            sock.close()
+            return candidato
+        except OSError:
+            try:
+                sock.close()
+            except OSError:
+                pass
+    return None
+
+
+def _run_empaquetado(host: str, port: int, *, open_browser: bool) -> None:
+    import logging
+    import threading
+
+    from consolidado.web.avisos import mostrar_tarjeta
+
+    elegido = _puerto_libre(host, port)
+    if elegido is None:
+        mostrar_tarjeta(
+            "No se pudo iniciar",
+            f"Los puertos {port}–{port + 9} están ocupados. Cierre la otra ventana de la aplicación e inténtelo de nuevo.",
+            "error",
+        )
+        return
+
+    log_dir = PROJECT_ROOT / "datos"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=str(log_dir / "servidor.log"),
+        level=logging.WARNING,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+
+    if open_browser:
+        threading.Timer(0.7, lambda: webbrowser.open(f"http://{host}:{elegido}/")).start()
+    try:
+        uvicorn.run(
+            app,
+            host=host,
+            port=elegido,
+            log_level="warning",
+            access_log=False,
+        )
+    except OSError as exc:
+        mostrar_tarjeta(
+            "No se pudo iniciar",
+            "No fue posible abrir el servidor. "
+            f"Detalle: {exc}",
+            "error",
+        )
+    except Exception as exc:
+        mostrar_tarjeta(
+            "Error inesperado",
+            str(exc) or "La aplicación se detuvo al arrancar.",
+            "error",
+        )
 
 
 if __name__ == "__main__":

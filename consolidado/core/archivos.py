@@ -424,6 +424,8 @@ def _tipo_libro_desde_nombre(ruta: Path) -> str:
         return "bd_rep"
     if "permanencia" in n or "ruta de grado" in n:
         return "bd_permanencia"
+    if "graduacion" in n or "graduación" in n:
+        return "bd_graduacion"
     if "alertas" in n and "psicolog" in n:
         return "bd_alertas_psi"
     if "alertas" in n and ("comunicacion" in n or "entrenamiento" in n):

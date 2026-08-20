@@ -87,6 +87,9 @@ COLUMNAS_RUTA_GRADO = [
     "Opción de grado",
     "Estado de inglés",
     "Saber Pro",
+    "Periodo grado",
+    "Estado graduación",
+    "Cohorte de graduación",
 ]
 
 ETIQUETAS_EXPORT_COLUMNAS: dict[str, str] = {
@@ -325,6 +328,14 @@ ARCHIVOS_FUENTE_DEFAULT = [
         "titulo": "Permanencia y ruta de grado",
         "tipo": "bd_permanencia",
         "nombre_guardado": "bd_permanencia.xlsx",
+        "requerido": False,
+    },
+    {
+        "id": "bd_graduacion",
+        "categoria": "rendimiento",
+        "titulo": "Gestión de graduación",
+        "tipo": "bd_graduacion",
+        "nombre_guardado": "bd_graduacion.xlsx",
         "requerido": False,
     },
     {

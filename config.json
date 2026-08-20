@@ -63,6 +63,14 @@
       "requerido": false
     },
     {
+      "id": "bd_graduacion",
+      "categoria": "rendimiento",
+      "titulo": "Gestión de graduación",
+      "tipo": "bd_graduacion",
+      "nombre_guardado": "bd_graduacion.xlsx",
+      "requerido": false
+    },
+    {
       "id": "bd_alertas_com_1",
       "titulo": "Alertas — Comunicación y Entrenamiento",
       "tipo": "bd_alertas_com",
@@ -289,7 +297,10 @@
         "Estado opción de grado",
         "Opción de grado",
         "Estado de inglés",
-        "Saber Pro"
+        "Saber Pro",
+        "Periodo grado",
+        "Estado graduación",
+        "Cohorte de graduación"
       ]
     },
     {

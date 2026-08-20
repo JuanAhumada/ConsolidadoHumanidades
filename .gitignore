@@ -34,9 +34,11 @@ release/*
 !release/README.md
 !release/ConsolidadoHumanidades-Windows.zip
 
-# Excel: datos de entrada, salidas y ejemplos locales
+# Paquete de Excels de prueba (raíz). GitHub admite hasta 100 MB por archivo.
+!ArchivosPrueba2026-1.zip
 
-# Excel: datos de entrada, salidas y ejemplos locales
+# Residuos locales
+installed.txt
 
 # Excel: datos de entrada, salidas y ejemplos locales
 *.xlsx

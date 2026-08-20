@@ -53,7 +53,13 @@ def cfg_actual() -> dict[str, Any]:
 
 
 def metas_ruta_grado() -> dict[str, Any]:
-    vacio = {"disponible": False, "graduacion": [], "permanencia": []}
+    vacio = {
+        "disponible": False,
+        "graduacion": [],
+        "permanencia": [],
+        "historico": [],
+        "graficas": [],
+    }
     try:
         cfg = cfg_actual()
         return cargar_metas(cfg, PROJECT_ROOT)

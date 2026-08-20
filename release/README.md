@@ -1,5 +1,6 @@
 # Paquete Windows
 
-Extraiga `ConsolidadoHumanidades-Windows.zip` y haga **doble clic** en `ConsolidadoHumanidades.exe` (el de la raíz, junto a la carpeta). No hace falta el `.bat`.
+Extraiga `ConsolidadoHumanidades-Windows.zip` y haga **doble clic** en `ConsolidadoHumanidades.exe` de la raíz.
+No se abre una consola. Si algo falla, aparece una tarjeta en pantalla.
 
-Si abrió el ZIP del código fuente, use el `ConsolidadoHumanidades.exe` de la raíz del repo: es un lanzador pequeño que abre el paquete real.
+El manual de cada pestaña está en la aplicación (signo **?**).

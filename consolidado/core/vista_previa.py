@@ -198,6 +198,9 @@ def obtener_vista_previa_slot(slot: dict, cfg: dict, base: Path) -> tuple[list[d
             "OPCIÓN DE GRADO / OPCION A GRADO",
             "ESTADO DE INGLÉS",
             "SABER PRO / SABER PRO2",
+            "PERIODO GRADO (si viene en la hoja)",
+            "ESTADO A …",
+            "Nombre de hoja COHORTE AAAA-S (AAAA-S)",
         ]
         return [
             _fila_mapa("Identificación (clave)", "DOCUMENTO", "Cruce por cédula"),
@@ -205,6 +208,21 @@ def obtener_vista_previa_slot(slot: dict, cfg: dict, base: Path) -> tuple[list[d
                 _fila_mapa(salida, origen, "Cohortes + base general")
                 for salida, origen in zip(COLUMNAS_RUTA_GRADO, origenes)
             ],
+        ], None
+    if tipo == "bd_graduacion":
+        return [
+            _fila_mapa("Identificación (clave)", "DOCUMENTO", "Cruce por cédula"),
+            _fila_mapa("% créditos aprobados", "% CREDITOS APROBADOS.", "Gestión de graduación"),
+            _fila_mapa("Saber Pro", "SABER PRO", "Gestión de graduación"),
+            _fila_mapa("Estado de inglés", "INGLES", "Gestión de graduación"),
+            _fila_mapa("Opción de grado", "OPCION A GRADO", "Gestión de graduación"),
+            _fila_mapa("Periodo grado", "PERIODO GRADO", "Vacío si aún no se gradúa"),
+            _fila_mapa("Estado graduación", "ESTADO A …", "ACTIVO / GRADUADO / AUSENTE / DESERTOR"),
+            _fila_mapa(
+                "Cohorte de graduación",
+                "(se completa con Permanencia)",
+                "Periodo en el que debería graduarse",
+            ),
         ], None
 
     hoja = slot.get("hoja")
