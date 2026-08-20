@@ -340,14 +340,13 @@ build_exe.bat
 
 Salida: `dist/ConsolidadoHumanidades/`. El spec empaqueta plantillas, estáticos, Polars y FastAPI.
 
-**Distribución a usuarios:** no sirve «Download ZIP» del repositorio: GitHub no incluye objetos Git LFS, el `.exe` queda en ~130 bytes de texto y Windows muestra *No se puede ejecutar esta aplicación en el equipo*. Hay que:
+**Usuarios:** doble clic en `ConsolidadoHumanidades.exe` (lanzador de ~7 KB en la raíz, o el de la raíz del ZIP Windows). No hace falta ningún `.bat`.
 
-- Publicar `ConsolidadoHumanidades-Windows.zip` en **GitHub Releases**, o
-- Clonar con `git lfs pull`.
+El lanzador busca `dist/ConsolidadoHumanidades/` con `_internal` y un `.exe` de más de 1 MB; si solo hay punteros Git LFS, extrae `release/ConsolidadoHumanidades-Windows.zip` a `%LOCALAPPDATA%\ConsolidadoHumanidades\app` y arranca ahí.
 
-`Ejecutar.bat` comprueba el tamaño del `.exe` y la carpeta `_internal` antes de lanzar. Tras un `build_exe.bat`, esos archivos se copian desde `empaquetado/`.
+Código: `empaquetado/Lanzador.cs`. Se recompila con `empaquetado/compilar_lanzador.bat` (lo llama `build_exe.bat`). No va por Git LFS, para que el ZIP del código lo traiga como ejecutable real.
 
-`.gitignore` ignora `build/` y datos de estudiantes; **no** ignora `dist/`. Los `.pyd` / `.dll` / `.exe` de `dist/` van por Git LFS (Polars ~185 MB).
+Para regenerar el paquete grande: `build_exe.bat`. `build/` no se versiona.
 
 ---
 

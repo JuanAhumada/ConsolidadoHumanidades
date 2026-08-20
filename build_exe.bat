@@ -31,6 +31,24 @@ copy /Y LEEME_EXE.txt "%DIST%\LEEME.txt" >nul
 copy /Y empaquetado\Ejecutar.bat "%DIST%\Ejecutar.bat" >nul
 copy /Y empaquetado\SI_NO_ABRE.txt "%DIST%\SI_NO_ABRE.txt" >nul
 
+call "%~dp0empaquetado\compilar_lanzador.bat"
+if errorlevel 1 (
+    echo Error al compilar el lanzador
+    exit /b 1
+)
+copy /Y empaquetado\Lanzador.exe "%DIST%\..\..\ConsolidadoHumanidades.exe" >nul 2>nul
+
+echo.
+echo Empaquetando ZIP para usuarios...
+if not exist "release" mkdir release
+if exist "release\ConsolidadoHumanidades-Windows.zip" del /F /Q "release\ConsolidadoHumanidades-Windows.zip"
+if exist "release\_zip_stage" rmdir /S /Q "release\_zip_stage"
+mkdir "release\_zip_stage"
+copy /Y empaquetado\Lanzador.exe "release\_zip_stage\ConsolidadoHumanidades.exe" >nul
+xcopy /E /I /Q /Y "%DIST%" "release\_zip_stage\ConsolidadoHumanidades" >nul
+tar.exe -a -c -f "release\ConsolidadoHumanidades-Windows.zip" -C "release\_zip_stage" ConsolidadoHumanidades.exe ConsolidadoHumanidades
+rmdir /S /Q "release\_zip_stage"
+
 echo.
 echo Listo: %DIST%\ConsolidadoHumanidades.exe
 echo Distribuya la carpeta completa dist\ConsolidadoHumanidades

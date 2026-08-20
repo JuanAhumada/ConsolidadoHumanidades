@@ -4,7 +4,10 @@ Aplicación para fusionar Excels de estudiantes (matriculados, becas, priorizado
 
 La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI.
 
-**Usuarios (Windows, sin Python):** descargue [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/blob/Torre/release/ConsolidadoHumanidades-Windows.zip) (o el archivo dentro de `release/` si ya tiene el repo), extraiga **esa** carpeta y abra `Ejecutar.bat`. No use el `.exe` que viene en el ZIP del código fuente: GitHub no incluye Git LFS y Windows dirá que no se puede ejecutar.
+**Usuarios (Windows, sin Python):** doble clic en `ConsolidadoHumanidades.exe`.
+
+- Si bajó [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Windows.zip), extraiga y pulse el `.exe` de la **raíz** de lo extraído.
+- Si bajó el ZIP del código, pulse el `ConsolidadoHumanidades.exe` de la **raíz del repo** (es un lanzador de 7 KB; localiza o descomprime el paquete). Usuario inicial: `admin` / `admin`.
 
 ## Requisitos
 
@@ -137,19 +140,14 @@ No mezcle el periodo de la **versión** (`periodo_desde_fecha`) con el **Periodo
 
 ## Ejecutable
 
-**No use «Code → Download ZIP».** Ese ZIP no trae los `.exe` / `.dll` (están en Git LFS) y Windows muestra *No se puede ejecutar esta aplicación en el equipo*.
+Doble clic en **`ConsolidadoHumanidades.exe`** de la raíz (lanzador). No hace falta un `.bat`.
 
-Opciones:
+Si clonó con Git LFS, el lanzador abre `dist/ConsolidadoHumanidades/`. Si bajó el ZIP del código, extrae `release/ConsolidadoHumanidades-Windows.zip` y abre la app.
 
-1. **Release (recomendado para usuarios):** [Releases](https://github.com/JuanAhumada/ConsolidadoHumanidades/releases) → `ConsolidadoHumanidades-Windows.zip`. Extraiga y use `Ejecutar.bat`.
-2. **Clone con Git LFS:** `git clone …` y `git lfs pull`, luego `dist/ConsolidadoHumanidades/Ejecutar.bat`.
-
-La carpeta `dist/ConsolidadoHumanidades/` tiene que ir **completa** (`_internal` incluida). Usuario inicial `admin` / `admin`.
-
-Para regenerarlo:
+Para regenerar el paquete grande:
 
 ```bat
 build_exe.bat
 ```
 
-Los binarios grandes van con Git LFS. No suba `build/` (es temporal).
+Los binarios grandes de `dist/` van con Git LFS. El lanzador de la raíz no. No suba `build/`.
