@@ -936,9 +936,17 @@ def _puerto_libre(host: str, port: int, intentos: int = 10) -> int | None:
 
 def _run_empaquetado(host: str, port: int, *, open_browser: bool) -> None:
     import logging
+    import os
     import threading
 
     from consolidado.web.avisos import mostrar_tarjeta
+
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8", errors="ignore")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8", errors="ignore")
+    if sys.stdin is None:
+        sys.stdin = open(os.devnull, "r", encoding="utf-8", errors="ignore")
 
     elegido = _puerto_libre(host, port)
     if elegido is None:
@@ -966,6 +974,7 @@ def _run_empaquetado(host: str, port: int, *, open_browser: bool) -> None:
             port=elegido,
             log_level="warning",
             access_log=False,
+            log_config=None,
         )
     except OSError as exc:
         mostrar_tarjeta(
