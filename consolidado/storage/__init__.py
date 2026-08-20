@@ -27,6 +27,7 @@ from consolidado.storage.usuarios import (  # noqa: F401
 from consolidado.storage.contactados import (  # noqa: F401
     cargar_ids_contactados,
     es_contactado,
+    estadisticas_atenciones,
     listar_contactados,
     marcar_contactado,
 )

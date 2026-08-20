@@ -9,6 +9,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "pasos": [
             "A la derecha del título está el paso a paso y el número de estudiantes de la última versión.",
             "Las tarjetas de abajo abren ficha, seguimiento, gráficas y metas.",
+            "Si cierra la pestaña, el navegador preguntará; acéptelo para apagar la aplicación y liberar el puerto.",
             "Si es administrador, también verá accesos a Data, datos antiguos, historial, configuración y usuarios.",
             "El aviso de si ya se puede generar el consolidado aparece en Data, no aquí.",
         ],
@@ -31,8 +32,19 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "pasos": [
             "General muestra el puntaje total; las demás pestañas filtran por componente (beca, priorizado, etc.).",
             "Pendientes son quienes aún no están marcados como contactados; Todos incluye a los ya contactados.",
-            "El check de contactado se guarda para siempre (no se borra al generar otra versión).",
+            "Cada tarjeta muestra nombre, puntaje y el botón para marcar que se atendió. El nombre abre la ficha completa.",
+            "Al marcar se guarda la fecha y la pestaña (beca, priorizado, etc.). En Estadísticas verá cuántos se atendieron al día y el promedio.",
             "Alertas lista a quienes tienen alerta de las bases o una alerta propia.",
+        ],
+    },
+    "seguimiento-estadisticas": {
+        "titulo": "Estadísticas de seguimiento",
+        "resumen": "Cuántas atenciones se marcaron por día y desde qué pestaña.",
+        "pasos": [
+            "Hoy es el recuento del día actual.",
+            "El promedio por día usa solo los días en los que sí hubo al menos una marca.",
+            "El promedio de 7 días incluye también los días en cero.",
+            "La tabla por pestaña indica desde cuál vista (beca, priorizado, alertas…) se marcó.",
         ],
     },
     "metas": {
@@ -40,7 +52,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "resumen": "Graduación, permanencia e histórico del Excel de Permanencia.",
         "pasos": [
             "Las tablas salen del libro de Permanencia (hojas de metas e HISTÓRICO). No se guardan en SQL.",
-            "Elija una meta en «Ver gráfica» para verla al instante: periodos actuales o la serie histórica.",
+            "Elija una meta en «Ver gráfica». Si elige histórico, salen dos líneas por gráfica: permanencia (meta y cumplimiento) y graduación (meta y cumplimiento).",
             "El consolidado cruza Gestión de graduación con Permanencia y añade el cohorte en el que el estudiante debería graduarse.",
             "Si no hay datos, pida al administrador que cargue esos Excel en Data (son opcionales).",
         ],
@@ -83,7 +95,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "titulo": "Historial",
         "resumen": "Bitácora de cambios en la aplicación.",
         "pasos": [
-            "Aquí queda quién generó, importó, marcó contactados o cambió usuarios.",
+            "Aquí queda quién generó, importó, cargó archivos, marcó contactados o cambió usuarios.",
             "Solo el administrador ve este listado.",
         ],
     },
@@ -92,7 +104,9 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "resumen": "Carga de los Excel fuente del periodo actual.",
         "pasos": [
             "Arriba verá si ya está listo para generar, o cuántos archivos obligatorios faltan.",
-            "Suba los libros obligatorios (matriculados, priorizados, becas). Permanencia, gestión de graduación y algunas alertas son opcionales.",
+            "Arriba puede cargar varios Excel de una vez por el nombre del archivo.",
+            "En cada fila elija el Excel de ese apartado y, al final, pulse «Cargar seleccionados» para subirlos todos juntos.",
+            "Permanencia, gestión de graduación y algunas alertas son opcionales.",
             "Cuando estén listos, use «Generar nuevo consolidado» en el menú.",
             "Los archivos se guardan en la carpeta de entrada de la aplicación.",
         ],

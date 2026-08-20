@@ -84,9 +84,10 @@
 <script>
 const MAX_SLOTS = 4;
 const colores = [
-  '#0c6b63','#128c82','#1aa39a','#2bb8ae','#5ecfc6',
-  '#0a4f4a','#146b8a','#1d7ea3','#2a6f97','#3d5a80',
-  '#415a77','#1b4332','#2d6a4f','#40916c','#52b788'
+  '#0c6b63','#e07a3d','#3b6fd8','#c43c5e','#8b5cf6',
+  '#d4a017','#0ea5e9','#ef4444','#84cc16','#db2777',
+  '#2563eb','#f59e0b','#14b8a6','#7c3aed','#f97316',
+  '#6366f1','#10b981','#e11d48','#64748b','#a855f7'
 ];
 
 const defaultCol = (() => {
@@ -232,6 +233,10 @@ async function aplicar(index, persistControls = true) {
     }
     const ctx = el(`chart-${i}`);
     if (slots[i].chart) slots[i].chart.destroy();
+    const palette = (data.colores && data.colores.length)
+      ? data.colores
+      : data.labels.map((_, k) => colores[k % colores.length]);
+    const esLinea = data.chart_type === 'line';
     slots[i].chart = new Chart(ctx, {
       type: data.chart_type,
       data: {
@@ -239,11 +244,9 @@ async function aplicar(index, persistControls = true) {
         datasets: [{
           label: data.columna,
           data: data.values,
-          backgroundColor: (data.colores && data.colores.length)
-            ? data.colores
-            : data.labels.map((_, k) => colores[k % colores.length]),
-          borderColor: (data.colores && data.colores.length) ? data.colores : '#64748b',
-          borderWidth: data.chart_type === 'line' ? 2 : 0,
+          backgroundColor: esLinea ? palette[0] + '33' : palette,
+          borderColor: esLinea ? palette[0] : palette,
+          borderWidth: esLinea ? 2 : 1,
           tension: 0.25,
         }]
       },

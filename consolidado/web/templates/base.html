@@ -68,8 +68,9 @@
           </div>
           <div class="nav-sub" id="nav-seg-sub" role="list">
             {% for c in categorias_seg %}
-            <a role="listitem" href="/seguimiento?cat={{ c.id }}&amp;vista={{ vista }}" class="{% if nav=='seguimiento' and (cat==c.id or (c.id=='general' and cat in ['general', ''])) %}active{% endif %}">{{ c.titulo }}</a>
+            <a role="listitem" href="/seguimiento?cat={{ c.id }}&amp;vista={{ vista }}" class="{% if nav=='seguimiento' and cat==c.id %}active{% endif %}">{{ c.titulo }}</a>
             {% endfor %}
+            <a role="listitem" href="/seguimiento/estadisticas" class="{% if cat=='estadisticas' %}active{% endif %}">Estadísticas</a>
           </div>
         </div>
         <a href="/metas" class="{% if nav=='metas' %}active{% endif %}">
@@ -171,9 +172,14 @@
     const name = input.closest(".file-pick")?.querySelector(".file-pick-name");
     const wrap = input.closest(".file-pick");
     input.addEventListener("change", () => {
-      const file = input.files && input.files[0];
-      if (name) name.textContent = file ? file.name : "Ningún archivo";
-      wrap?.classList.toggle("has-file", Boolean(file));
+      const files = input.files;
+      const n = files ? files.length : 0;
+      if (name) {
+        if (!n) name.textContent = "Ningún archivo";
+        else if (n === 1) name.textContent = files[0].name;
+        else name.textContent = n + " archivos";
+      }
+      wrap?.classList.toggle("has-file", n > 0);
     });
   });
   (function () {
@@ -197,6 +203,7 @@
     });
   })();
   </script>
+  {% include "_cierre.html" %}
   {% include "_ayuda.html" %}
   {% block scripts %}{% endblock %}
 </body>

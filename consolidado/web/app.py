@@ -14,10 +14,10 @@ import webbrowser
 from datetime import date
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import uvicorn
-from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -50,7 +50,7 @@ from consolidado.storage.alertas_propias import (
     cargar_alertas_propias,
     quitar_alerta_propia,
 )
-from consolidado.storage.contactados import marcar_contactado
+from consolidado.storage.contactados import estadisticas_atenciones, marcar_contactado
 from consolidado.storage.db import (
     buscar_estudiantes,
     listar_versiones,
@@ -93,7 +93,7 @@ TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 app = FastAPI(title="Consolidado de Humanidades")
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
-_RUTAS_PUBLICAS = {"/login", "/logout"}
+_RUTAS_PUBLICAS = {"/login", "/logout", "/api/apagar"}
 # Rutas solo para rol admin. Consulta: hasta Versiones (GET), más Metas y Colores.
 _PREFIJOS_ADMIN = (
     "/config",
@@ -288,6 +288,73 @@ async def pagina_archivos(request: Request) -> HTMLResponse:
     return _render(request, "archivos.html", nav="archivos")
 
 
+@app.post("/upload/varios")
+async def upload_varios(archivos: list[UploadFile] = File(...)) -> RedirectResponse:
+    lote: list[tuple[str, bytes]] = []
+    for archivo in archivos:
+        nombre = archivo.filename or "archivo.xlsx"
+        if nombre.startswith("."):
+            continue
+        contenido = await archivo.read()
+        lote.append((nombre, contenido))
+    if not lote:
+        return _redir("/archivos", err="No se eligió ningún Excel.")
+    try:
+        resultado = services.subir_varios(lote)
+    except Exception as exc:
+        return _redir("/archivos", err=str(exc))
+    n_ok = len(resultado["ok"])
+    partes: list[str] = []
+    if n_ok:
+        partes.append(
+            f"Se actualizaron {n_ok} archivo{'s' if n_ok != 1 else ''}."
+        )
+    if resultado["sin_slot"]:
+        nombres = ", ".join(resultado["sin_slot"][:8])
+        extra = f" y {len(resultado['sin_slot']) - 8} más" if len(resultado["sin_slot"]) > 8 else ""
+        partes.append(f"No se reconocieron: {nombres}{extra}.")
+    if resultado["errores"]:
+        partes.append(" ".join(resultado["errores"][:4]))
+    if not n_ok:
+        return _redir("/archivos", err=" ".join(partes) or "Ningún archivo se pudo cargar.")
+    msg = " ".join(partes)
+    if resultado["sin_slot"] or resultado["errores"]:
+        return _redir("/archivos", msg=msg)
+    return _redir("/archivos", msg=msg)
+
+
+@app.post("/upload/lote")
+async def upload_lote(request: Request) -> RedirectResponse:
+    form = await request.form()
+    lote: dict[str, tuple[str, bytes]] = {}
+    for key, value in form.multi_items():
+        if not str(key).startswith("archivo_"):
+            continue
+        slot_id = str(key)[len("archivo_") :]
+        if not slot_id or not hasattr(value, "read"):
+            continue
+        contenido = await value.read()
+        if not contenido:
+            continue
+        nombre = getattr(value, "filename", None) or "archivo.xlsx"
+        lote[slot_id] = (str(nombre), contenido)
+    if not lote:
+        return _redir("/archivos", err="No hay archivos seleccionados.")
+    try:
+        resultado = services.subir_lote(lote)
+    except Exception as exc:
+        return _redir("/archivos", err=str(exc))
+    n_ok = len(resultado["ok"])
+    partes: list[str] = []
+    if n_ok:
+        partes.append(f"Se actualizaron {n_ok} archivo{'s' if n_ok != 1 else ''}.")
+    if resultado["errores"]:
+        partes.append(" ".join(resultado["errores"][:4]))
+    if not n_ok:
+        return _redir("/archivos", err=" ".join(partes) or "Ningún archivo se pudo cargar.")
+    return _redir("/archivos", msg=" ".join(partes))
+
+
 @app.post("/upload/{slot_id}")
 async def upload_slot(slot_id: str, archivo: UploadFile = File(...)) -> RedirectResponse:
     try:
@@ -370,26 +437,75 @@ async def ficha_estudiante(request: Request, identificacion: str) -> HTMLRespons
     )
 
 
+def _url_seguimiento(cat: str, vista: str, programas: list[str] | None = None) -> str:
+    pares: list[tuple[str, str]] = [("cat", cat), ("vista", vista)]
+    for programa in programas or []:
+        if programa:
+            pares.append(("prog", programa))
+    return "/seguimiento?" + urlencode(pares)
+
+
 @app.get("/seguimiento", response_class=HTMLResponse)
 async def pagina_seguimiento(
     request: Request,
     cat: str = "general",
     vista: str = "pendientes",
+    prog: list[str] = Query(default=[]),
 ) -> HTMLResponse:
-    data = listar_seguimiento(cat_id=cat, vista=vista, base=PROJECT_ROOT)
+    data = listar_seguimiento(cat_id=cat, vista=vista, programas=prog, base=PROJECT_ROOT)
+    cat_id = data["categoria"]["id"]
+    vista_ok = data["vista"]
+    sel = list(data["programas_sel"])
+    categorias = [
+        {**c, "href": _url_seguimiento(c["id"], vista_ok, sel)}
+        for c in data["categorias"]
+    ]
+    programas_ui = []
+    for nombre in data["programas"]:
+        if nombre in sel:
+            nuevo = [p for p in sel if p != nombre]
+        else:
+            nuevo = sel + [nombre]
+        programas_ui.append(
+            {
+                "nombre": nombre,
+                "corta": color_programa(nombre).get("corta") or nombre,
+                "activo": nombre in sel,
+                "href": _url_seguimiento(cat_id, vista_ok, nuevo),
+            }
+        )
     return _render(
         request,
         "seguimiento.html",
         nav="seguimiento",
-        cat=data["categoria"]["id"],
-        categorias=data["categorias"],
+        cat=cat_id,
+        categorias=categorias,
         categoria=data["categoria"],
         filas=data["filas"],
         total=data["total"],
         visibles=data["visibles"],
-        vista=data["vista"],
+        vista=vista_ok,
         meta=data["meta"],
-        alertas_propias=cargar_alertas_propias(PROJECT_ROOT) if data["categoria"]["id"] == "alertas" else [],
+        programas=programas_ui,
+        programas_sel=sel,
+        filtro_general=not sel,
+        href_carreras_general=_url_seguimiento(cat_id, vista_ok, []),
+        href_pendientes=_url_seguimiento(cat_id, "pendientes", sel),
+        href_todos=_url_seguimiento(cat_id, "todos", sel),
+        href_estadisticas="/seguimiento/estadisticas",
+        alertas_propias=cargar_alertas_propias(PROJECT_ROOT) if cat_id == "alertas" else [],
+    )
+
+
+@app.get("/seguimiento/estadisticas", response_class=HTMLResponse)
+async def pagina_seguimiento_estadisticas(request: Request) -> HTMLResponse:
+    return _render(
+        request,
+        "seguimiento_estadisticas.html",
+        nav="seguimiento",
+        cat="estadisticas",
+        ayuda_clave="seguimiento-estadisticas",
+        stats=estadisticas_atenciones(base=PROJECT_ROOT),
     )
 
 
@@ -410,10 +526,12 @@ async def marcar_seguimiento(
     contactado: str = Form("1"),
     cat: str = Form("general"),
     vista: str = Form("pendientes"),
+    prog: list[str] = Form(default=[]),
 ) -> RedirectResponse:
     marcar_contactado(
         identificacion,
         contactado=contactado in {"1", "true", "on"},
+        categoria=cat,
         base=PROJECT_ROOT,
     )
     estado = "contactado" if contactado in {"1", "true", "on"} else "pendiente"
@@ -424,7 +542,7 @@ async def marcar_seguimiento(
         identificacion=identificacion,
     )
     return RedirectResponse(
-        f"/seguimiento?cat={quote(cat)}&vista={quote(vista)}",
+        _url_seguimiento(cat, vista, prog),
         status_code=303,
     )
 
@@ -435,7 +553,12 @@ async def toggle_contactado(
     contactado: str = Form("1"),
     vista: str = Form("primer_plano"),
 ) -> RedirectResponse:
-    marcar_contactado(identificacion, contactado=contactado in {"1", "true", "on"}, base=PROJECT_ROOT)
+    marcar_contactado(
+        identificacion,
+        contactado=contactado in {"1", "true", "on"},
+        categoria="priorizado",
+        base=PROJECT_ROOT,
+    )
     estado = "contactado" if contactado in {"1", "true", "on"} else "no contactado"
     registrar_modificacion(
         accion="contactado",
@@ -902,6 +1025,30 @@ async def api_buscar(q: str = "") -> JSONResponse:
     return JSONResponse(resultados)
 
 
+_SERVIDOR: uvicorn.Server | None = None
+
+
+def _pedir_apagar() -> None:
+    global _SERVIDOR
+    if _SERVIDOR is not None:
+        _SERVIDOR.should_exit = True
+        _SERVIDOR.force_exit = True
+        return
+    import os
+    import threading
+
+    threading.Timer(0.2, lambda: os._exit(0)).start()
+
+
+@app.post("/api/apagar")
+async def api_apagar() -> JSONResponse:
+    """Cierra el servidor local y libera el puerto (tras confirmar en el navegador)."""
+    import threading
+
+    threading.Timer(0.4, _pedir_apagar).start()
+    return JSONResponse({"ok": True})
+
+
 def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:
     if getattr(sys, "frozen", False):
         _run_empaquetado(host, port, open_browser=open_browser)
@@ -935,6 +1082,7 @@ def _puerto_libre(host: str, port: int, intentos: int = 10) -> int | None:
 
 
 def _run_empaquetado(host: str, port: int, *, open_browser: bool) -> None:
+    global _SERVIDOR
     import logging
     import os
     import threading
@@ -968,7 +1116,7 @@ def _run_empaquetado(host: str, port: int, *, open_browser: bool) -> None:
     if open_browser:
         threading.Timer(0.7, lambda: webbrowser.open(f"http://{host}:{elegido}/")).start()
     try:
-        uvicorn.run(
+        config = uvicorn.Config(
             app,
             host=host,
             port=elegido,
@@ -976,6 +1124,9 @@ def _run_empaquetado(host: str, port: int, *, open_browser: bool) -> None:
             access_log=False,
             log_config=None,
         )
+        _SERVIDOR = uvicorn.Server(config)
+        _SERVIDOR.run()
+        _SERVIDOR = None
     except OSError as exc:
         mostrar_tarjeta(
             "No se pudo iniciar",

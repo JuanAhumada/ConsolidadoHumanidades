@@ -28,6 +28,7 @@ ETIQUETAS_ACCION = {
     "importar": "Importar Excel",
     "generar_historico": "Versión histórica",
     "cargar_archivo": "Cargar archivo",
+    "cargar_archivos": "Actualizar archivos",
     "descartar_alerta": "Descartar alerta",
     "alerta_propia": "Alerta propia",
     "quitar_alerta_propia": "Quitar alerta propia",

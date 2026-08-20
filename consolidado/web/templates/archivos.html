@@ -20,6 +20,20 @@
   <div class="stat"><div class="n">{% if estado.listo_generar %}Sí{% else %}No{% endif %}</div><div class="l">Listo para generar</div></div>
 </div>
 
+<div class="card">
+  <h3>Cargar varios por nombre</h3>
+  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Elija varios Excel a la vez. Se asignan solos según el nombre del archivo.</p>
+  <form method="post" action="/upload/varios" enctype="multipart/form-data" class="file-row" style="padding:.2rem 0 0;border:0;">
+    <label class="file-pick">
+      <input type="file" name="archivos" accept=".xlsx,.xlsm,.xls" multiple required/>
+      <span class="file-pick-btn">Elegir varios Excel</span>
+      <span class="file-pick-name">Ningún archivo</span>
+    </label>
+    <button class="btn" type="submit">Cargar por nombre</button>
+  </form>
+</div>
+
+<form method="post" action="/upload/lote" enctype="multipart/form-data" id="form-lote">
 {% for cat in estado.categorias %}
 <div class="card">
   <h3>{{ cat.titulo }}</h3>
@@ -33,18 +47,20 @@
         {% if slot.cargado %}Cargado · {{ slot.nombre_guardado }}{% else %}Sin cargar{% endif %}
       </div>
     </div>
-    <form method="post" action="/upload/{{ slot.id }}" enctype="multipart/form-data">
-      <label class="file-pick">
-        <input type="file" name="archivo" accept=".xlsx,.xlsm,.xls" required/>
-        <span class="file-pick-btn">Elegir Excel</span>
-        <span class="file-pick-name">Ningún archivo</span>
-      </label>
-      <button class="btn sm" type="submit">{% if slot.cargado %}Cambiar{% else %}Cargar{% endif %}</button>
-    </form>
+    <label class="file-pick">
+      <input type="file" name="archivo_{{ slot.id }}" accept=".xlsx,.xlsm,.xls"/>
+      <span class="file-pick-btn">Elegir Excel</span>
+      <span class="file-pick-name">Ningún archivo</span>
+    </label>
   </div>
   {% endfor %}
 </div>
 {% endfor %}
+<div class="card archivos-lote-bar">
+  <p class="muted" style="margin:0;">Elija el Excel de cada fila y pulse el botón para subir todos los seleccionados de una vez.</p>
+  <button class="btn" type="submit">Cargar seleccionados</button>
+</div>
+</form>
 
 <div class="card">
   <h3>Documentos adicionales</h3>

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Estadísticas de seguimiento{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Estadísticas de seguimiento</h2>
+    <p class="sub">Atenciones marcadas con fecha y pestaña. El promedio usa los días en los que sí hubo al menos una marca.</p>
+  </div>
+  <a class="btn sm secondary" href="/seguimiento">Volver al listado</a>
+</div>
+
+<div class="grid grid-3">
+  <div class="stat"><div class="n">{{ stats.hoy }}</div><div class="l">Atendidos hoy</div></div>
+  <div class="stat"><div class="n">{{ stats.promedio }}</div><div class="l">Promedio por día con atención</div></div>
+  <div class="stat"><div class="n">{{ stats.promedio_semana }}</div><div class="l">Promedio últimos 7 días</div></div>
+</div>
+<div class="grid grid-3" style="margin-top:.75rem;">
+  <div class="stat"><div class="n">{{ stats.total }}</div><div class="l">Total registradas</div></div>
+  <div class="stat"><div class="n">{{ stats.dias_con_atencion }}</div><div class="l">Días con atención</div></div>
+  <div class="stat"><div class="n">{{ stats.ventana }}</div><div class="l">Días en la gráfica</div></div>
+</div>
+
+<section class="card" style="margin-top:1rem;">
+  <h3>Atendidos por día</h3>
+  <p class="muted" style="margin-top:-.2rem;">Últimos {{ stats.ventana }} días, incluyendo los que quedaron en cero.</p>
+  <div class="seg-stats-chart">
+    <canvas id="chart-atenciones"></canvas>
+  </div>
+</section>
+<script type="application/json" id="seg-stats-json">{{ stats.series | tojson }}</script>
+
+<section class="card" style="margin-top:1rem;">
+  <h3>Por pestaña</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Pestaña</th><th>Atenciones</th></tr></thead>
+      <tbody>
+      {% for c in stats.categorias %}
+        <tr>
+          <td>{{ c.titulo }}</td>
+          <td>{{ c.n }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="2" class="muted">Aún no hay marcas registradas.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if stats.recientes %}
+<section class="card" style="margin-top:1rem;">
+  <h3>Últimas marcas</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Fecha</th><th>Pestaña</th><th>Identificación</th></tr></thead>
+      <tbody>
+      {% for r in stats.recientes %}
+        <tr>
+          <td>{{ r.fecha }}</td>
+          <td>{{ r.titulo }}</td>
+          <td><a href="/estudiante/{{ r.identificacion }}">{{ r.identificacion }}</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const raw = document.getElementById("seg-stats-json");
+  let series = [];
+  try { series = JSON.parse(raw.textContent || "[]"); } catch (e) { series = []; }
+  const canvas = document.getElementById("chart-atenciones");
+  if (!canvas || !window.Chart) return;
+  new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: series.map((d) => d.fecha),
+      datasets: [{
+        label: "Atendidos",
+        data: series.map((d) => d.n),
+        backgroundColor: "#0c6b63",
+        borderRadius: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+    },
+  });
+})();
+</script>
+{% endblock %}

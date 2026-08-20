@@ -714,7 +714,7 @@ class AppConsolidado(ctk.CTk):
         self._refrescar_tabla_priorizados_filtrada()
 
     def _on_toggle_contactado(self, identificacion: str, contactado: bool) -> None:
-        marcar_contactado(identificacion, contactado=contactado, base=self.base)
+        marcar_contactado(identificacion, contactado=contactado, categoria="priorizado", base=self.base)
         for fila in self._filas_priorizados:
             if str(fila.get("identificacion", "")).strip() == identificacion.strip():
                 fila["contactado"] = contactado

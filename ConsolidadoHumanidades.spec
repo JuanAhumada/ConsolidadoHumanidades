@@ -58,6 +58,24 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+def _escribir_icono() -> str | None:
+    png = SPECDIR / "consolidado" / "web" / "static" / "favicon.png"
+    ico = SPECDIR / "empaque" / "icono.ico"
+    if not png.is_file():
+        return str(ico) if ico.is_file() else None
+    from PIL import Image
+    imagen = Image.open(png).convert("RGBA")
+    ico.parent.mkdir(parents=True, exist_ok=True)
+    imagen.save(
+        ico,
+        format="ICO",
+        sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (256, 256)],
+    )
+    return str(ico)
+
+
+ICONO = _escribir_icono()
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -74,6 +92,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=ICONO,
 )
 coll = COLLECT(
     exe,

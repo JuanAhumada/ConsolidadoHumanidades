@@ -21,9 +21,13 @@
     <option value="{{ g.id }}">{{ g.etiqueta }}</option>
     {% endfor %}
   </select>
-  <p class="muted metas-chart-hint" id="meta-chart-hint">La gráfica aparece al seleccionar la meta.</p>
+  <p class="muted metas-chart-hint" id="meta-chart-hint">La gráfica aparece al seleccionar la meta. En histórico se muestran permanencia y graduación, cada una con meta y cumplimiento.</p>
   <div class="metas-chart-wrap is-empty" id="meta-chart-wrap" hidden>
     <canvas id="meta-chart"></canvas>
+  </div>
+  <div class="metas-charts-duo" id="meta-charts-duo" hidden>
+    <div class="metas-chart-wrap"><canvas id="meta-chart-a"></canvas></div>
+    <div class="metas-chart-wrap"><canvas id="meta-chart-b"></canvas></div>
   </div>
 </section>
 <script type="application/json" id="metas-graficas-json">{{ metas.graficas | tojson }}</script>
@@ -165,30 +169,99 @@ document.querySelectorAll("[data-metas-tabs]").forEach(function (block) {
   const sel = document.getElementById("meta-grafica");
   const raw = document.getElementById("metas-graficas-json");
   const wrap = document.getElementById("meta-chart-wrap");
+  const duo = document.getElementById("meta-charts-duo");
   const hint = document.getElementById("meta-chart-hint");
   const canvas = document.getElementById("meta-chart");
+  const canvasA = document.getElementById("meta-chart-a");
+  const canvasB = document.getElementById("meta-chart-b");
   if (!sel || !raw || !canvas) return;
   let graficas = [];
   try { graficas = JSON.parse(raw.textContent || "[]"); } catch (e) { graficas = []; }
   const porId = {};
   graficas.forEach((g) => { if (g && g.id) porId[g.id] = g; });
   const colores = ["#0c6b63", "#c47a12"];
-  let chart = null;
+  const charts = [];
+
+  function destruir() {
+    while (charts.length) {
+      const c = charts.pop();
+      try { c.destroy(); } catch (e) {}
+    }
+  }
+
+  function ocultaTodo() {
+    destruir();
+    if (wrap) {
+      wrap.hidden = true;
+      wrap.classList.add("is-empty");
+    }
+    if (duo) duo.hidden = true;
+    if (hint) hint.hidden = false;
+  }
+
+  function opcionesLinea(dato) {
+    return {
+      type: "line",
+      data: {
+        labels: dato.labels || [],
+        datasets: (dato.datasets || []).map((ds, i) => ({
+          label: ds.label,
+          data: ds.data,
+          backgroundColor: colores[i % colores.length] + "33",
+          borderColor: colores[i % colores.length],
+          borderWidth: 2,
+          tension: 0.25,
+          fill: false,
+          pointRadius: 3,
+          spanGaps: true,
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true },
+          title: { display: true, text: dato.titulo || "" },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: { display: Boolean(dato.ylabel), text: dato.ylabel || "" },
+          },
+        },
+      },
+    };
+  }
 
   function pintar(id) {
     const dato = porId[id];
     if (!dato) {
-      if (chart) { chart.destroy(); chart = null; }
-      wrap.hidden = true;
-      wrap.classList.add("is-empty");
-      if (hint) hint.hidden = false;
+      ocultaTodo();
       return;
     }
+    if (hint) hint.hidden = true;
+    destruir();
+    const paneles = dato.tipo === "historico" ? (dato.paneles || []) : null;
+    if (paneles && paneles.length) {
+      if (wrap) {
+        wrap.hidden = true;
+        wrap.classList.add("is-empty");
+      }
+      if (duo) duo.hidden = false;
+      const wraps = duo ? duo.querySelectorAll(".metas-chart-wrap") : [];
+      const lienzos = [canvasA, canvasB];
+      paneles.slice(0, 2).forEach((panel, i) => {
+        if (wraps[i]) wraps[i].hidden = false;
+        if (!lienzos[i]) return;
+        charts.push(new Chart(lienzos[i], opcionesLinea(panel)));
+      });
+      for (let i = paneles.length; i < wraps.length; i++) wraps[i].hidden = true;
+      return;
+    }
+    if (duo) duo.hidden = true;
     wrap.hidden = false;
     wrap.classList.remove("is-empty");
-    if (hint) hint.hidden = true;
-    if (chart) chart.destroy();
-    chart = new Chart(canvas, {
+    charts.push(new Chart(canvas, {
       type: dato.tipo || "bar",
       data: {
         labels: dato.labels || [],
@@ -213,7 +286,7 @@ document.querySelectorAll("[data-metas-tabs]").forEach(function (block) {
           y: { beginAtZero: true, title: { display: Boolean(dato.ylabel), text: dato.ylabel || "" } },
         },
       },
-    });
+    }));
   }
   sel.addEventListener("change", function () { pintar(sel.value); });
 })();

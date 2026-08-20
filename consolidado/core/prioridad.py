@@ -7,6 +7,8 @@ ruta de grado) y asigna color de fila. Cambiar pesos o umbrales solo aquí.
 
 from __future__ import annotations
 
+from datetime import date
+
 import polars as pl
 
 from consolidado.config.settings import (
@@ -40,6 +42,7 @@ from consolidado.core.normalizacion import (
     _es_valor_true,
     es_estudiante_activo,
     es_responsable_beca_especial,
+    formatear_periodo_cod,
     normalizar_encabezado,
     normalizar_id,
     parsear_monto_beca,
@@ -155,13 +158,14 @@ _VALOR_MAX_COMPONENTE: dict[str, float] = {
     "reintegro": 3,
     "propio": PESO_PRIORIZADO_PROPIO,
     "activacion": PESO_ACTIVACION_RUTA,
-    "ruta": 4,
+    "ruta": 5,
 }
 
 _COL_PCT_CREDITOS = COLUMNAS_RUTA_GRADO[0]
 _COL_ESTADO_OPCION = COLUMNAS_RUTA_GRADO[1]
 _COL_ESTADO_INGLES = COLUMNAS_RUTA_GRADO[3]
 _COL_SABER_PRO = COLUMNAS_RUTA_GRADO[4]
+_COL_COHORTE_GRAD = COLUMNAS_RUTA_GRADO[7]
 _ESTADOS_FINALIZADO = frozenset({"finalizado"})
 _ESTADOS_MATRICULADO = frozenset({"matriculado"})
 _ESTADOS_PAGADO = frozenset({"pagado"})
@@ -215,7 +219,7 @@ BLOQUES_PUNTUACION_GUI: list[dict] = [
     },
     {
         "titulo": "Ruta de grado",
-        "nota": "Suma créditos, opción de grado, inglés y Saber Pro. Umbrales estrictos (> 90 % / > 70 %).",
+        "nota": "Suma créditos, opción de grado, inglés, Saber Pro y cercanía al cohorte de graduación (respecto al periodo actual del calendario).",
         "items": [
             {"etiqueta": "% créditos aprobados > 90", "puntos": 1},
             {"etiqueta": "% créditos aprobados > 70 y ≤ 90", "puntos": 0.5},
@@ -223,6 +227,8 @@ BLOQUES_PUNTUACION_GUI: list[dict] = [
             {"etiqueta": "Opción de grado / inglés Matriculado", "puntos": 0.5},
             {"etiqueta": "Saber Pro Finalizado", "puntos": 1},
             {"etiqueta": "Saber Pro Pagado", "puntos": 0.5},
+            {"etiqueta": "Cohorte de graduación: este o el siguiente", "puntos": 1},
+            {"etiqueta": "Cohorte de graduación: dos periodos adelante", "puntos": 0.5},
         ],
     },
 ]
@@ -579,7 +585,34 @@ def _puntos_estado_ruta(val, *, uno: frozenset[str], medio: frozenset[str]) -> f
     return 0.0
 
 
-def _puntos_ruta(row: dict) -> float:
+def _periodo_calendario(fecha: date | None = None) -> str:
+    """Enero–junio → YYYY-1; julio–diciembre → YYYY-2."""
+    dia = fecha or date.today()
+    return f"{dia.year}-{1 if dia.month <= 6 else 2}"
+
+
+def _clave_semestres(val) -> int | None:
+    periodo = formatear_periodo_cod(val)
+    if not periodo:
+        return None
+    return int(periodo[:4]) * 2 + (int(periodo[-1]) - 1)
+
+
+def _puntos_proximidad_cohorte(row: dict, periodo_actual: str) -> float:
+    """+1 si se gradúa este periodo o el siguiente; +0,5 si es el siguiente a ese."""
+    actual = _clave_semestres(periodo_actual)
+    destino = _clave_semestres(row.get(_COL_COHORTE_GRAD))
+    if actual is None or destino is None:
+        return 0.0
+    delta = destino - actual
+    if delta <= 1:
+        return 1.0
+    if delta == 2:
+        return 0.5
+    return 0.0
+
+
+def _puntos_ruta(row: dict, periodo_actual: str) -> float:
     return (
         _puntos_pct_creditos(row.get(_COL_PCT_CREDITOS))
         + _puntos_estado_ruta(
@@ -597,6 +630,7 @@ def _puntos_ruta(row: dict) -> float:
             uno=_ESTADOS_FINALIZADO,
             medio=_ESTADOS_PAGADO,
         )
+        + _puntos_proximidad_cohorte(row, periodo_actual)
     )
 
 
@@ -656,7 +690,11 @@ def _prioridad_nula(*, detalle: str | None = None) -> dict:
     }
 
 
-def _calcular_prioridad_fila(row: dict, ids_propios: set[str]) -> dict:
+def _calcular_prioridad_fila(
+    row: dict,
+    ids_propios: set[str],
+    periodo_actual: str,
+) -> dict:
     if not es_estudiante_activo(row.get(COL_ACTIVOS)):
         return _prioridad_nula(detalle="Graduado")
 
@@ -673,7 +711,7 @@ def _calcular_prioridad_fila(row: dict, ids_propios: set[str]) -> dict:
     ptje_reint = _puntos_reintegro(row.get("Reintegros"))
     ptje_propio = _puntos_propio(es_propio)
     ptje_act = _puntos_activacion(row.get(COL_ACTIVACION_RUTA))
-    ptje_ruta = _puntos_ruta(row)
+    ptje_ruta = _puntos_ruta(row, periodo_actual)
 
     puntaje = (
         ptje_beca + ptje_prio + ptje_rep + ptje_reint + ptje_propio + ptje_act + ptje_ruta
@@ -699,19 +737,22 @@ def _calcular_prioridad_fila(row: dict, ids_propios: set[str]) -> dict:
 def aplicar_prioridad(
     consolidado: pl.DataFrame,
     ids_propios: set[str] | None = None,
+    *,
+    periodo_actual: str | None = None,
 ) -> pl.DataFrame:
     """Añade componentes de puntaje, puntaje total, nivel y detalle a cada fila."""
     if consolidado.height == 0:
         return consolidado
 
     ids = ids_propios or set()
+    periodo = formatear_periodo_cod(periodo_actual) or _periodo_calendario()
     componentes: dict[str, list] = {col: [] for col in COLUMNAS_PUNTAJE_COMPONENTES}
     puntajes: list[float] = []
     niveles: list[int] = []
     detalles: list[str | None] = []
 
     for row in consolidado.iter_rows(named=True):
-        calc = _calcular_prioridad_fila(row, ids)
+        calc = _calcular_prioridad_fila(row, ids, periodo)
         for col in COLUMNAS_PUNTAJE_COMPONENTES:
             componentes[col].append(calc[col])
         puntajes.append(calc[COL_PUNTAJE_PRIORIDAD])

@@ -21,6 +21,46 @@ TIPOS_GRAFICA = (
     "line",
 )
 
+PALETA_GRAFICA = (
+    "#0c6b63",
+    "#e07a3d",
+    "#3b6fd8",
+    "#c43c5e",
+    "#8b5cf6",
+    "#d4a017",
+    "#0ea5e9",
+    "#ef4444",
+    "#84cc16",
+    "#db2777",
+    "#2563eb",
+    "#f59e0b",
+    "#14b8a6",
+    "#7c3aed",
+    "#f97316",
+    "#6366f1",
+    "#10b981",
+    "#e11d48",
+    "#64748b",
+    "#a855f7",
+    "#0891b2",
+    "#ca8a04",
+    "#4f46e5",
+    "#16a34a",
+    "#be123c",
+)
+
+
+def paleta_categorias(n: int) -> list[str]:
+    if n <= 0:
+        return []
+    base = list(PALETA_GRAFICA)
+    if n <= len(base):
+        return base[:n]
+    out = list(base)
+    while len(out) < n:
+        out.append(base[len(out) % len(base)])
+    return out[:n]
+
 _TIPO_POWERBI = {
     "bar": "Columnas agrupadas",
     "pie": "Gráfico circular",
@@ -90,7 +130,7 @@ def preparar_datos_grafica(
         "horizontal": False,
         "labels": labels,
         "values": data,
-        "colores": colores_para_etiquetas(labels) if es_programa else None,
+        "colores": colores_para_etiquetas(labels) if es_programa else paleta_categorias(len(labels)),
         "total_filas": len(valores),
         "categorias": len(labels),
     }

@@ -1,7 +1,7 @@
 """
 Color de acento por programa (ficha, listas, gráficas).
 
-Psicología rojo oscuro, Comunicación azul rey, Licenciatura verde militar,
+Psicología rojo oscuro, Comunicación azul rey, Licenciatura verde bosque,
 Entrenamiento amarillo opaco.
 estilo_color() escribe variables CSS --accent* en el inline style de la fila.
 """
@@ -34,11 +34,11 @@ _FIJOS: dict[str, dict[str, str]] = {
     },
     "licenciatura en educacion basica primaria": {
         "clave": "licenciatura",
-        "hex": "#4B5320",
-        "bright": "#6B7435",
-        "soft": "#E6E9D4",
-        "ink": "#2A3012",
-        "glow": "rgba(75, 83, 32, 0.32)",
+        "hex": "#1E5A38",
+        "bright": "#2F8A54",
+        "soft": "#D8EFE3",
+        "ink": "#0F3320",
+        "glow": "rgba(30, 90, 56, 0.32)",
         "corta": "Licenciatura",
     },
     "tecnico profesional en entrenamiento deportivo": {

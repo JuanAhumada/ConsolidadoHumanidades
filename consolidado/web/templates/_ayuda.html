@@ -78,6 +78,11 @@
     return location.pathname + location.search;
   }
 
+  function irA(url) {
+    if (typeof marcarNavegacionInterna === "function") marcarNavegacionInterna();
+    location.href = url;
+  }
+
   function leerHist() {
     try {
       const rawH = sessionStorage.getItem(KEY);
@@ -107,34 +112,11 @@
     try { sessionStorage.setItem(EST_KEY, JSON.stringify(ids)); } catch (e) {}
   }
 
-  function estudiantesRecientes() {
-    try { return JSON.parse(sessionStorage.getItem(EST_KEY) || "[]"); } catch (e) { return []; }
-  }
-
-  function estudianteVecino(delta) {
-    const id = idEstudianteActual();
-    if (!id) return null;
-    const ids = estudiantesRecientes();
-    const i = ids.lastIndexOf(id);
-    if (i < 0) return null;
-    const j = i + delta;
-    if (j < 0 || j >= ids.length) return null;
-    return ids[j];
-  }
-
-  function irEstudiante(id) {
-    sessionStorage.setItem(SKIP, "1");
-    location.href = "/estudiante/" + encodeURIComponent(id);
-  }
-
   function puedeAtras(h) {
-    if (estudianteVecino(-1)) return true;
-    if (h.index > 0) return true;
-    return Boolean(idEstudianteActual());
+    return h.index > 0;
   }
 
   function puedeAdelante(h) {
-    if (estudianteVecino(1)) return true;
     return h.index >= 0 && h.index < h.stack.length - 1;
   }
 
@@ -149,10 +131,8 @@
     if (skip) sessionStorage.removeItem(SKIP);
     let h = leerHist();
     if (skip) {
-      const i = h.stack.indexOf(url);
-      if (i >= 0) h.index = i;
-      guardarHist(h);
       actualizarBotones(h);
+      recordarEstudiante();
       return;
     }
     if (h.stack[h.index] === url) {
@@ -162,8 +142,13 @@
     }
     h.stack = h.stack.slice(0, h.index + 1);
     h.stack.push(url);
-    if (h.stack.length > 80) h.stack = h.stack.slice(-80);
-    h.index = h.stack.length - 1;
+    if (h.stack.length > 80) {
+      const extra = h.stack.length - 80;
+      h.stack = h.stack.slice(extra);
+      h.index = h.stack.length - 1;
+    } else {
+      h.index = h.stack.length - 1;
+    }
     guardarHist(h);
     actualizarBotones(h);
     recordarEstudiante();
@@ -176,31 +161,15 @@
     h.index = dest;
     guardarHist(h);
     sessionStorage.setItem(SKIP, "1");
-    location.href = h.stack[dest];
+    irA(h.stack[dest]);
   }
 
   function atras() {
-    const vecino = estudianteVecino(-1);
-    if (vecino) {
-      irEstudiante(vecino);
-      return;
-    }
-    const h = leerHist();
-    if (h.index > 0) {
-      ir(-1);
-      return;
-    }
-    if (idEstudianteActual()) location.href = "/estudiante";
+    ir(-1);
   }
 
   function adelante() {
-    const vecino = estudianteVecino(1);
-    if (vecino) {
-      irEstudiante(vecino);
-      return;
-    }
-    const h = leerHist();
-    if (h.index >= 0 && h.index < h.stack.length - 1) ir(1);
+    ir(1);
   }
 
   registrarPagina();

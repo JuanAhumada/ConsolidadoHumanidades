@@ -208,6 +208,15 @@ def _crear_tablas_v2(conn: sqlite3.Connection) -> None:
             contactado_en TEXT NOT NULL,
             actualizado_en TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS seguimiento_atenciones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            identificacion TEXT NOT NULL,
+            categoria TEXT NOT NULL DEFAULT 'general',
+            fecha TEXT NOT NULL,
+            creado_en TEXT NOT NULL,
+            UNIQUE (identificacion, categoria, fecha)
+        );
         """
     )
 
@@ -295,6 +304,8 @@ def _crear_indices_v2(conn: sqlite3.Connection) -> None:
             ON alertas_propias(identificacion);
         CREATE INDEX IF NOT EXISTS idx_contactados_flag
             ON priorizados_contactados(contactado);
+        CREATE INDEX IF NOT EXISTS idx_atenciones_fecha
+            ON seguimiento_atenciones(fecha);
         CREATE INDEX IF NOT EXISTS idx_priorizados_activo
             ON priorizados_propios(activo);
         """
@@ -709,6 +720,30 @@ def _asegurar_periodo_actual(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE estudiantes_base ADD COLUMN periodo_actual TEXT")
 
 
+def _sembrar_atenciones_desde_contactados(conn: sqlite3.Connection) -> None:
+    """Si aún no hay bitácora, copia las marcas actuales como atenciones del día en que se marcaron."""
+    n = conn.execute("SELECT COUNT(*) FROM seguimiento_atenciones").fetchone()[0]
+    if n:
+        return
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO seguimiento_atenciones (
+            identificacion, categoria, fecha, creado_en
+        )
+        SELECT
+            identificacion,
+            'general',
+            substr(contactado_en, 1, 10),
+            contactado_en
+        FROM priorizados_contactados
+        WHERE contactado = 1
+          AND identificacion IS NOT NULL
+          AND trim(identificacion) != ''
+          AND contactado_en IS NOT NULL
+        """
+    )
+
+
 def inicializar_db(base: Path | None = None) -> Path:
     """Crea o migra el schema. Devuelve la ruta del archivo .db."""
     base = base or PROJECT_ROOT
@@ -737,6 +772,7 @@ def inicializar_db(base: Path | None = None) -> Path:
         _crear_tablas_usuarios(conn)
         _crear_tablas_modificaciones(conn)
         _asegurar_periodo_actual(conn)
+        _sembrar_atenciones_desde_contactados(conn)
         _marcar_schema_version(conn)
     return ruta_base_datos(base)
 

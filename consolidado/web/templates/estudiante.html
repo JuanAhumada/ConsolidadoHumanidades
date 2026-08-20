@@ -43,30 +43,41 @@
 
 {% if ficha %}
 <div class="ficha-view" {% if ficha.estilo %}style="{{ ficha.estilo }}"{% endif %}>
-  <div class="ficha-board" data-n="{{ ficha.n_categorias }}">
+  <div class="ficha-board">
     <aside class="ficha-side">
       <div class="ficha-side-hero">
-        <div class="ficha-side-avatar" aria-hidden="true">
-          <svg viewBox="0 0 64 64" width="72" height="72" fill="none">
-            <circle cx="32" cy="24" r="12" fill="#fff"/>
-            <path d="M12 54c3.5-12 11-18 20-18s16.5 6 20 18" fill="#fff"/>
-          </svg>
+        <div class="ficha-side-avatar-wrap">
+          <p class="ficha-side-id">{{ ficha.identificacion }}</p>
+          <div class="ficha-side-avatar" aria-hidden="true">
+            <svg viewBox="0 0 64 64" width="96" height="96" fill="none">
+              <circle cx="32" cy="24" r="12" fill="#fff"/>
+              <path d="M12 54c3.5-12 11-18 20-18s16.5 6 20 18" fill="#fff"/>
+            </svg>
+          </div>
+          {% if ficha.nivel_prioridad %}
+          <p class="ficha-side-nivel">Nivel {{ ficha.nivel_prioridad }}</p>
+          {% endif %}
         </div>
         <div class="ficha-side-who">
-          <p class="ficha-side-id">{{ ficha.identificacion }}</p>
           <h3 class="ficha-side-name">{{ ficha.nombre or 'Sin nombre' }}</h3>
           <p class="ficha-side-meta">
-            {{ ficha.programa or 'Sin programa' }}{% if ficha.periodo_ingreso and ficha.periodo_ingreso != '—' %} · ingreso {{ ficha.periodo_ingreso }}{% endif %}
+            {{ ficha.programa or 'Sin programa' }}{% if ficha.periodo_ingreso and ficha.periodo_ingreso != '—' %} – {{ ficha.periodo_ingreso }}{% endif %}
           </p>
-          {% if ficha.cohorte_graduacion and ficha.cohorte_graduacion != '—' %}
-          <p class="ficha-side-meta">Debería graduarse {{ ficha.cohorte_graduacion }}{% if ficha.periodo_grado and ficha.periodo_grado != '—' %} · graduó {{ ficha.periodo_grado }}{% endif %}</p>
-          {% elif ficha.periodo_grado and ficha.periodo_grado != '—' %}
-          <p class="ficha-side-meta">Graduó {{ ficha.periodo_grado }}</p>
-          {% endif %}
-          {% if ficha.nivel_prioridad %}
-          <p class="ficha-side-nivel">Nivel {{ ficha.nivel_prioridad }}{% if ficha.puntaje_prioridad %} · {{ ficha.puntaje_prioridad }} pts{% endif %}</p>
-          {% endif %}
         </div>
+      </div>
+      <div class="ficha-side-contacto">
+        <p>
+          <span class="e">Correo institucional</span>
+          <span class="v">{{ ficha.correo_institucional or '—' }}</span>
+        </p>
+        <p>
+          <span class="e">Celular</span>
+          <span class="v">{{ ficha.telefono or '—' }}</span>
+        </p>
+        <p>
+          <span class="e">Correo personal</span>
+          <span class="v">{{ ficha.correo_personal or '—' }}</span>
+        </p>
       </div>
       <div class="ficha-chart" aria-label="Puntajes de prioridad">
         {% for p in ficha.puntajes %}
@@ -82,9 +93,9 @@
     </aside>
 
     <div class="ficha-main">
+      {% if ficha.datos %}
       <section class="ficha-datos">
-        <h3>Datos estudiante</h3>
-        {% if ficha.datos %}
+        <h3>Datos del Estudiante</h3>
         <div class="ficha-datos-grid">
           {% for campo in ficha.datos %}
           <div>
@@ -93,10 +104,8 @@
           </div>
           {% endfor %}
         </div>
-        {% else %}
-        <p class="ficha-datos-vacio">Sin datos de contacto adicionales.</p>
-        {% endif %}
       </section>
+      {% endif %}
 
       {% if ficha.categorias %}
       <div class="ficha-cats" data-n="{{ ficha.n_categorias }}">

@@ -1,0 +1,36 @@
+<script>
+(function () {
+  let interna = false;
+  function marcarInterna() { interna = true; }
+  window.marcarNavegacionInterna = marcarInterna;
+
+  document.addEventListener("click", function (ev) {
+    const a = ev.target.closest && ev.target.closest("a[href]");
+    if (!a) return;
+    const href = a.getAttribute("href");
+    if (!href || href.startsWith("#") || href.toLowerCase().startsWith("javascript:")) return;
+    if (a.target === "_blank" || a.hasAttribute("download")) return;
+    try {
+      const u = new URL(a.href, location.href);
+      if (u.origin === location.origin) marcarInterna();
+    } catch (e) {}
+  }, true);
+  document.addEventListener("submit", marcarInterna, true);
+
+  window.addEventListener("beforeunload", function (ev) {
+    if (interna) return;
+    ev.preventDefault();
+    ev.returnValue = "Si deja de usar la aplicación, acéptelo para cerrarla y liberar el puerto.";
+    return ev.returnValue;
+  });
+
+  window.addEventListener("pagehide", function (ev) {
+    if (interna || ev.persisted) return;
+    try {
+      navigator.sendBeacon("/api/apagar", "");
+    } catch (e) {
+      try { fetch("/api/apagar", { method: "POST", keepalive: true }); } catch (e2) {}
+    }
+  });
+})();
+</script>

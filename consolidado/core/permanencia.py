@@ -851,16 +851,30 @@ def _grafica_historico(bloque: dict[str, Any], clave: str) -> dict[str, Any] | N
     programa = bloque.get("programa") or "Programa"
     nombre = "Permanencia" if clave == "permanencia" else "Graduación"
     return {
-        "id": f"historico:{clave}:{programa}",
-        "etiqueta": f"Histórico {nombre.lower()} · {programa}",
+        "titulo": f"{nombre} · {programa}",
         "tipo": "line",
-        "titulo": f"Histórico de {nombre.lower()} · {programa}",
         "labels": [f.get("periodo") for f in filas],
         "datasets": [
             {"label": "Meta", "data": [f.get(f"{clave}_meta_n") for f in filas]},
             {"label": "Cumplimiento", "data": [f.get(f"{clave}_cumplimiento_n") for f in filas]},
         ],
         "ylabel": "%",
+    }
+
+
+def _grafica_historico_par(bloque: dict[str, Any]) -> dict[str, Any] | None:
+    perm = _grafica_historico(bloque, "permanencia")
+    grad = _grafica_historico(bloque, "graduacion")
+    paneles = [p for p in (perm, grad) if p]
+    if not paneles:
+        return None
+    programa = bloque.get("programa") or "Programa"
+    return {
+        "id": f"historico:{programa}",
+        "etiqueta": f"Histórico · {programa}",
+        "tipo": "historico",
+        "titulo": f"Histórico · {programa}",
+        "paneles": paneles,
     }
 
 
@@ -881,10 +895,9 @@ def _graficas_desde_metas(
             g["etiqueta"] = f"Permanencia · {b.get('periodo')}"
             out.append(g)
     for b in historico:
-        for clave in ("permanencia", "graduacion"):
-            g = _grafica_historico(b, clave)
-            if g:
-                out.append(g)
+        g = _grafica_historico_par(b)
+        if g:
+            out.append(g)
     return out
 
 

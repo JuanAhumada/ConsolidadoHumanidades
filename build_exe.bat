@@ -11,6 +11,13 @@ call .venv\Scripts\activate.bat
 python -m pip install -q -U pip
 python -m pip install -q -r requirements.txt
 
+echo Generando icono del instalador...
+python -c "from pathlib import Path; from PIL import Image; p=Path('consolidado/web/static/favicon.png'); Image.open(p).convert('RGBA').save('empaque/icono.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(256,256)])"
+if errorlevel 1 (
+    echo No se pudo generar empaque\icono.ico
+    exit /b 1
+)
+
 echo.
 echo Generando ejecutable...
 pyinstaller --noconfirm --clean ConsolidadoHumanidades.spec

@@ -40,7 +40,16 @@ from consolidado.storage.db import (
     ultima_version,
 )
 
-_CAMPOS_HERO = frozenset({"Identificación", "Nombre y apellidos", "Programa"})
+_CAMPOS_HERO = frozenset(
+    {
+        "Identificación",
+        "Nombre y apellidos",
+        "Programa",
+        "Teléfono celular",
+        "Correo institucional",
+        "Correo personal",
+    }
+)
 _COLS_TIPO_ALERTA = frozenset(
     {
         COL_TIPO_ALERTA_INICIAL,
@@ -56,7 +65,7 @@ _PUNTAJES_GRAFICA = [
     ("Ptje Reintegro", "Reintegro"),
     ("Ptje Propio", "Propio"),
     ("Ptje Activacion", "Activacion"),
-    ("Ptje Ruta", "Ruta"),
+    ("Ptje Ruta", "Grado"),
 ]
 _DIAS_SEMANA = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado")
 _DIA_CANON = {
@@ -352,6 +361,9 @@ def obtener_ficha_estudiante(
         "nombre": nombre,
         "programa": programa,
         "periodo_ingreso": _formatear_valor_ficha(fila.get("Periodo ingreso")),
+        "telefono": _formatear_valor_ficha(fila.get("Teléfono celular")),
+        "correo_institucional": _formatear_valor_ficha(fila.get("Correo institucional")),
+        "correo_personal": _formatear_valor_ficha(fila.get("Correo personal")),
         "periodo_grado": _formatear_valor_ficha(fila.get("Periodo grado")),
         "cohorte_graduacion": _formatear_valor_ficha(fila.get("Cohorte de graduación")),
         "estado_graduacion": _formatear_valor_ficha(fila.get("Estado graduación")),

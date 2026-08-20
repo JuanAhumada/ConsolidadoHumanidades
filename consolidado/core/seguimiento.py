@@ -37,17 +37,6 @@ CATEGORIAS_SEGUIMIENTO: tuple[dict[str, str], ...] = (
     {"id": "alertas", "titulo": "Alertas", "columna": "", "grupo": "alertas"},
 )
 
-_DIVISIONES_PUNTAJE: tuple[dict[str, str], ...] = (
-    {"id": "beca", "titulo": "Beca", "corto": "Beca", "campo": "ptje_beca"},
-    {"id": "priorizado", "titulo": "Priorizado", "corto": "Prio", "campo": "ptje_priorizado"},
-    {"id": "repitiendo", "titulo": "Repitiendo", "corto": "Repitiendo", "campo": "ptje_repitiendo"},
-    {"id": "reintegro", "titulo": "Reintegro", "corto": "Reintegro", "campo": "ptje_reintegro"},
-    {"id": "propio", "titulo": "Propio", "corto": "Propio", "campo": "ptje_propio"},
-    {"id": "activacion", "titulo": "Activación", "corto": "Activacion", "campo": "ptje_activacion"},
-    {"id": "ruta", "titulo": "Ruta", "corto": "Ruta", "campo": "ptje_ruta"},
-)
-
-
 def _numero(val: Any) -> float:
     if _es_nulo(val):
         return 0.0
@@ -69,6 +58,8 @@ def _entero(val: Any) -> int:
 def _texto(val: Any) -> str:
     if _es_nulo(val):
         return ""
+    if isinstance(val, bool):
+        return "Sí" if val else ""
     texto = str(val).strip()
     if texto.lower() in {"none", "nan", "null", "nat", "—"}:
         return ""
@@ -140,7 +131,6 @@ def _fila_base(fila: dict[str, Any], ids_contactados: set[str]) -> dict[str, Any
         "contactado": ident in ids_contactados,
         "color": color,
         "estilo": estilo_color(color),
-        "divisiones": [],
     }
 
 
@@ -177,24 +167,29 @@ def listar_seguimiento(
     *,
     cat_id: str = "general",
     vista: str = "pendientes",
+    programas: list[str] | None = None,
     base: Path | None = None,
 ) -> dict[str, Any]:
     """Estudiantes de la última versión con nivel ≥ 1, filtrados por categoría."""
     base = base or PROJECT_ROOT
     cat = categoria_seguimiento(cat_id)
+    programas_sel = [p.strip() for p in (programas or []) if p and str(p).strip()]
+    vacio = {
+        "categoria": cat,
+        "categorias": [
+            {**c, "n": 0, "n_pendientes": 0} for c in CATEGORIAS_SEGUIMIENTO
+        ],
+        "filas": [],
+        "total": 0,
+        "visibles": 0,
+        "vista": vista,
+        "meta": None,
+        "programas": [],
+        "programas_sel": [],
+    }
     ult = ultima_version(base)
     if ult is None:
-        return {
-            "categoria": cat,
-            "categorias": [
-                {**c, "n": 0, "n_pendientes": 0} for c in CATEGORIAS_SEGUIMIENTO
-            ],
-            "filas": [],
-            "total": 0,
-            "visibles": 0,
-            "vista": vista,
-            "meta": None,
-        }
+        return vacio
 
     df = cargar_dataframe_version(int(ult["id"]), base)
     ids_contactados = cargar_ids_contactados(base)
@@ -215,9 +210,16 @@ def listar_seguimiento(
             item["num_alertas"] = int(item["num_alertas"]) + 1
         universo.append(item)
 
+    programas_opciones = sorted({f["programa"] for f in universo if f["programa"]})
+    programas_sel = [p for p in programas_sel if p in programas_opciones]
+    if programas_sel:
+        universo_f = [f for f in universo if f["programa"] in programas_sel]
+    else:
+        universo_f = universo
+
     cats_out: list[dict[str, Any]] = []
     for c in CATEGORIAS_SEGUIMIENTO:
-        miembros = [f for f in universo if _entra_en_categoria(f, c)]
+        miembros = [f for f in universo_f if _entra_en_categoria(f, c)]
         cats_out.append(
             {
                 **c,
@@ -226,7 +228,7 @@ def listar_seguimiento(
             }
         )
 
-    filtradas = [f for f in universo if _entra_en_categoria(f, cat)]
+    filtradas = [f for f in universo_f if _entra_en_categoria(f, cat)]
     filtradas.sort(
         key=lambda f: (
             -_puntaje_categoria(f, cat),
@@ -241,17 +243,6 @@ def listar_seguimiento(
         f["puntaje_lista"] = valor
         f["puntaje_txt"] = fmt_pts(valor)
         f["pct"] = round(min(valor / tope, 1.0) * 100) if tope else 0
-        tope_div = max((float(f[d["campo"]]) for d in _DIVISIONES_PUNTAJE), default=1.0) or 1.0
-        f["divisiones"] = [
-            {
-                "id": d["id"],
-                "titulo": d["corto"],
-                "valor": fmt_pts(f[d["campo"]]),
-                "pct": round(min(float(f[d["campo"]]) / tope_div, 1.0) * 100) if tope_div else 0,
-                "activo": float(f[d["campo"]]) > 0,
-            }
-            for d in _DIVISIONES_PUNTAJE
-        ]
 
     if vista != "todos":
         visibles = [f for f in filtradas if not f["contactado"]]
@@ -266,4 +257,6 @@ def listar_seguimiento(
         "visibles": len(visibles),
         "vista": "todos" if vista == "todos" else "pendientes",
         "meta": ult,
+        "programas": programas_opciones,
+        "programas_sel": programas_sel,
     }
