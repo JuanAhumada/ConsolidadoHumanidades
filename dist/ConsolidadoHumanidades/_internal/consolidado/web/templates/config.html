@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Configuración{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Configuración</h2>
+    <p class="sub">Programas, exclusiones y motivos de priorizado. Restablecer usa config_fabrica.json.</p>
+  </div>
+  <form method="post" action="/config/fabrica" onsubmit="return confirm('¿Restablecer valores de fábrica?');">
+    <button class="btn secondary" type="submit">Restablecer de fábrica</button>
+  </form>
+</div>
+
+<form method="post" action="/config/guardar">
+  <div class="card">
+    <h3>Programas permitidos</h3>
+    <textarea name="programas">{% for p in programas %}{{ p }}
+{% endfor %}</textarea>
+  </div>
+  <div class="card">
+    <h3>Programas excluidos</h3>
+    <textarea name="excluidos">{% for p in excluidos %}{{ p }}
+{% endfor %}</textarea>
+  </div>
+  <div class="card">
+    <h3>Columnas motivo priorizado</h3>
+    <textarea name="motivos">{% for m in motivos %}{{ m }}
+{% endfor %}</textarea>
+  </div>
+  <button class="btn" type="submit">Guardar cambios</button>
+</form>
+
+{% if documentos %}
+<div class="card" style="margin-top:1rem;">
+  <h3>Documentos adicionales configurados</h3>
+  {% for d in documentos %}
+  <div class="file-row">
+    <div><strong>{{ d.titulo }}</strong> <span class="muted">· {{ d.grupo_encabezado }} · {{ (d.columnas or [])|length }} cols</span></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

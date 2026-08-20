@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Alertas{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Alertas</h2>
+    <p class="sub">Estudiantes con alertas de las bases (un registro por persona). Despliegue para ver cada tipo y descartar las viejas.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Estudiantes con alertas <span class="muted" style="font-weight:500;font-size:.9rem;">({{ estudiantes_alertas|length }})</span></h3>
+  <div class="table-wrap">
+    <table class="tabla-alertas-est">
+      <thead>
+        <tr>
+          <th>Identificación</th>
+          <th>Nombre</th>
+          <th>Alertas</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for e in estudiantes_alertas %}
+        <tr>
+          <td><a href="/estudiante/{{ e.identificacion }}">{{ e.identificacion }}</a></td>
+          <td>{{ e.nombre or '—' }}</td>
+          <td><span class="chip chip-bad">{{ e.num_alertas }}</span></td>
+          <td>
+            <details class="alerta-ver">
+              <summary>Ver alertas</summary>
+              <div class="alerta-ver-panel">
+                {% if e.inicial %}
+                <p class="ficha-fase">Inicial ({{ e.num_inicial }})</p>
+                <ul class="ficha-alerta-lista">
+                  {% for t in e.inicial %}
+                  <li>
+                    <span>{{ t }}</span>
+                    <form method="post" action="/alertas/fuente/quitar" onsubmit="return confirm('¿Descartar esta alerta? No volverá a aparecer al generar el consolidado.');">
+                      <input type="hidden" name="identificacion" value="{{ e.identificacion }}"/>
+                      <input type="hidden" name="fase" value="inicial"/>
+                      <input type="hidden" name="tipo" value="{{ t }}"/>
+                      <input type="hidden" name="volver" value="/alertas"/>
+                      <button class="btn sm danger" type="submit">Eliminar</button>
+                    </form>
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+                {% if e.final %}
+                <p class="ficha-fase">Final ({{ e.num_final }})</p>
+                <ul class="ficha-alerta-lista">
+                  {% for t in e.final %}
+                  <li>
+                    <span>{{ t }}</span>
+                    <form method="post" action="/alertas/fuente/quitar" onsubmit="return confirm('¿Descartar esta alerta? No volverá a aparecer al generar el consolidado.');">
+                      <input type="hidden" name="identificacion" value="{{ e.identificacion }}"/>
+                      <input type="hidden" name="fase" value="final"/>
+                      <input type="hidden" name="tipo" value="{{ t }}"/>
+                      <input type="hidden" name="volver" value="/alertas"/>
+                      <button class="btn sm danger" type="submit">Eliminar</button>
+                    </form>
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+                <p class="alerta-ver-ficha"><a href="/estudiante/{{ e.identificacion }}">Ver ficha del estudiante</a></p>
+              </div>
+            </details>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="muted">Nadie tiene alertas vigentes en las bases.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Añadir alerta propia</h3>
+  <form method="post" action="/alertas/anadir" class="form-row">
+    <div class="field">
+      <label for="alerta-id">Identificación</label>
+      <input id="alerta-id" type="text" name="identificacion" required placeholder="Cédula o documento"/>
+    </div>
+    <div class="field">
+      <label for="alerta-nombre">Nombre</label>
+      <input id="alerta-nombre" type="text" name="nombre" placeholder="Nombre del estudiante"/>
+    </div>
+    <div class="field" style="grid-column:1/-1;">
+      <label for="alerta-detalle">Detalle</label>
+      <input id="alerta-detalle" type="text" name="detalle" required placeholder="Motivo o nota de la alerta"/>
+    </div>
+    <div class="form-actions-row">
+      <button class="btn" type="submit">Guardar</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Alertas propias</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Identificación</th><th>Nombre</th><th>Detalle</th><th></th></tr></thead>
+      <tbody>
+      {% for a in alertas %}
+        <tr>
+          <td><a href="/estudiante/{{ a.identificacion }}">{{ a.identificacion }}</a></td>
+          <td>{{ a.nombre }}</td>
+          <td>{{ a.detalle }}</td>
+          <td>
+            <form method="post" action="/alertas/quitar" onsubmit="return confirm('¿Quitar esta alerta propia?');">
+              <input type="hidden" name="identificacion" value="{{ a.identificacion }}"/>
+              <button class="btn sm danger" type="submit">Quitar</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="muted">No hay alertas propias.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

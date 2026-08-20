@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{% block title %}Consolidado{% endblock %} · Humanidades</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png"/>
+  <link rel="apple-touch-icon" href="/static/favicon.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/app.css"/>
+  <script>
+  (function () {
+    try {
+      if (localStorage.getItem("nav-hidden") === "1") {
+        document.documentElement.classList.add("nav-hidden");
+      }
+    } catch (e) {}
+  })();
+  </script>
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <button type="button" class="nav-show" id="nav-show" title="Mostrar menú" aria-label="Mostrar menú">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="18" height="18"><path d="M5 7h14M5 12h14M5 17h14"/></svg>
+  </button>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <a class="brand" href="/" style="text-decoration:none;color:inherit;">
+          <img class="brand-mark" src="/static/favicon.png" alt="" width="38" height="38"/>
+          <h1>Humanidades</h1>
+          <p>Consolidado académico</p>
+        </a>
+        <button type="button" class="nav-hide" id="nav-hide" title="Ocultar menú" aria-label="Ocultar menú">
+          <svg class="nav-hide-side" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="16" height="16"><path d="M15 6 9 12l6 6"/></svg>
+          <svg class="nav-hide-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" width="16" height="16"><path d="M6 15l6-6 6 6"/></svg>
+        </button>
+      </div>
+      <nav class="nav">
+        <a href="/" class="{% if nav=='inicio' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 11 12 4l8 7"/><path d="M6 10.5V19h4.2v-5h3.6v5H18v-8.5"/></svg>
+          Inicio
+        </a>
+        <a href="/estudiante" class="{% if nav=='estudiante' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19c1.6-3.2 4-4.8 6.5-4.8S16.9 15.8 18.5 19"/></svg>
+          Estudiante
+        </a>
+        <div class="nav-group {% if nav=='seguimiento' %}is-current is-open{% endif %}" id="nav-seg">
+          <div class="nav-group-row">
+            <a href="/seguimiento?cat=general&amp;vista={{ vista }}">
+              <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 7h14M5 12h10M5 17h7"/><circle cx="18.2" cy="16.8" r="2.4"/></svg>
+              Seguimiento
+            </a>
+            <button type="button" class="nav-group-toggle" id="nav-seg-toggle" aria-expanded="{% if nav=='seguimiento' %}true{% else %}false{% endif %}" aria-controls="nav-seg-sub" title="Vistas de seguimiento">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" width="14" height="14"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+          </div>
+          <div class="nav-sub" id="nav-seg-sub" role="list">
+            {% for c in categorias_seg %}
+            <a role="listitem" href="/seguimiento?cat={{ c.id }}&amp;vista={{ vista }}" class="{% if nav=='seguimiento' and (cat==c.id or (c.id=='general' and cat in ['general', ''])) %}active{% endif %}">{{ c.titulo }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        <a href="/metas" class="{% if nav=='metas' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3.8 14.6 9l5.7.8-4.1 4 1 5.6L12 16.7 6.8 19.4l1-5.6-4.1-4L9.4 9Z"/></svg>
+          Metas
+        </a>
+        <a href="/graficas" class="{% if nav=='graficas' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 19V9M12 19V5M19 19v-7"/></svg>
+          Gráficas
+        </a>
+        <a href="/colores" class="{% if nav=='colores' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><circle cx="6.5" cy="8" r="2.1"/><circle cx="17.5" cy="8.2" r="2.1"/><circle cx="7.2" cy="16.6" r="2.1"/><circle cx="16.8" cy="16.5" r="2.1"/></svg>
+          Colores
+        </a>
+        <a href="/versiones" class="{% if nav=='versiones' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="7.5"/><path d="M12 8v4.5l3 1.8"/></svg>
+          Versiones
+        </a>
+        {% if es_admin %}
+        <a href="/datos-antiguos" class="{% if nav=='datos-antiguos' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 8.5V6.2A2.2 2.2 0 0 1 8.2 4h3.1L13 6.2h2.8A2.2 2.2 0 0 1 18 8.4V11"/><path d="M7 20h10a2 2 0 0 0 2-2v-5.5H5V18a2 2 0 0 0 2 2Z"/><path d="M12 12.5v4M10 14.5h4"/></svg>
+          Datos antiguos
+        </a>
+        <a href="/modificaciones" class="{% if nav=='modificaciones' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 6h14M5 12h9M5 18h11"/><path d="M16 10.5 19 12l-3 1.5"/></svg>
+          Historial
+        </a>
+        <a href="/archivos" class="{% if nav=='archivos' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h3L11 7h6.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z"/></svg>
+          Data
+        </a>
+        <a href="/config" class="{% if nav=='config' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 4.5v2M12 17.5v2M4.5 12h2M17.5 12h2M6.8 6.8l1.4 1.4M15.8 15.8l1.4 1.4M6.8 17.2l1.4-1.4M15.8 8.2l1.4-1.4"/></svg>
+          Configuración
+        </a>
+        <a href="/usuarios" class="{% if nav=='usuarios' %}active{% endif %}">
+          <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="2.6"/><circle cx="16" cy="9" r="2.2"/><path d="M4.5 18c1.2-2.6 3.1-3.9 5.2-3.9 1.4 0 2.6.6 3.6 1.6"/><path d="M14.2 18c.5-1.6 1.6-2.6 3-2.6 1.5 0 2.6.9 3.3 2.6"/></svg>
+          Usuarios
+        </a>
+        {% endif %}
+      </nav>
+      <div class="cta">
+        {% if usuario %}
+        <p class="sidebar-user">{{ usuario.nombre }}{% if es_admin %} · admin{% endif %}</p>
+        <form method="post" action="/logout">
+          <button class="btn secondary" type="submit" style="width:100%;margin-bottom:.7rem;">Cerrar sesión</button>
+        </form>
+        {% endif %}
+        {% if es_admin %}
+        <a class="btn secondary" href="/versiones/ultima/excel" style="width:100%;text-align:center;"
+           {% if not estado.ultima %}aria-disabled="true" onclick="return false;" title="Aún no hay un Excel generado"{% endif %}>
+          Descargar último Excel
+        </a>
+        <form method="post" action="/generar">
+          <label class="cta-date-lbl" for="fecha-gen">Fecha de la versión</label>
+          <input id="fecha-gen" type="date" name="fecha_version" value="{{ hoy }}"/>
+          <button class="btn" type="submit" style="width:100%"
+                  {% if not estado.listo_generar %}disabled title="Faltan archivos obligatorios"{% endif %}>
+            Generar nuevo consolidado
+          </button>
+        </form>
+        {% set pct = ((estado.obligatorios_listos / estado.obligatorios_total * 100) if estado.obligatorios_total else 0)|int %}
+        <div class="cta-progress" aria-hidden="true"><span style="width:{{ pct }}%"></span></div>
+        <p class="muted" style="font-size:.78rem;margin:.15rem .2rem 0;">
+          {{ estado.obligatorios_listos }}/{{ estado.obligatorios_total }} obligatorios
+        </p>
+        {% else %}
+        <a class="btn" href="/versiones/ultima/excel" style="width:100%;text-align:center;"
+           {% if not estado.ultima %}aria-disabled="true" onclick="return false;" title="Aún no hay un Excel generado"{% endif %}>
+          Descargar último Excel
+        </a>
+        {% endif %}
+      </div>
+    </aside>
+    <main class="main">
+      {% if flash %}
+      <div class="flash ok">{{ flash }}</div>
+      {% endif %}
+      {% if error %}
+      <div class="flash err">{{ error }}</div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script>
+  document.querySelectorAll(".file-pick input[type=file]").forEach((input) => {
+    const name = input.closest(".file-pick")?.querySelector(".file-pick-name");
+    const wrap = input.closest(".file-pick");
+    input.addEventListener("change", () => {
+      const file = input.files && input.files[0];
+      if (name) name.textContent = file ? file.name : "Ningún archivo";
+      wrap?.classList.toggle("has-file", Boolean(file));
+    });
+  });
+  (function () {
+    const KEY = "nav-hidden";
+    function setHidden(hidden) {
+      document.documentElement.classList.toggle("nav-hidden", hidden);
+      try { localStorage.setItem(KEY, hidden ? "1" : "0"); } catch (e) {}
+    }
+    document.getElementById("nav-hide")?.addEventListener("click", () => setHidden(true));
+    document.getElementById("nav-show")?.addEventListener("click", () => setHidden(false));
+  })();
+  (function () {
+    const group = document.getElementById("nav-seg");
+    const btn = document.getElementById("nav-seg-toggle");
+    if (!group || !btn) return;
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      const open = !group.classList.contains("is-open");
+      group.classList.toggle("is-open", open);
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

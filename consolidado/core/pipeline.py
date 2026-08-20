@@ -1,3 +1,11 @@
+"""
+Pipeline: de los Excel fuente al consolidado (DataFrame + Excel + versión SQL).
+
+Entradas típicas: generar_dataframe_consolidado (solo memoria) y
+ejecutar_consolidado (guarda Excel y llama a guardar_version).
+carpeta_fuentes aísla Datos antiguos (historico) de datos/entrada.
+persistir_config=False en histórico para no pisar la config viva.
+"""
 from __future__ import annotations
 
 from datetime import date, datetime
@@ -33,7 +41,6 @@ from consolidado.core.constants import (
 from consolidado.core.documentos import _unir_documentos_adicionales
 from consolidado.core.excel_io import abrir_archivo_en_sistema
 from consolidado.core.export import guardar_excel_consolidado
-from consolidado.core.html_export import guardar_html_consolidado, ruta_html_desde_excel
 from consolidado.core.fusion import fusionar_por_id
 from consolidado.core.priorizado_enriquecido import (
     _cargar_priorizado_enriquecido_cfg,
@@ -47,6 +54,8 @@ from consolidado.core.priorizados import (
 )
 from consolidado.core.repetidas import _cargar_materias_repetidas_cfg, _cargar_repitiendo_cfg, aplicar_repitiendo
 from consolidado.core.normalizacion import normalizar_id
+from consolidado.core.permanencia import aplicar_permanencia
+from consolidado.storage.alertas_fuente import aplicar_alertas_descartadas
 from consolidado.storage.alertas_propias import cargar_alertas_propias
 from consolidado.storage.db import (
     guardar_version,
@@ -101,13 +110,14 @@ def generar_dataframe_consolidado(
     *,
     base: Path | None = None,
     archivos: list[Path] | None = None,
+    carpeta_fuentes: Path | None = None,
 ) -> tuple[pl.DataFrame, int]:
     """Arma el consolidado en memoria (sin guardar Excel)."""
     base = base or PROJECT_ROOT
     cfg = aplicar_config(cfg, base)
 
+    carpeta = Path(carpeta_fuentes) if carpeta_fuentes else carpeta_excels(cfg, base)
     if archivos is None:
-        carpeta = carpeta_excels(cfg, base)
         archivos_por_slot: list[tuple[dict, Path]] = []
         for slot in cfg.get("archivos_fuente", []):
             p = carpeta / slot.get("nombre_guardado", "")
@@ -178,20 +188,28 @@ def generar_dataframe_consolidado(
         columnas_materias=columnas_materias,
         tipos_partes=tipos_partes,
     )
-    consolidado = _unir_documentos_adicionales(consolidado, cfg, base)
+    consolidado = _unir_documentos_adicionales(consolidado, cfg, base, carpeta=carpeta)
+    consolidado = aplicar_permanencia(consolidado, cfg, base, carpeta=carpeta)
     consolidado = _limpiar_becas_programa_no_permitido(consolidado)
     consolidado = aplicar_priorizado_enriquecido(
-        consolidado, _cargar_priorizado_enriquecido_cfg(cfg, base)
+        consolidado, _cargar_priorizado_enriquecido_cfg(cfg, base, carpeta=carpeta)
     )
-    consolidado = _aplicar_alertas(consolidado, _cargar_alertas_cfg(cfg, base))
-    consolidado = aplicar_alertas_propias(consolidado, cargar_alertas_propias(base))
+    consolidado = _aplicar_alertas(consolidado, _cargar_alertas_cfg(cfg, base, carpeta=carpeta))
+    if carpeta_fuentes is None:
+        consolidado = aplicar_alertas_descartadas(consolidado, base)
+        consolidado = aplicar_alertas_propias(consolidado, cargar_alertas_propias(base))
+        propios_sql = cargar_priorizados_propios(base)
+    else:
+        propios_sql = []
 
     propios = _unificar_priorizados_propios(
-        cargar_priorizados_propios(base),
-        cargar_priorizados_internos_psi(cfg, base),
+        propios_sql,
+        cargar_priorizados_internos_psi(cfg, base, carpeta=carpeta),
     )
     consolidado = aplicar_priorizados_propios(consolidado, propios)
-    consolidado = aplicar_repitiendo(consolidado, _cargar_repitiendo_cfg(cfg, base))
+    consolidado = aplicar_repitiendo(
+        consolidado, _cargar_repitiendo_cfg(cfg, base, carpeta=carpeta)
+    )
     ids_propios = {
         normalizar_id(p.get("identificacion", ""))
         for p in propios
@@ -206,12 +224,15 @@ def ejecutar_consolidado(
     *,
     base: Path | None = None,
     archivos: list[Path] | None = None,
+    carpeta_fuentes: Path | None = None,
     salida: Path | None = None,
     abrir: bool = True,
     preguntar_sobrescribir: bool = False,
     parent=None,
     fecha_version: date | None = None,
     guardar_en_db: bool = True,
+    persistir_config: bool = True,
+    notas: str | None = None,
 ) -> tuple[pl.DataFrame, Path]:
     """
     Procesa fuentes, guarda una nueva versión en SQL y genera el Excel
@@ -221,8 +242,12 @@ def ejecutar_consolidado(
     del preguntar_sobrescribir  # compatibilidad API; el versionado ya no sobrescribe
     base = base or PROJECT_ROOT
     cfg = aplicar_config(cfg, base)
-    consolidado, max_materias = generar_dataframe_consolidado(cfg, base=base, archivos=archivos)
-    materias_repetidas = _cargar_materias_repetidas_cfg(cfg, base)
+    consolidado, max_materias = generar_dataframe_consolidado(
+        cfg, base=base, archivos=archivos, carpeta_fuentes=carpeta_fuentes
+    )
+    materias_repetidas = _cargar_materias_repetidas_cfg(
+        cfg, base, carpeta=carpeta_fuentes
+    )
 
     destino, periodo, fecha_v = resolver_destino_versionado(
         cfg, base, fecha_version=fecha_version, salida_explicita=salida
@@ -234,21 +259,14 @@ def ejecutar_consolidado(
         num_materias=max_materias,
         materias_repetidas=materias_repetidas,
     )
-    destino_html = guardar_html_consolidado(
-        consolidado,
-        ruta_html_desde_excel(destino),
-        cfg=cfg,
-        num_materias=max_materias,
-        titulo=f"Consolidado · {periodo} · {fecha_v.isoformat()}",
-    )
 
-    # Mantener la carpeta de salida en config (no el archivo puntual)
-    try:
-        rel_carpeta = destino.parent.resolve().relative_to(base.resolve())
-        cfg.setdefault("salida", {})["ruta"] = (rel_carpeta / "estudiantes_consolidado.xlsx").as_posix()
-        guardar_config(cfg, base)
-    except ValueError:
-        pass
+    if persistir_config and carpeta_fuentes is None:
+        try:
+            rel_carpeta = destino.parent.resolve().relative_to(base.resolve())
+            cfg.setdefault("salida", {})["ruta"] = (rel_carpeta / "estudiantes_consolidado.xlsx").as_posix()
+            guardar_config(cfg, base)
+        except ValueError:
+            pass
 
     if guardar_en_db:
         guardar_version(
@@ -258,9 +276,9 @@ def ejecutar_consolidado(
             periodo=periodo,
             num_materias=max_materias,
             ruta_excel=destino,
-            notas=f"Consolidado generado · periodo {periodo}",
+            notas=(notas or "").strip() or f"Consolidado generado · periodo {periodo}",
         )
 
     if abrir:
-        abrir_archivo_en_sistema(destino_html, parent=parent)
+        abrir_archivo_en_sistema(destino, parent=parent)
     return consolidado, destino

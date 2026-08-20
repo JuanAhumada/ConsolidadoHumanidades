@@ -1,3 +1,4 @@
+"""Alertas de Comunicación y Psicología: se cruzan al listado, no crean filas nuevas."""
 from __future__ import annotations
 
 import re
@@ -157,8 +158,10 @@ def _aplicar_alertas(consolidado: pl.DataFrame, alertas: pl.DataFrame) -> pl.Dat
     return resultado
 
 
-def _cargar_alertas_cfg(cfg: dict, base: Path) -> pl.DataFrame:
-    carpeta = carpeta_excels(cfg, base)
+def _cargar_alertas_cfg(
+    cfg: dict, base: Path, carpeta: Path | None = None
+) -> pl.DataFrame:
+    carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
     por_fase: dict[str, list[pl.DataFrame]] = {"inicial": [], "final": []}
     for slot in cfg.get("archivos_fuente", []):
         tipo = slot.get("tipo")

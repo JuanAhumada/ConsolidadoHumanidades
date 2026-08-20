@@ -1,3 +1,9 @@
+"""
+Une listados y horarios por identificación.
+
+bd1 y bd12 se combinan; Periodo actual toma el más reciente (no se concatenan
+con "|"). El horario se pega a la izquierda del listado filtrado.
+"""
 from __future__ import annotations
 
 import polars as pl
@@ -11,6 +17,7 @@ from consolidado.core.constants import (
     COL_DATOS_CONTACTO,
     COL_FUNCIONARIO_BECA,
     COL_NOMBRE,
+    COL_PERIODO_ACTUAL,
     COL_TELEFONO_CELULAR,
     COL_TOTAL_BECA,
     SALIDA_COLUMNAS_LISTADO,
@@ -32,6 +39,7 @@ from consolidado.core.normalizacion import (
     normalizar_encabezado,
     normalizar_id,
     normalizar_telefono_celda,
+    periodo_mas_reciente,
     programa_es_permitido,
     programa_esta_excluido,
     sumar_montos_beca,
@@ -90,6 +98,41 @@ def filtrar_filas_consolidado(df: pl.DataFrame) -> pl.DataFrame:
     df = filtrar_filas_programa_excluido(df)
     df = filtrar_filas_con_telefono(df)
     return df
+
+def _combinar_programa(valores: list) -> str | None:
+    """Unifica programa: variantes con/sin tilde quedan en un solo valor."""
+    candidatos: list[str] = []
+    for v in valores:
+        if _es_nulo(v):
+            continue
+        s = str(v).strip()
+        if not s:
+            continue
+        for parte in s.split("|"):
+            p = parte.strip()
+            if p:
+                candidatos.append(p)
+    if not candidatos:
+        return None
+    mejor_por_clave: dict[str, str] = {}
+    for s in candidatos:
+        clave = normalizar_encabezado(s)
+        if not clave:
+            continue
+        prev = mejor_por_clave.get(clave)
+        if prev is None or _cuenta_tildes(s) > _cuenta_tildes(prev) or (
+            _cuenta_tildes(s) == _cuenta_tildes(prev) and len(s) > len(prev)
+        ):
+            mejor_por_clave[clave] = s
+    if not mejor_por_clave:
+        return None
+    elegidos = list(mejor_por_clave.values())
+    permitidos = [p for p in elegidos if programa_es_permitido(p)]
+    usar = permitidos or elegidos
+    if len(usar) == 1:
+        return usar[0]
+    return " | ".join(usar)
+
 
 def _combinar_nombre(valores: list) -> str | None:
     """Unifica nombres: un solo valor, el más largo entre equivalentes."""
@@ -167,12 +210,16 @@ def _fusionar_bloques_por_id(
                 continue
             if col == COL_NOMBRE:
                 merged = _combinar_nombre(grp[col].to_list())
+            elif col == "Programa":
+                merged = _combinar_programa(grp[col].to_list())
             elif col in COL_DATOS_CONTACTO:
                 merged = _combinar_contacto(grp, col)
             elif col == COL_TOTAL_BECA:
                 merged = sumar_montos_beca(grp[col].to_list())
             elif col == COL_FUNCIONARIO_BECA:
                 merged = combinar_funcionario_beca(grp[col].to_list())
+            elif col == COL_PERIODO_ACTUAL:
+                merged = periodo_mas_reciente(grp[col].to_list())
             else:
                 vals = grp[col].to_list()
                 if col == COL_TELEFONO_CELULAR:
@@ -182,7 +229,7 @@ def _fusionar_bloques_por_id(
             fila[col] = merged if merged else None
         filas.append(fila)
 
-    return pl.DataFrame(filas)
+    return pl.from_dicts(filas, infer_schema_length=None)
 
 def fusionar_por_id(
     partes: list[pl.DataFrame],
@@ -242,7 +289,10 @@ def fusionar_por_id(
     for df in horarios_partes:
         if df.height == 0:
             continue
-        d = alinear_dataframe_salida(df, cols_horarios_interno).with_columns(
+        cols_h = list(cols_horarios_interno)
+        if COL_PERIODO_ACTUAL in df.columns and COL_PERIODO_ACTUAL not in cols_h:
+            cols_h.append(COL_PERIODO_ACTUAL)
+        d = alinear_dataframe_salida(df, cols_h).with_columns(
             pl.col("Identificación")
             .map_elements(normalizar_id, return_dtype=pl.Utf8)
             .alias("_id_key")
@@ -257,7 +307,10 @@ def fusionar_por_id(
     )
 
     if bloques_h:
-        horarios = _fusionar_bloques_por_id(bloques_h, cols_horarios_interno)
+        cols_h_fusion = list(cols_horarios_interno)
+        if any(COL_PERIODO_ACTUAL in b.columns for b in bloques_h):
+            cols_h_fusion.append(COL_PERIODO_ACTUAL)
+        horarios = _fusionar_bloques_por_id(bloques_h, cols_h_fusion)
         horarios = horarios.with_columns(
             pl.col("Identificación")
             .map_elements(normalizar_id, return_dtype=pl.Utf8)
@@ -268,6 +321,27 @@ def fusionar_por_id(
             on="_id_key",
             how="left",
         )
+        if COL_PERIODO_ACTUAL in horarios.columns:
+            consolidado = consolidado.join(
+                horarios.select(["_id_key", COL_PERIODO_ACTUAL]).rename(
+                    {COL_PERIODO_ACTUAL: "_periodo_h"}
+                ),
+                on="_id_key",
+                how="left",
+            )
+            consolidado = consolidado.with_columns(
+                pl.struct([COL_PERIODO_ACTUAL, "_periodo_h"])
+                .map_elements(
+                    lambda s: periodo_mas_reciente(
+                        [
+                            s[COL_PERIODO_ACTUAL] if isinstance(s, dict) else s[0],
+                            s["_periodo_h"] if isinstance(s, dict) else s[1],
+                        ]
+                    ),
+                    return_dtype=pl.Utf8,
+                )
+                .alias(COL_PERIODO_ACTUAL)
+            ).drop("_periodo_h")
 
     consolidado = consolidado.drop("_id_key")
     columnas_final = [*cols_listado, *cols_materias]

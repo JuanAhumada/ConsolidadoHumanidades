@@ -1,3 +1,10 @@
+"""
+Lectura de cada libro fuente.
+
+preparar_archivo: listado + hoja HORARIO (bd1/bd12).
+COD_PENSUM en HORARIO solo decide el formato materia/profesor
+(_cod_pensum_es_numero); el periodo del alumno es otra columna.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -8,6 +15,7 @@ from consolidado.config.settings import COLUMNAS_BECAS, COLUMNAS_PRIORIZADO
 from consolidado.core.columnas import construir_mapa_columnas, renombrar_y_filtrar
 from consolidado.core.constants import (
     COL_NOMBRE,
+    COL_PERIODO_ACTUAL,
     _COLUMNAS_MOTIVO_PRIO_RUNTIME,
     aplicar_config,
 )
@@ -27,8 +35,10 @@ from consolidado.core.normalizacion import (
     _orden_fecha_por_tipo_libro,
     _str_celda,
     combinar_valores,
+    formatear_periodo_cod,
     normalizar_encabezado,
     normalizar_id,
+    periodo_mas_reciente,
     programa_es_permitido,
 )
 def _limpiar_becas_programa_no_permitido(df: pl.DataFrame) -> pl.DataFrame:
@@ -175,6 +185,7 @@ def _mapear_columnas_horario(df: pl.DataFrame) -> dict[str, str | None]:
     return {
         "num_identificacion": _columna_horario(df, "NUM_IDENTIFICACION"),
         "genero": _columna_horario(df, "GENERO"),
+        "cod_periodo": _columna_horario(df, "COD_PERIODO"),
         "cod_pensum": _columna_horario(df, "COD_PENSUM"),
         "nom_subgrupo": _columna_horario(df, "NOM_SUBGRUPO"),
         "num_grupo": _columna_horario(df, "NUM_GRUPO"),
@@ -198,6 +209,7 @@ def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
         )
 
     por_id: dict[str, list[dict]] = {}
+    periodos: dict[str, list[str]] = {}
     for row in df_horario.iter_rows(named=True):
         id_key = normalizar_id(row[c["num_identificacion"]])
         if not id_key:
@@ -212,6 +224,13 @@ def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
                 "profesor": profesor,
             }
         )
+        periodo = None
+        if c.get("cod_periodo"):
+            periodo = formatear_periodo_cod(row[c["cod_periodo"]])
+        if not periodo and c.get("cod_pensum"):
+            periodo = formatear_periodo_cod(row[c["cod_pensum"]])
+        if periodo:
+            periodos.setdefault(id_key, []).append(periodo)
 
     if not por_id:
         return pl.DataFrame()
@@ -223,6 +242,9 @@ def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
             "_id_key": id_key,
             "Identificación": id_key,
         }
+        periodo_est = periodo_mas_reciente(periodos.get(id_key, []))
+        if periodo_est:
+            fila[COL_PERIODO_ACTUAL] = periodo_est
         for i, it in enumerate(items, start=1):
             if it["materia"]:
                 fila[f"Materia {i}"] = it["materia"]
@@ -330,7 +352,7 @@ def _preparar_archivo_interno(
     )
     df_listado = filtrar_filas_con_nombre(df_listado)
     df_horarios = pl.DataFrame()
-    if tipo == "bd1":
+    if tipo in ("bd1", "bd12"):
         hoja_hor = _nombre_hoja_horario(ruta)
         if hoja_hor:
             df_horarios = resumir_hoja_horario(_leer_hoja_excel(ruta, hoja_hor))
@@ -400,6 +422,8 @@ def _tipo_libro_desde_nombre(ruta: Path) -> str:
         return "bd3"
     if n.startswith("bd_rep") or "asignaturas repetidas" in n or "repetidas" in n:
         return "bd_rep"
+    if "permanencia" in n or "ruta de grado" in n:
+        return "bd_permanencia"
     if "alertas" in n and "psicolog" in n:
         return "bd_alertas_psi"
     if "alertas" in n and ("comunicacion" in n or "entrenamiento" in n):
@@ -449,6 +473,11 @@ def _elegir_hoja_datos(ruta: Path, *, tipo: str | None = None) -> str:
         ) or _hoja_por_subcadena(nombres, "estudiantes")
     elif tipo == "bd_rep":
         candidata = _hoja_por_subcadena(nombres, "hoja") or (nombres[0] if nombres else None)
+    elif tipo == "bd_permanencia":
+        candidata = next(
+            (sn for sn in nombres if sn.strip().upper().startswith("COHORTE")),
+            None,
+        ) or _hoja_por_subcadena(nombres, "base de datos")
     elif tipo in ("bd_alertas_com", "bd_alertas_psi"):
         candidata = _hoja_por_subcadena(nombres, "sheet") or (nombres[0] if nombres else None)
     elif tipo == "bd_prio_psi":

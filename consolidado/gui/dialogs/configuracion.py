@@ -9,9 +9,15 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 
 import consolidado as merge
-from consolidado.config.settings import etiqueta_alias, guardar_config
+from consolidado.config.settings import etiqueta_alias, guardar_config, restaurar_config_fabrica
 from consolidado.gui.dialogs.documento import DialogoDocumento
-from consolidado.gui.theme import FONT_SUBTITULO, FONT_TEXTO, configurar_tabview, configurar_treeview
+from consolidado.gui.theme import (
+    FONT_SUBTITULO,
+    FONT_TEXTO,
+    configurar_tabview,
+    configurar_treeview,
+    estilo_boton_secundario,
+)
 
 
 class DialogoCambiarDatos(ctk.CTkToplevel):
@@ -56,6 +62,12 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
 
         marco_btn = ctk.CTkFrame(self, fg_color="transparent")
         marco_btn.pack(fill="x", padx=8, pady=(0, 12))
+        ctk.CTkButton(
+            marco_btn,
+            text="Restablecer valores de fábrica",
+            command=self._restablecer_fabrica,
+            **estilo_boton_secundario(),
+        ).pack(side="left", padx=4)
         ctk.CTkButton(marco_btn, text="Guardar cambios", command=self._guardar).pack(
             side="right", padx=4
         )
@@ -291,3 +303,29 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
         self.callback()
         self.destroy()
         messagebox.showinfo("Guardado", "Configuración actualizada.", parent=self.master)
+
+    def _restablecer_fabrica(self) -> None:
+        if not messagebox.askyesno(
+            "Restablecer de fábrica",
+            "¿Restablecer aliases, programas, archivos fuente, documentos y "
+            "demás ajustes a la configuración base guardada?\n\n"
+            "Se conservan el tema de la interfaz y la carpeta de salida.\n"
+            "Esta acción no borra los Excels ya cargados en disco.",
+            parent=self,
+        ):
+            return
+        try:
+            nuevo = restaurar_config_fabrica(self.cfg, self.base)
+        except Exception as exc:
+            messagebox.showerror("Error", str(exc), parent=self)
+            return
+        self.cfg.clear()
+        self.cfg.update(nuevo)
+        merge.aplicar_config(self.cfg, self.base)
+        self.callback()
+        self.destroy()
+        messagebox.showinfo(
+            "Restablecido",
+            "Se restauraron los valores de fábrica.",
+            parent=self.master,
+        )

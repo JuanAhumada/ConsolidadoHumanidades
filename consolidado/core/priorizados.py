@@ -1,3 +1,4 @@
+"""Priorizados propios y cruce con el listado (motivo/detalle en la ficha)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -106,7 +107,9 @@ def procesar_priorizados_internos_psi(ruta: Path) -> list[dict]:
     return list(mapa.values())
 
 
-def cargar_priorizados_internos_psi(cfg: dict, base: Path) -> list[dict]:
+def cargar_priorizados_internos_psi(
+    cfg: dict, base: Path, carpeta: Path | None = None
+) -> list[dict]:
     """Priorizados internos desde la hoja de casos del Excel de Psicología."""
     slot = next(
         (s for s in cfg.get("archivos_fuente", []) if s.get("tipo") == "bd_prio_psi"),
@@ -114,7 +117,8 @@ def cargar_priorizados_internos_psi(cfg: dict, base: Path) -> list[dict]:
     )
     if not slot:
         return []
-    p = carpeta_excels(cfg, base) / slot.get("nombre_guardado", "")
+    origen = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
+    p = origen / slot.get("nombre_guardado", "")
     if not p.is_file():
         return []
     try:
@@ -343,6 +347,8 @@ def _fusionar_entrada_vista(vista: list[dict], ids_vista: set[str], entrada: dic
             )
             if entrada.get("es_propio"):
                 v["es_propio"] = True
+            if "activo" in entrada:
+                v["activo"] = entrada["activo"]
             break
         return
     ids_vista.add(key)
@@ -407,7 +413,7 @@ def obtener_lista_priorizados_vista(cfg: dict, base: Path) -> list[dict]:
             except Exception:
                 pass
 
-    for p in cargar_priorizados_propios(base):
+    for p in cargar_priorizados_propios(base, solo_activos=False):
         key = normalizar_id(p.get("identificacion", ""))
         if not key:
             continue
@@ -421,6 +427,7 @@ def obtener_lista_priorizados_vista(cfg: dict, base: Path) -> list[dict]:
                 "detalle": p.get("detalle") or "",
                 "origen": "Priorizado propio",
                 "es_propio": True,
+                "activo": bool(p.get("activo", True)),
             },
         )
 
@@ -429,6 +436,7 @@ def obtener_lista_priorizados_vista(cfg: dict, base: Path) -> list[dict]:
             key = normalizar_id(v.get("identificacion", ""))
             v["nombre"] = id_to_name.get(key, "")
         v.setdefault("es_propio", v.get("origen") == "Priorizado propio")
+        v.setdefault("activo", True)
         key = normalizar_id(v.get("identificacion", ""))
         v["contactado"] = key in ids_contactados
     return vista

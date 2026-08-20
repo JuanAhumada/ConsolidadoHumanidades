@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Iniciar sesión · Humanidades</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/app.css"/>
+</head>
+<body class="page-login">
+  <main class="login-shell">
+    <section class="login-card">
+      <header class="login-brand">
+        <img class="login-logo" src="/static/favicon.png" alt="" width="64" height="64"/>
+        <p class="login-kicker">Consolidado académico</p>
+        <h1>Humanidades</h1>
+        <p class="login-lead">Inicie sesión para continuar</p>
+      </header>
+      <form class="login-form" method="post" action="/login">
+        <input type="hidden" name="siguiente" value="{{ siguiente or '/' }}"/>
+        {% if flash %}<div class="flash ok">{{ flash }}</div>{% endif %}
+        {% if error %}<div class="flash err">{{ error }}</div>{% endif %}
+        <div class="field">
+          <label for="usuario">Usuario</label>
+          <input id="usuario" type="text" name="usuario" required autocomplete="username" autofocus placeholder="Su usuario"/>
+        </div>
+        <div class="field">
+          <label for="clave">Contraseña</label>
+          <input id="clave" type="password" name="clave" required autocomplete="current-password" placeholder="••••••••"/>
+        </div>
+        <button class="btn" type="submit">Entrar</button>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

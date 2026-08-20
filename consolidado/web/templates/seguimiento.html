@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}Seguimiento{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Seguimiento</h2>
+    <p class="sub">
+      Estudiantes activos con nivel de prioridad ≥ 1.
+      {{ visibles }} visibles de {{ total }} en {{ categoria.titulo|lower }}.
+      {% if meta %}Versión {{ meta.periodo }} · {{ meta.fecha_version }}{% endif %}
+    </p>
+  </div>
+  <div class="segment">
+    <a class="btn sm {% if vista!='pendientes' %}secondary{% endif %}" href="/seguimiento?cat={{ cat }}&amp;vista=pendientes">Pendientes</a>
+    <a class="btn sm {% if vista!='todos' %}secondary{% endif %}" href="/seguimiento?cat={{ cat }}&amp;vista=todos">Todos</a>
+  </div>
+</div>
+
+<nav class="seg-switch" aria-label="Tipo de prioridad">
+  {% for c in categorias %}
+  <a class="{% if c.id==cat %}active{% endif %}" href="/seguimiento?cat={{ c.id }}&amp;vista={{ vista }}">
+    <span class="seg-switch-lbl">{{ c.titulo }}</span>
+    <span class="seg-switch-n">{% if vista=='todos' %}{{ c.n }}{% else %}{{ c.n_pendientes }}{% endif %}</span>
+  </a>
+  {% endfor %}
+</nav>
+
+{% if cat == 'priorizado' %}
+<div class="card seg-panel">
+  <h3>Añadir priorizado propio</h3>
+  <form method="post" action="/priorizados/anadir" class="form-row">
+    <div class="field">
+      <label for="prio-id">Identificación</label>
+      <input id="prio-id" type="text" name="identificacion" required placeholder="Cédula o documento"/>
+    </div>
+    <div class="field">
+      <label for="prio-nombre">Nombre</label>
+      <input id="prio-nombre" type="text" name="nombre" placeholder="Nombre del estudiante"/>
+    </div>
+    <div class="field">
+      <label for="prio-motivo">Motivo</label>
+      <input id="prio-motivo" type="text" name="motivo" value="Priorizado propio"/>
+    </div>
+    <div class="field">
+      <label for="prio-detalle">Detalle</label>
+      <input id="prio-detalle" type="text" name="detalle" placeholder="Nota adicional"/>
+    </div>
+    <div class="form-actions-row">
+      <button class="btn" type="submit">Guardar</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+{% if cat == 'alertas' %}
+<div class="card seg-panel">
+  <h3>Añadir alerta propia</h3>
+  <form method="post" action="/alertas/anadir" class="form-row">
+    <div class="field">
+      <label for="alerta-id">Identificación</label>
+      <input id="alerta-id" type="text" name="identificacion" required placeholder="Cédula o documento"/>
+    </div>
+    <div class="field">
+      <label for="alerta-nombre">Nombre</label>
+      <input id="alerta-nombre" type="text" name="nombre" placeholder="Nombre del estudiante"/>
+    </div>
+    <div class="field" style="grid-column:1/-1;">
+      <label for="alerta-detalle">Detalle</label>
+      <input id="alerta-detalle" type="text" name="detalle" required placeholder="Motivo o nota de la alerta"/>
+    </div>
+    <div class="form-actions-row">
+      <button class="btn" type="submit">Guardar</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="seg-lista">
+  {% for f in filas %}
+  <article class="seg-card {% if f.contactado %}is-marcado{% endif %}" style="{{ f.estilo }}">
+    <button type="button"
+            class="seg-check js-marcar"
+            data-id="{{ f.identificacion }}"
+            data-nombre="{{ f.nombre }}"
+            data-on="{% if f.contactado %}1{% else %}0{% endif %}"
+            aria-pressed="{% if f.contactado %}true{% else %}false{% endif %}">
+      <span class="seg-check-box {% if f.contactado %}is-on{% endif %}" aria-hidden="true"></span>
+      <span class="seg-check-lbl">{% if f.contactado %}Marcado{% else %}Marcar{% endif %}</span>
+    </button>
+    <h3><a href="/estudiante/{{ f.identificacion }}">{{ f.nombre }}</a></h3>
+    <p class="seg-card-score"><strong>{{ f.puntaje_txt }}</strong> {% if cat == 'alertas' %}alertas{% else %}pts{% endif %}</p>
+  </article>
+  {% else %}
+  <div class="card"><p class="muted">No hay estudiantes en esta categoría{% if vista=='pendientes' %} pendientes de marcar{% endif %}.</p></div>
+  {% endfor %}
+</div>
+
+{% if cat == 'alertas' and alertas_propias %}
+<div class="card seg-panel">
+  <h3>Alertas propias</h3>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Identificación</th><th>Nombre</th><th>Detalle</th><th></th></tr></thead>
+      <tbody>
+      {% for a in alertas_propias %}
+        <tr>
+          <td><a href="/estudiante/{{ a.identificacion }}">{{ a.identificacion }}</a></td>
+          <td>{{ a.nombre }}</td>
+          <td>{{ a.detalle }}</td>
+          <td>
+            <form method="post" action="/alertas/quitar">
+              <input type="hidden" name="identificacion" value="{{ a.identificacion }}"/>
+              <button class="btn sm danger" type="submit">Quitar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<form id="form-marcar" method="post" action="/seguimiento/marcar" hidden>
+  <input type="hidden" name="identificacion" id="marcar-id"/>
+  <input type="hidden" name="contactado" id="marcar-on"/>
+  <input type="hidden" name="cat" value="{{ cat }}"/>
+  <input type="hidden" name="vista" value="{{ vista }}"/>
+</form>
+
+<div id="modal-marcar" class="modal-marcar" hidden>
+  <div class="modal-marcar-card" role="dialog" aria-modal="true" aria-labelledby="modal-marcar-titulo">
+    <p class="modal-marcar-kicker" id="modal-marcar-titulo">Confirmar marcado</p>
+    <p class="modal-marcar-nombre" id="modal-marcar-nombre"></p>
+    <p class="modal-marcar-help" id="modal-marcar-help">La marca aplica a todas las categorías de seguimiento.</p>
+    <div class="modal-marcar-acciones">
+      <button type="button" class="btn secondary" id="modal-marcar-no">Cancelar</button>
+      <button type="button" class="btn" id="modal-marcar-si">Confirmar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const modal = document.getElementById("modal-marcar");
+  const titulo = document.getElementById("modal-marcar-titulo");
+  const nombreEl = document.getElementById("modal-marcar-nombre");
+  const helpEl = document.getElementById("modal-marcar-help");
+  const siBtn = document.getElementById("modal-marcar-si");
+  const form = document.getElementById("form-marcar");
+  const idInp = document.getElementById("marcar-id");
+  const onInp = document.getElementById("marcar-on");
+  let pending = null;
+
+  function cerrar() {
+    modal.hidden = true;
+    document.body.style.overflow = "";
+    pending = null;
+  }
+
+  function abrir(btn) {
+    pending = btn;
+    const ya = btn.dataset.on === "1";
+    const nombre = btn.dataset.nombre || btn.dataset.id;
+    titulo.textContent = ya ? "Quitar marca" : "Marcar seguimiento";
+    nombreEl.textContent = nombre;
+    helpEl.textContent = ya
+      ? "Dejará de aparecer como marcado en todas las categorías."
+      : "Quedará marcado en todas las categorías de seguimiento.";
+    siBtn.textContent = ya ? "Quitar marca" : "Marcar";
+    siBtn.classList.toggle("danger", ya);
+    modal.hidden = false;
+    document.body.style.overflow = "hidden";
+    siBtn.focus();
+  }
+
+  document.querySelectorAll(".js-marcar").forEach((btn) => {
+    btn.addEventListener("click", () => abrir(btn));
+  });
+
+  document.getElementById("modal-marcar-no").addEventListener("click", cerrar);
+  modal.addEventListener("click", (ev) => {
+    if (ev.target === modal) cerrar();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && !modal.hidden) cerrar();
+  });
+  siBtn.addEventListener("click", () => {
+    if (!pending) return;
+    const ya = pending.dataset.on === "1";
+    idInp.value = pending.dataset.id;
+    onInp.value = ya ? "0" : "1";
+    pending = null;
+    form.submit();
+  });
+})();
+</script>
+{% endblock %}

@@ -145,14 +145,6 @@ class DialogoVersiones(ctk.CTkToplevel):
         ).pack(side="left", padx=(0, 8))
         ctk.CTkButton(
             barra,
-            text="Vista web",
-            width=110,
-            height=36,
-            command=self._abrir_html,
-            **estilo_boton_secundario(),
-        ).pack(side="left", padx=(0, 8))
-        ctk.CTkButton(
-            barra,
             text="Exportar de nuevo",
             width=150,
             height=36,
@@ -237,44 +229,6 @@ class DialogoVersiones(ctk.CTkToplevel):
             )
             return
         abrir_archivo_en_sistema(ruta, parent=self)
-
-    def _abrir_html(self) -> None:
-        from consolidado.core.html_export import (
-            guardar_html_consolidado,
-            ruta_html_desde_excel,
-        )
-
-        v = self._version_seleccionada()
-        if not v:
-            messagebox.showwarning("Versiones", "Seleccione una versión de la lista.", parent=self)
-            return
-        ruta_html = None
-        ruta_rel = v.get("ruta_excel")
-        if ruta_rel:
-            excel = Path(ruta_rel)
-            if not excel.is_absolute():
-                excel = self.base / excel
-            candidato = ruta_html_desde_excel(excel)
-            if candidato.is_file():
-                ruta_html = candidato
-        if ruta_html is None:
-            try:
-                meta = obtener_version(v["id"], self.base)
-                if meta is None:
-                    raise ValueError("Versión no encontrada.")
-                df = cargar_dataframe_version(v["id"], self.base)
-                destino = self.base / "salida" / f"vista_web_{meta['periodo']}_{meta['id']}.html"
-                ruta_html = guardar_html_consolidado(
-                    df,
-                    destino,
-                    cfg=self.cfg,
-                    num_materias=meta.get("num_materias"),
-                    titulo=f"Consolidado · {meta['periodo']} · {meta['fecha_version']}",
-                )
-            except Exception as exc:
-                messagebox.showerror("Vista web", str(exc), parent=self)
-                return
-        abrir_archivo_en_sistema(ruta_html, parent=self)
 
     def _exportar(self) -> None:
         v = self._version_seleccionada()

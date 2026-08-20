@@ -1,3 +1,9 @@
+"""
+Normalización de celdas: id, teléfonos, fechas, programas, periodo.
+
+formatear_periodo_cod: 20261 → 2026-1 (año 1990–2099, último dígito 1 o 2).
+normalizar_id quita espacios y decimales de Excel.
+"""
 from __future__ import annotations
 
 import re
@@ -143,11 +149,17 @@ def programa_esta_excluido(val) -> bool:
 def programa_es_permitido(val) -> bool:
     if _es_nulo(val):
         return False
-    if programa_esta_excluido(val):
-        return False
     if not _PROGRAMAS_PERMITIDOS_RUNTIME:
         aplicar_config()
-    return normalizar_encabezado(str(val)) in _PROGRAMAS_PERMITIDOS_RUNTIME
+    partes = [p.strip() for p in str(val).split("|") if p.strip()]
+    if not partes:
+        return False
+    for parte in partes:
+        if programa_esta_excluido(parte):
+            continue
+        if normalizar_encabezado(parte) in _PROGRAMAS_PERMITIDOS_RUNTIME:
+            return True
+    return False
 
 def _es_valor_true(val) -> bool:
     if _es_nulo(val):
@@ -158,6 +170,20 @@ def _es_valor_true(val) -> bool:
         return val == 1
     return str(val).strip().lower() in ("true", "verdadero", "si", "sí", "1")
 
+
+def es_estudiante_activo(val) -> bool:
+    """True si no está marcado como graduado/inactivo. Sin valor se asume activo."""
+    if _es_nulo(val):
+        return True
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return val != 0
+    texto = str(val).strip().lower()
+    if texto in {"false", "0", "no", "n", "f", "inactivo"}:
+        return False
+    return True
+
 def normalizar_id(val) -> str:
     if _es_nulo(val):
         return ""
@@ -167,6 +193,58 @@ def normalizar_id(val) -> str:
     s = str(val).strip()
     s = re.sub(r"\s+", "", s)
     return s
+
+
+_RE_PERIODO_ETIQUETA = re.compile(r"^(19|20)\d{2}\s*[-–/\s]\s*([12])$")
+_ANIO_PERIODO_MIN = 1990
+_ANIO_PERIODO_MAX = 2099
+
+
+def formatear_periodo_cod(val) -> str | None:
+    """COD_PERIODO / COD_PENSUM de 5 dígitos (YYYY + 1|2) → 'YYYY-N'."""
+    if _es_nulo(val):
+        return None
+    if isinstance(val, bool):
+        return None
+    if isinstance(val, float) and val == int(val):
+        val = int(val)
+    texto = str(val).strip()
+    if not texto or texto.lower() in ("nan", "none", "-", "—"):
+        return None
+    m = _RE_PERIODO_ETIQUETA.match(texto)
+    if m:
+        anio = int(texto[:4])
+        if _ANIO_PERIODO_MIN <= anio <= _ANIO_PERIODO_MAX:
+            return f"{anio}-{m.group(2)}"
+    digitos = re.sub(r"\D", "", texto)
+    if len(digitos) == 5:
+        anio = int(digitos[:4])
+        per = digitos[4]
+        if _ANIO_PERIODO_MIN <= anio <= _ANIO_PERIODO_MAX and per in "12":
+            return f"{anio}-{per}"
+    return None
+
+
+def _clave_periodo(periodo: str) -> tuple[int, int] | None:
+    m = re.match(r"^(\d{4})-([12])$", periodo or "")
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2))
+
+
+def periodo_mas_reciente(valores: list) -> str | None:
+    """Elige el periodo YYYY-N más reciente entre varios orígenes."""
+    mejores: list[tuple[tuple[int, int], str]] = []
+    for v in valores:
+        f = formatear_periodo_cod(v)
+        if not f:
+            continue
+        clave = _clave_periodo(f)
+        if clave:
+            mejores.append((clave, f))
+    if not mejores:
+        return None
+    return max(mejores, key=lambda item: item[0])[1]
 
 def _mapa_norm_a_real(columns: list[str]) -> dict[str, str]:
     return {normalizar_encabezado(c): c for c in columns}
@@ -263,6 +341,23 @@ def sumar_montos_beca(valores: list) -> int | float | None:
     if not encontrado:
         return None
     return int(total) if total == int(total) else total
+
+
+def formatear_monto_beca_vista(val) -> str | None:
+    """Muestra un monto de beca como '$ 1.234.567' (puntos de miles)."""
+    monto = parsear_monto_beca(val)
+    if monto is None:
+        return None
+    negativo = monto < 0
+    monto = abs(monto)
+    entero = int(monto)
+    frac = round(monto - entero, 2)
+    cuerpo = f"{entero:,}".replace(",", ".")
+    if frac:
+        centavos = f"{frac:.2f}".split(".")[1]
+        cuerpo = f"{cuerpo},{centavos}"
+    prefijo = "-$ " if negativo else "$ "
+    return f"{prefijo}{cuerpo}"
 
 def _digitos_a_entero_str(digits: str) -> str | None:
     if not digits:

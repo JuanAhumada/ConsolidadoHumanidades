@@ -1,4 +1,13 @@
-"""Paquete consolidado: fusión de Excels de estudiantes."""
+"""
+Paquete consolidado: fusión de Excels de estudiantes.
+
+Subpaquetes:
+- config: JSON vivo + defaults
+- core: pipeline y reglas
+- storage: SQLite y marcas globales
+- web: FastAPI (interfaz principal)
+- gui: escritorio (legado)
+"""
 
 from consolidado.config.settings import (
     ARCHIVOS_FUENTE_REQUERIDOS,

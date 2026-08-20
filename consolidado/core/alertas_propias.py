@@ -1,4 +1,4 @@
-"""Aplicación de alertas propias al consolidado."""
+"""Cruza alertas propias del SQL al DataFrame antes de persistir la versión."""
 
 from __future__ import annotations
 

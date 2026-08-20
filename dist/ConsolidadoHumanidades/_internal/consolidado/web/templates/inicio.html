@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Inicio{% endblock %}
+{% block body_class %}page-landing{% endblock %}
+{% block content %}
+<section class="land-hero">
+  <div class="land-hero-copy">
+    <p class="hub-kicker">Facultad de Ciencias Humanas y Sociales</p>
+    <h2>El consolidado de estudiantes, en un solo lugar</h2>
+    <p class="land-lead">Fusione los Excel de matrícula, priorizados, becas y alertas. Consulte fichas, haga seguimiento y vea cómo va la facultad frente a sus metas.</p>
+    <form class="hub-search" method="get" action="/estudiante">
+      <input type="search" name="q" placeholder="Buscar por cédula o nombre…" aria-label="Buscar estudiante"/>
+      <button class="btn" type="submit">Buscar</button>
+    </form>
+    <div class="land-hero-actions">
+      <a class="btn" href="/seguimiento">Ir a seguimiento</a>
+      <a class="btn secondary" href="/metas">Ver metas</a>
+    </div>
+    {% if es_admin %}
+    {% if estado.listo_generar %}
+    <div class="hub-banner ok">Listo para generar el consolidado. Los archivos obligatorios ya están cargados.</div>
+    {% else %}
+    <div class="hub-banner warn">Aún no está listo para generar: faltan {{ estado.obligatorios_total - estado.obligatorios_listos }} de {{ estado.obligatorios_total }} archivos obligatorios. Revise <a href="/archivos">Data</a>.</div>
+    {% endif %}
+    {% endif %}
+    <p class="land-pulse">
+      <strong>{{ estado.num_estudiantes_distintos }}</strong> estudiantes distintos en el histórico
+      {% if estado.ultima %}
+      · <strong>{{ estado.ultima.num_estudiantes }}</strong> en la última versión ({{ estado.ultima.fecha_version }})
+      {% else %}
+      · todavía no hay una versión generada
+      {% endif %}
+    </p>
+  </div>
+</section>
+
+<section class="land-steps" aria-label="Cómo funciona">
+  <article>
+    <span>1</span>
+    <div>
+      <h3>Cargar</h3>
+      <p>El admin sube los Excel de base, priorizado, rendimiento y alertas en Data.</p>
+    </div>
+  </article>
+  <article>
+    <span>2</span>
+    <div>
+      <h3>Generar</h3>
+      <p>El pipeline cruza por documento, calcula prioridad y guarda una versión nueva.</p>
+    </div>
+  </article>
+  <article>
+    <span>3</span>
+    <div>
+      <h3>Consultar</h3>
+      <p>La ficha, el seguimiento y las gráficas leen ese corte. El histórico no se pierde.</p>
+    </div>
+  </article>
+</section>
+
+<section class="land-showcase" aria-label="Qué puede hacer">
+  <a class="land-card" href="/estudiante">
+    <figure class="land-shot">
+      <img src="/static/landing/ficha.jpg" alt=""/>
+    </figure>
+    <div class="land-copy">
+      <p class="hub-kicker">Consulta</p>
+      <h3>Ficha de cada estudiante</h3>
+      <p>Cédula o nombre, contacto, beca, priorizado, alertas, ruta de grado y horario del periodo actual.</p>
+    </div>
+  </a>
+  <a class="land-card" href="/seguimiento">
+    <figure class="land-shot">
+      <img src="/static/landing/seguimiento.jpg" alt=""/>
+    </figure>
+    <div class="land-copy">
+      <p class="hub-kicker">Prioridad</p>
+      <h3>Seguimiento</h3>
+      <p>Quienes tienen nivel 1 o más, por componente. Marque a los contactados.</p>
+    </div>
+  </a>
+  <a class="land-card" href="/graficas">
+    <figure class="land-shot">
+      <img src="/static/landing/graficas.jpg" alt=""/>
+    </figure>
+    <div class="land-copy">
+      <p class="hub-kicker">Tablero</p>
+      <h3>Gráficas</h3>
+      <p>Hasta cuatro visualizaciones. Compare programas, niveles o cualquier columna.</p>
+    </div>
+  </a>
+  <a class="land-card" href="/metas">
+    <figure class="land-shot">
+      <img src="/static/landing/metas.jpg" alt=""/>
+    </figure>
+    <div class="land-copy">
+      <p class="hub-kicker">Facultad</p>
+      <h3>Metas</h3>
+      <p>Graduación y permanencia por periodo: población, meta, alcanzado y si se cumple.</p>
+    </div>
+  </a>
+</section>
+
+<section class="land-foot">
+  <p>Los colores de fila del Excel no son los mismos que el acento de la aplicación. <a href="/colores">Vea qué significa cada color</a>.</p>
+  {% if es_admin %}
+  <p class="hub-admin"><a href="/archivos">Data</a> · <a href="/versiones">Versiones</a> · <a href="/config">Configuración</a> · <a href="/usuarios">Usuarios</a></p>
+  {% endif %}
+</section>
+{% endblock %}

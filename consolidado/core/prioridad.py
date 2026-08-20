@@ -1,12 +1,22 @@
-"""Cálculo de puntaje y nivel de prioridad por estudiante."""
+"""
+Puntaje y nivel de prioridad.
+
+Suma componentes (beca, priorizado, repitiendo, reintegro, propio, activación,
+ruta de grado) y asigna color de fila. Cambiar pesos o umbrales solo aquí.
+"""
 
 from __future__ import annotations
 
 import polars as pl
 
-from consolidado.config.settings import COLORES_PRIORIDAD_DEFAULT, COLORES_PRIORIDAD_LEGACY
+from consolidado.config.settings import (
+    COLORES_PRIORIDAD_DEFAULT,
+    COLORES_PRIORIDAD_LEGACY,
+    COLUMNAS_RUTA_GRADO,
+)
 from consolidado.core.constants import (
     COL_ACTIVACION_RUTA,
+    COL_ACTIVOS,
     COL_AJUSTE_RAZONABLE,
     COL_DETALLE_PRIORIDAD,
     COL_FUNCIONARIO_BECA,
@@ -17,6 +27,7 @@ from consolidado.core.constants import (
     COL_PTJE_PROPIO,
     COL_PTJE_REINTEGRO,
     COL_PTJE_REPITIENDO,
+    COL_PTJE_RUTA,
     COL_PUNTAJE_PRIORIDAD,
     COL_REPITIENDO,
     COL_TOTAL_BECA,
@@ -27,7 +38,9 @@ from consolidado.core.constants import (
 from consolidado.core.normalizacion import (
     _es_nulo,
     _es_valor_true,
+    es_estudiante_activo,
     es_responsable_beca_especial,
+    normalizar_encabezado,
     normalizar_id,
     parsear_monto_beca,
 )
@@ -89,6 +102,11 @@ METADATA_COLORES_FILA: list[dict] = [
         "nota": "Repitiendo como componente con puntaje más alto (tono distinto al reintegro).",
     },
     {
+        "clave": "ruta",
+        "etiqueta": "Esmeralda",
+        "nota": "Ruta de grado como componente con puntaje más alto.",
+    },
+    {
         "clave": "amarillo",
         "etiqueta": "Amarillo",
         "nota": "2 o más componentes empatados con puntaje 2.",
@@ -112,6 +130,7 @@ _COMPONENTES_PUNTAJE = (
     "reintegro",
     "propio",
     "activacion",
+    "ruta",
 )
 
 _COMPONENTE_A_COLOR: dict[str, str] = {
@@ -121,9 +140,10 @@ _COMPONENTE_A_COLOR: dict[str, str] = {
     "repitiendo": "repitiendo",
     "reintegro": "reintegro",
     "activacion": "rojo",
+    "ruta": "ruta",
 }
 
-_VALOR_MAX_COMPONENTE: dict[str, int] = {
+_VALOR_MAX_COMPONENTE: dict[str, float] = {
     "beca": 3,
     "priorizado": (
         PESO_DISCAPACIDAD
@@ -135,7 +155,16 @@ _VALOR_MAX_COMPONENTE: dict[str, int] = {
     "reintegro": 3,
     "propio": PESO_PRIORIZADO_PROPIO,
     "activacion": PESO_ACTIVACION_RUTA,
+    "ruta": 4,
 }
+
+_COL_PCT_CREDITOS = COLUMNAS_RUTA_GRADO[0]
+_COL_ESTADO_OPCION = COLUMNAS_RUTA_GRADO[1]
+_COL_ESTADO_INGLES = COLUMNAS_RUTA_GRADO[3]
+_COL_SABER_PRO = COLUMNAS_RUTA_GRADO[4]
+_ESTADOS_FINALIZADO = frozenset({"finalizado"})
+_ESTADOS_MATRICULADO = frozenset({"matriculado"})
+_ESTADOS_PAGADO = frozenset({"pagado"})
 
 BLOQUES_PUNTUACION_GUI: list[dict] = [
     {
@@ -184,10 +213,22 @@ BLOQUES_PUNTUACION_GUI: list[dict] = [
         "nota": None,
         "items": [{"etiqueta": "Activación de ruta = Sí", "puntos": PESO_ACTIVACION_RUTA}],
     },
+    {
+        "titulo": "Ruta de grado",
+        "nota": "Suma créditos, opción de grado, inglés y Saber Pro. Umbrales estrictos (> 90 % / > 70 %).",
+        "items": [
+            {"etiqueta": "% créditos aprobados > 90", "puntos": 1},
+            {"etiqueta": "% créditos aprobados > 70 y ≤ 90", "puntos": 0.5},
+            {"etiqueta": "Opción de grado / inglés Finalizado", "puntos": 1},
+            {"etiqueta": "Opción de grado / inglés Matriculado", "puntos": 0.5},
+            {"etiqueta": "Saber Pro Finalizado", "puntos": 1},
+            {"etiqueta": "Saber Pro Pagado", "puntos": 0.5},
+        ],
+    },
 ]
 
 FORMULA_PUNTAJE_GUI = (
-    "Puntaje prioridad = Beca + Priorizado + Repitiendo + Reintegro + Propio + Activación"
+    "Puntaje prioridad = Beca + Priorizado + Repitiendo + Reintegro + Propio + Activación + Ruta"
 )
 
 
@@ -287,37 +328,38 @@ def _tono_color(base_hex: str, valor: int, valor_max: int) -> str:
     return _mezclar_hex(claro, base_hex, ratio)
 
 
-def _entero_componente(val) -> int:
+def _numero_componente(val) -> float:
     if _es_nulo(val):
-        return 0
+        return 0.0
     try:
-        return max(0, int(val))
+        return max(0.0, float(val))
     except (TypeError, ValueError):
-        return 0
+        return 0.0
 
 
-def _puntajes_componentes_fila(row: dict) -> dict[str, int]:
+def _puntajes_componentes_fila(row: dict) -> dict[str, float]:
     return {
-        "beca": _entero_componente(row.get(COL_PTJE_BECA)),
-        "priorizado": _entero_componente(row.get(COL_PTJE_PRIORIZADO)),
-        "repitiendo": _entero_componente(row.get(COL_PTJE_REPITIENDO)),
-        "reintegro": _entero_componente(row.get(COL_PTJE_REINTEGRO)),
-        "propio": _entero_componente(row.get(COL_PTJE_PROPIO)),
-        "activacion": _entero_componente(row.get(COL_PTJE_ACTIVACION)),
+        "beca": _numero_componente(row.get(COL_PTJE_BECA)),
+        "priorizado": _numero_componente(row.get(COL_PTJE_PRIORIZADO)),
+        "repitiendo": _numero_componente(row.get(COL_PTJE_REPITIENDO)),
+        "reintegro": _numero_componente(row.get(COL_PTJE_REINTEGRO)),
+        "propio": _numero_componente(row.get(COL_PTJE_PROPIO)),
+        "activacion": _numero_componente(row.get(COL_PTJE_ACTIVACION)),
+        "ruta": _numero_componente(row.get(COL_PTJE_RUTA)),
     }
 
 
-def _beca_especial_fila(row: dict, puntajes: dict[str, int]) -> bool:
+def _beca_especial_fila(row: dict, puntajes: dict[str, float]) -> bool:
     return puntajes["beca"] > 0 and _funcionario_reduce_beca(row.get(COL_FUNCIONARIO_BECA))
 
 
-def _solo_beca_especial(puntajes: dict[str, int], row: dict) -> bool:
+def _solo_beca_especial(puntajes: dict[str, float], row: dict) -> bool:
     if not _beca_especial_fila(row, puntajes):
         return False
     return not any(puntajes[nombre] > 0 for nombre in _COMPONENTES_PUNTAJE if nombre != "beca")
 
 
-def _puntajes_para_color(puntajes: dict[str, int], row: dict) -> dict[str, int]:
+def _puntajes_para_color(puntajes: dict[str, float], row: dict) -> dict[str, float]:
     """Excluye beca 0/NO/Call Center de la competencia si hay otra señal."""
     ajustados = dict(puntajes)
     if _beca_especial_fila(row, puntajes) and not _solo_beca_especial(puntajes, row):
@@ -325,7 +367,7 @@ def _puntajes_para_color(puntajes: dict[str, int], row: dict) -> dict[str, int]:
     return ajustados
 
 
-def _componentes_en_maximo(puntajes: dict[str, int]) -> list[str]:
+def _componentes_en_maximo(puntajes: dict[str, float]) -> list[str]:
     maximo = max(puntajes.values(), default=0)
     if maximo <= 0:
         return []
@@ -488,7 +530,77 @@ def _puntos_activacion(val) -> int:
     return PESO_ACTIVACION_RUTA if _es_priorizado(val) else 0
 
 
-def _nivel_desde_puntaje(puntaje: int, ptje_activacion: int) -> int:
+def fmt_pts(n: float | int) -> str:
+    """1 → '1'; 0.5 → '0.5'; 1.5 → '1.5'."""
+    valor = float(n)
+    if abs(valor - round(valor)) < 1e-9:
+        return str(int(round(valor)))
+    return f"{valor:.1f}"
+
+
+def _pct_creditos_num(val) -> float:
+    if _es_nulo(val):
+        return 0.0
+    if isinstance(val, bool):
+        return 0.0
+    if isinstance(val, (int, float)):
+        n = float(val)
+        if -1.5 <= n <= 1.5:
+            n *= 100
+        return n
+    texto = str(val).strip().replace("%", "").replace(",", ".")
+    texto = " ".join(texto.split())
+    try:
+        n = float(texto)
+    except ValueError:
+        return 0.0
+    if -1.5 <= n <= 1.5:
+        n *= 100
+    return n
+
+
+def _puntos_pct_creditos(val) -> float:
+    pct = _pct_creditos_num(val)
+    if pct > 90:
+        return 1.0
+    if pct > 70:
+        return 0.5
+    return 0.0
+
+
+def _puntos_estado_ruta(val, *, uno: frozenset[str], medio: frozenset[str]) -> float:
+    if _es_nulo(val):
+        return 0.0
+    estado = normalizar_encabezado(val)
+    if estado in uno:
+        return 1.0
+    if estado in medio:
+        return 0.5
+    return 0.0
+
+
+def _puntos_ruta(row: dict) -> float:
+    return (
+        _puntos_pct_creditos(row.get(_COL_PCT_CREDITOS))
+        + _puntos_estado_ruta(
+            row.get(_COL_ESTADO_OPCION),
+            uno=_ESTADOS_FINALIZADO,
+            medio=_ESTADOS_MATRICULADO,
+        )
+        + _puntos_estado_ruta(
+            row.get(_COL_ESTADO_INGLES),
+            uno=_ESTADOS_FINALIZADO,
+            medio=_ESTADOS_MATRICULADO,
+        )
+        + _puntos_estado_ruta(
+            row.get(_COL_SABER_PRO),
+            uno=_ESTADOS_FINALIZADO,
+            medio=_ESTADOS_PAGADO,
+        )
+    )
+
+
+def _nivel_desde_puntaje(puntaje: float, ptje_activacion: int) -> int:
     if ptje_activacion >= PESO_ACTIVACION_RUTA:
         return 5
     if puntaje >= 10:
@@ -509,24 +621,45 @@ def _detalle_componentes(
     ptje_reint: int,
     ptje_propio: int,
     ptje_act: int,
+    ptje_ruta: float,
 ) -> str:
     partes: list[str] = []
     if ptje_beca:
-        partes.append(f"Beca={ptje_beca}")
+        partes.append(f"Beca={fmt_pts(ptje_beca)}")
     if ptje_prio:
-        partes.append(f"Priorizado={ptje_prio}")
+        partes.append(f"Priorizado={fmt_pts(ptje_prio)}")
     if ptje_rep:
-        partes.append(f"Repitiendo={ptje_rep}")
+        partes.append(f"Repitiendo={fmt_pts(ptje_rep)}")
     if ptje_reint:
-        partes.append(f"Reintegro={ptje_reint}")
+        partes.append(f"Reintegro={fmt_pts(ptje_reint)}")
     if ptje_propio:
-        partes.append(f"Propio={ptje_propio}")
+        partes.append(f"Propio={fmt_pts(ptje_propio)}")
     if ptje_act:
-        partes.append(f"Activación={ptje_act}")
+        partes.append(f"Activación={fmt_pts(ptje_act)}")
+    if ptje_ruta:
+        partes.append(f"Ruta={fmt_pts(ptje_ruta)}")
     return "; ".join(partes)
 
 
+def _prioridad_nula(*, detalle: str | None = None) -> dict:
+    return {
+        COL_PTJE_BECA: 0,
+        COL_PTJE_PRIORIZADO: 0,
+        COL_PTJE_REPITIENDO: 0,
+        COL_PTJE_REINTEGRO: 0,
+        COL_PTJE_PROPIO: 0,
+        COL_PTJE_ACTIVACION: 0,
+        COL_PTJE_RUTA: 0.0,
+        COL_PUNTAJE_PRIORIDAD: 0,
+        COL_NIVEL_PRIORIDAD: 0,
+        COL_DETALLE_PRIORIDAD: detalle,
+    }
+
+
 def _calcular_prioridad_fila(row: dict, ids_propios: set[str]) -> dict:
+    if not es_estudiante_activo(row.get(COL_ACTIVOS)):
+        return _prioridad_nula(detalle="Graduado")
+
     id_key = normalizar_id(row.get("Identificación"))
     motivo = row.get("Motivo Prio.")
     es_propio = _es_priorizado_propio(motivo, id_key, ids_propios)
@@ -540,10 +673,13 @@ def _calcular_prioridad_fila(row: dict, ids_propios: set[str]) -> dict:
     ptje_reint = _puntos_reintegro(row.get("Reintegros"))
     ptje_propio = _puntos_propio(es_propio)
     ptje_act = _puntos_activacion(row.get(COL_ACTIVACION_RUTA))
+    ptje_ruta = _puntos_ruta(row)
 
-    puntaje = ptje_beca + ptje_prio + ptje_rep + ptje_reint + ptje_propio + ptje_act
+    puntaje = (
+        ptje_beca + ptje_prio + ptje_rep + ptje_reint + ptje_propio + ptje_act + ptje_ruta
+    )
     detalle = _detalle_componentes(
-        ptje_beca, ptje_prio, ptje_rep, ptje_reint, ptje_propio, ptje_act
+        ptje_beca, ptje_prio, ptje_rep, ptje_reint, ptje_propio, ptje_act, ptje_ruta
     )
 
     return {
@@ -553,6 +689,7 @@ def _calcular_prioridad_fila(row: dict, ids_propios: set[str]) -> dict:
         COL_PTJE_REINTEGRO: ptje_reint,
         COL_PTJE_PROPIO: ptje_propio,
         COL_PTJE_ACTIVACION: ptje_act,
+        COL_PTJE_RUTA: ptje_ruta,
         COL_PUNTAJE_PRIORIDAD: puntaje,
         COL_NIVEL_PRIORIDAD: _nivel_desde_puntaje(puntaje, ptje_act),
         COL_DETALLE_PRIORIDAD: detalle or None,
@@ -568,8 +705,8 @@ def aplicar_prioridad(
         return consolidado
 
     ids = ids_propios or set()
-    componentes: dict[str, list[int]] = {col: [] for col in COLUMNAS_PUNTAJE_COMPONENTES}
-    puntajes: list[int] = []
+    componentes: dict[str, list] = {col: [] for col in COLUMNAS_PUNTAJE_COMPONENTES}
+    puntajes: list[float] = []
     niveles: list[int] = []
     detalles: list[str | None] = []
 
@@ -582,12 +719,16 @@ def aplicar_prioridad(
         detalles.append(calc[COL_DETALLE_PRIORIDAD])
 
     columnas_nuevas = [
-        pl.Series(col, vals, dtype=pl.Int32).alias(col)
+        pl.Series(
+            col,
+            vals,
+            dtype=pl.Float64 if col == COL_PTJE_RUTA else pl.Int32,
+        ).alias(col)
         for col, vals in componentes.items()
     ]
     columnas_nuevas.extend(
         [
-            pl.Series(COL_PUNTAJE_PRIORIDAD, puntajes, dtype=pl.Int32),
+            pl.Series(COL_PUNTAJE_PRIORIDAD, puntajes, dtype=pl.Float64),
             pl.Series(COL_NIVEL_PRIORIDAD, niveles, dtype=pl.Int8),
             pl.Series(COL_DETALLE_PRIORIDAD, detalles, dtype=pl.Utf8),
         ]

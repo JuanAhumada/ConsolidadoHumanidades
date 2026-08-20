@@ -1,4 +1,4 @@
-"""Persistencia de alertas propias (SQLite)."""
+"""Alertas propias (global por identificación). Se mezclan al generar y en la ficha."""
 
 from __future__ import annotations
 

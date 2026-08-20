@@ -1,4 +1,10 @@
-"""Carga y guardado de configuración JSON para el consolidado de estudiantes."""
+"""
+Carga y guardado de config.json.
+
+COLUMNAS_* alimentan grupos_salida. ALIASES_DEFAULT mapea encabezados de Excel.
+_fusionar_grupos_salida añade columnas nuevas del default al JSON existente
+(por eso Periodo actual aparece sin reescribir a mano el archivo).
+"""
 
 from __future__ import annotations
 
@@ -11,17 +17,20 @@ from typing import Any
 from consolidado.paths import PROJECT_ROOT
 
 CONFIG_FILENAME = "config.json"
+CONFIG_FABRICA_FILENAME = "config_fabrica.json"
 CARPETA_EXCELS_DEFAULT = "datos/entrada"
 
 COLUMNAS_DATOS = [
     "Identificación",
     "Nombre y apellidos",
+    "Activos",
     "Fecha de nacimiento",
     "Teléfono celular",
     "Programa",
     "Correo institucional",
     "Correo personal",
     "Periodo ingreso",
+    "Periodo actual",
     "Reintegros",
     "Lugar de nacimiento",
     "Lugar de residencia",
@@ -43,6 +52,7 @@ COLUMNAS_PUNTAJE_COMPONENTES = [
     "Ptje Reintegro",
     "Ptje Propio",
     "Ptje Activacion",
+    "Ptje Ruta",
 ]
 
 COLUMNAS_PRIORIDAD = [
@@ -71,6 +81,14 @@ COLUMNAS_ALERTAS_PROPIAS = [
     "Detalle Propio",
 ]
 
+COLUMNAS_RUTA_GRADO = [
+    "% créditos aprobados",
+    "Estado opción de grado",
+    "Opción de grado",
+    "Estado de inglés",
+    "Saber Pro",
+]
+
 ETIQUETAS_EXPORT_COLUMNAS: dict[str, str] = {
     "Ptje Beca": "Beca",
     "Ptje Priorizado": "Priorizado",
@@ -78,6 +96,7 @@ ETIQUETAS_EXPORT_COLUMNAS: dict[str, str] = {
     "Ptje Reintegro": "Reintegro",
     "Ptje Propio": "Propio",
     "Ptje Activacion": "Activacion",
+    "Ptje Ruta": "Ruta",
 }
 
 CATEGORIAS_FUENTE_DEFAULT: dict[str, str] = {
@@ -153,6 +172,16 @@ ALIASES_DEFAULT: dict[str, list[str]] = {
         "año ingreso",
         "ano ingreso",
     ],
+    "periodo_actual": [
+        "cod periodo",
+        "codigo periodo",
+        "cod_periodo",
+        "ultimo periodo inscrito",
+        "periodo ultima matricula",
+        "cod pensum",
+        "codigo pensum",
+        "cod_pensum",
+    ],
     "periodo_ultima_matricula": ["periodo ultima matricula"],
     "reintegros": ["reintegros"],
     "lugar_nacimiento": ["lugar de nacimiento", "lugar nacimiento"],
@@ -218,6 +247,7 @@ COLORES_PRIORIDAD_DEFAULT = {
     "naranja": "E67E22",
     "reintegro": "2980B9",
     "repitiendo": "5DADE2",
+    "ruta": "1ABC9C",
     "amarillo": "F1C40F",
     "verde": "2ECC71",
     "gris": "BDC3C7",
@@ -290,6 +320,14 @@ ARCHIVOS_FUENTE_DEFAULT = [
         "hoja": "Hoja1",
     },
     {
+        "id": "bd_permanencia",
+        "categoria": "rendimiento",
+        "titulo": "Permanencia y ruta de grado",
+        "tipo": "bd_permanencia",
+        "nombre_guardado": "bd_permanencia.xlsx",
+        "requerido": False,
+    },
+    {
         "id": "bd_alertas_com_1",
         "categoria": "alertas",
         "titulo": "Alertas Comunicación — inicial",
@@ -349,6 +387,7 @@ def config_default(base: Path | None = None) -> dict[str, Any]:
                 "columnas": list(COLUMNAS_PRIORIZADO) + list(COLUMNAS_PRIORIZADO_ENRIQUECIDO),
             },
             {"nombre": "Becas", "columnas": list(COLUMNAS_BECAS)},
+            {"nombre": "Ruta de grado", "columnas": list(COLUMNAS_RUTA_GRADO)},
             {
                 "nombre": "Alertas",
                 "columnas": list(COLUMNAS_ALERTAS) + list(COLUMNAS_ALERTAS_PROPIAS),
@@ -377,8 +416,59 @@ def ruta_config(base: Path | None = None) -> Path:
     return base / CONFIG_FILENAME
 
 
+def ruta_config_fabrica(base: Path | None = None) -> Path:
+    base = base or PROJECT_ROOT
+    return base / CONFIG_FABRICA_FILENAME
+
+
+def asegurar_config_fabrica(base: Path | None = None) -> Path:
+    """
+    Guarda una copia de la configuración base (valores de fábrica) si aún no existe.
+    No sobrescribe una fábrica ya guardada.
+    """
+    base = base or PROJECT_ROOT
+    path = ruta_config_fabrica(base)
+    if not path.is_file():
+        fabrica = config_default(base)
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(fabrica, f, ensure_ascii=False, indent=2)
+    return path
+
+
+def cargar_config_fabrica(base: Path | None = None) -> dict[str, Any]:
+    base = base or PROJECT_ROOT
+    asegurar_config_fabrica(base)
+    path = ruta_config_fabrica(base)
+    with path.open(encoding="utf-8") as f:
+        data = json.load(f)
+    return _fusionar_con_default(data, config_default(base))
+
+
+def restaurar_config_fabrica(
+    cfg_actual: dict[str, Any] | None = None,
+    base: Path | None = None,
+    *,
+    preservar_interfaz: bool = True,
+    preservar_salida: bool = True,
+) -> dict[str, Any]:
+    """
+    Restablece config.json a los valores de fábrica.
+    Conserva por defecto modo de apariencia y carpeta de salida.
+    """
+    base = base or PROJECT_ROOT
+    fabrica = cargar_config_fabrica(base)
+    actual = cfg_actual or {}
+    if preservar_interfaz and isinstance(actual.get("interfaz"), dict):
+        fabrica["interfaz"] = deepcopy(actual["interfaz"])
+    if preservar_salida and isinstance(actual.get("salida"), dict):
+        fabrica["salida"] = deepcopy(actual["salida"])
+    guardar_config(fabrica, base)
+    return fabrica
+
+
 def cargar_config(base: Path | None = None) -> dict[str, Any]:
     base = base or PROJECT_ROOT
+    asegurar_config_fabrica(base)
     path = ruta_config(base)
     if not path.is_file():
         cfg = config_default(base)
@@ -434,7 +524,7 @@ def _fusionar_grupos_salida(
             continue
         if nombre in por_nombre:
             existente = por_nombre[nombre]
-            if nombre in ("Alertas", "Priorizados", "Prioridad", "Puntaje", "Becas"):
+            if nombre in ("Alertas", "Priorizados", "Prioridad", "Puntaje", "Becas", "Ruta de grado"):
                 existente["columnas"] = list(grupo.get("columnas", []))
             else:
                 cols = [c for c in existente.get("columnas", []) if c not in _COLUMNAS_ALERTAS_LEGACY]
@@ -567,6 +657,7 @@ ALIAS_ETIQUETAS: dict[str, str] = {
     "correo_institucional": "Correo institucional",
     "correo_personal": "Correo personal",
     "periodo_ingreso": "Periodo ingreso",
+    "periodo_actual": "Periodo actual",
     "periodo_ultima_matricula": "Periodo última matrícula",
     "reintegros": "Reintegros",
     "lugar_nacimiento": "Lugar de nacimiento",

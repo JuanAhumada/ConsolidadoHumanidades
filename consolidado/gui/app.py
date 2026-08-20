@@ -1,4 +1,4 @@
-"""Ventana principal — interfaz tipo aplicación web (CustomTkinter)."""
+"""Ventana principal CustomTkinter. Preferir la web salvo mantenimiento de este cliente."""
 
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.alertas_propias import quitar_alerta_propia
 from consolidado.storage.contactados import marcar_contactado
 from consolidado.storage.db import ultima_version
-from consolidado.storage.priorizados import quitar_priorizado_propio
+from consolidado.storage.priorizados import set_priorizado_activo
 from consolidado.storage.versiones import asegurar_semilla_si_vacia
 
 
@@ -293,8 +293,8 @@ class AppConsolidado(ctk.CTk):
         BotonIconoTexto(
             cab.acciones,
             icon=self._ico("remove"),
-            texto="Quitar propio",
-            command=self._quitar_priorizado_propio_seleccionado,
+            texto="Desactivar / Activar",
+            command=self._alternar_priorizado_propio_seleccionado,
             **estilo_boton_secundario(),
         ).pack(side="left", padx=(0, 6))
         BotonIconoTexto(
@@ -393,8 +393,8 @@ class AppConsolidado(ctk.CTk):
         BotonIconoTexto(
             cab.acciones,
             icon=self._ico("generate"),
-            texto="Vista web",
-            command=self._abrir_vista_web_ultima,
+            texto="Abrir Excel",
+            command=self._abrir_excel_ultima,
             **estilo_boton_secundario(),
         ).pack(side="left")
 
@@ -736,21 +736,73 @@ class AppConsolidado(ctk.CTk):
     def _refrescar_tabla_priorizados_filtrada(self) -> None:
         self.tabla_priorizados.limpiar()
         if self._vista_priorizados == "primer_plano":
-            visibles = [f for f in self._filas_priorizados if not f.get("contactado")]
+            visibles = [
+                f
+                for f in self._filas_priorizados
+                if not f.get("contactado") and f.get("activo", True)
+            ]
         else:
             visibles = list(self._filas_priorizados)
         for f in visibles:
             self.tabla_priorizados.insertar_fila(f)
         n_total = len(self._filas_priorizados)
         n_contactados = sum(1 for f in self._filas_priorizados if f.get("contactado"))
+        n_inactivos = sum(
+            1
+            for f in self._filas_priorizados
+            if f.get("es_propio") and not f.get("activo", True)
+        )
         if self._vista_priorizados == "primer_plano":
             self.lbl_conteo_prio.configure(
-                text=f"{len(visibles)} pendientes · {n_contactados} contactados ocultos"
+                text=(
+                    f"{len(visibles)} pendientes · {n_contactados} contactados ocultos"
+                    + (f" · {n_inactivos} propios inactivos" if n_inactivos else "")
+                )
             )
         else:
             self.lbl_conteo_prio.configure(
-                text=f"{n_total} priorizados · {n_contactados} contactados"
+                text=(
+                    f"{n_total} priorizados · {n_contactados} contactados"
+                    + (f" · {n_inactivos} inactivos" if n_inactivos else "")
+                )
             )
+
+    def _alternar_priorizado_propio_seleccionado(self) -> None:
+        fila = self.tabla_priorizados.fila_seleccionada()
+        if not fila:
+            messagebox.showwarning(
+                "Priorizado propio",
+                "Seleccione un priorizado propio en la tabla.",
+            )
+            return
+        origen = fila.get("origen", "")
+        if "Priorizado propio" not in origen and not fila.get("es_propio"):
+            messagebox.showwarning(
+                "Priorizado propio",
+                "Solo puede activar o desactivar entradas «Priorizado propio».\n\n"
+                "Los que vienen de Excels no se gestionan desde aquí.",
+            )
+            return
+        activo_actual = bool(fila.get("activo", True))
+        nuevo = not activo_actual
+        accion = "activar" if nuevo else "desactivar"
+        if not messagebox.askyesno(
+            "Confirmar",
+            f"¿{accion.capitalize()} el priorizado propio de "
+            f"{fila.get('nombre') or fila['identificacion']}?\n\n"
+            + (
+                "Quedará guardado en la base, pero no se aplicará al consolidado."
+                if not nuevo
+                else "Volverá a aplicarse al generar el consolidado."
+            ),
+        ):
+            return
+        set_priorizado_activo(fila["identificacion"], activo=nuevo, base=self.base)
+        self._actualizar_tabla_priorizados()
+        messagebox.showinfo(
+            "Listo",
+            "Priorizado propio " + ("activado." if nuevo else "desactivado."),
+        )
 
     def _actualizar_tabla_priorizados(self) -> None:
         merge.aplicar_config(self.cfg, self.base)
@@ -761,40 +813,24 @@ class AppConsolidado(ctk.CTk):
             return
         self._refrescar_tabla_priorizados_filtrada()
 
-    def _abrir_vista_web_ultima(self) -> None:
-        from consolidado.core.html_export import (
-            guardar_html_consolidado,
-            ruta_html_desde_excel,
-        )
-        from consolidado.storage.db import cargar_dataframe_version, ultima_version
+    def _abrir_excel_ultima(self) -> None:
+        from consolidado.storage.db import ultima_version
 
         ult = ultima_version(self.base)
         if not ult:
-            messagebox.showinfo("Vista web", "Aún no hay versiones generadas.")
+            messagebox.showinfo("Excel", "Aún no hay versiones generadas.")
             return
         ruta_excel = ult.get("ruta_excel")
-        if ruta_excel:
-            excel = Path(ruta_excel)
-            if not excel.is_absolute():
-                excel = self.base / excel
-            html_path = ruta_html_desde_excel(excel)
-            if html_path.is_file():
-                merge.abrir_archivo_en_sistema(html_path, parent=self)
-                return
-        try:
-            df = cargar_dataframe_version(ult["id"], self.base)
-            destino = self.base / "salida" / f"vista_web_{ult['periodo']}_{ult['id']}.html"
-            html_path = guardar_html_consolidado(
-                df,
-                destino,
-                cfg=self.cfg,
-                num_materias=ult.get("num_materias"),
-                titulo=f"Consolidado · {ult['periodo']} · {ult['fecha_version']}",
-            )
-        except Exception as exc:
-            messagebox.showerror("Vista web", str(exc))
+        if not ruta_excel:
+            messagebox.showinfo("Excel", "La última versión no tiene Excel asociado.")
             return
-        merge.abrir_archivo_en_sistema(html_path, parent=self)
+        excel = Path(ruta_excel)
+        if not excel.is_absolute():
+            excel = self.base / excel
+        if not excel.is_file():
+            messagebox.showerror("Excel", f"No se encontró el archivo:\n{excel}")
+            return
+        merge.abrir_archivo_en_sistema(excel, parent=self)
 
     def _actualizar_tabla_alertas(self) -> None:
         merge.aplicar_config(self.cfg, self.base)
@@ -830,32 +866,6 @@ class AppConsolidado(ctk.CTk):
     def _abrir_priorizado_propio(self) -> None:
         DialogoPriorizadoPropio(self, self.cfg, self.base, self._actualizar_tabla_priorizados)
 
-    def _quitar_priorizado_propio_seleccionado(self) -> None:
-        fila = self.tabla_priorizados.fila_seleccionada()
-        if not fila:
-            messagebox.showwarning(
-                "Quitar priorizado",
-                "Seleccione un estudiante en la tabla de priorizados.",
-            )
-            return
-        origen = fila.get("origen", "")
-        if "Priorizado propio" not in origen:
-            messagebox.showwarning(
-                "Quitar priorizado",
-                "Solo puede quitar entradas marcadas como «Priorizado propio».\n\n"
-                "Los que vienen de Excels (grupos priorizados, Psicología internos, etc.) "
-                "no se eliminan desde aquí; actualice el archivo fuente correspondiente.",
-            )
-            return
-        if not messagebox.askyesno(
-            "Confirmar",
-            f"¿Quitar el priorizado propio de {fila.get('nombre') or fila['identificacion']}?",
-        ):
-            return
-        quitar_priorizado_propio(fila["identificacion"], self.base)
-        self._actualizar_tabla_priorizados()
-        messagebox.showinfo("Listo", "Priorizado propio eliminado.")
-
     def generar(self) -> None:
         _, _, _, _, faltantes = self._conteo_archivos()
         if faltantes:
@@ -875,7 +885,7 @@ class AppConsolidado(ctk.CTk):
             consolidado, destino = merge.ejecutar_consolidado(
                 self.cfg,
                 base=self.base,
-                abrir=False,
+                abrir=True,
                 parent=self,
             )
         except SystemExit:
@@ -884,18 +894,12 @@ class AppConsolidado(ctk.CTk):
             messagebox.showerror("Error", str(exc))
             return
         self._actualizar_ruta_salida()
-        from consolidado.core.html_export import ruta_html_desde_excel
-
-        html_path = ruta_html_desde_excel(destino)
         messagebox.showinfo(
             "Consolidado generado",
             f"Nueva versión guardada en SQL (periodo {periodo}).\n"
             f"{consolidado.height} estudiantes.\n\n"
-            f"Excel:\n{destino}\n\n"
-            f"Vista web:\n{html_path}\n\nSe abrirá la vista web.",
+            f"Excel:\n{destino}\n\nSe abrió el archivo Excel.",
         )
-        if html_path.is_file():
-            merge.abrir_archivo_en_sistema(html_path, parent=self)
 
     def _abrir_consulta_estudiante(self) -> None:
         DialogoConsultaEstudiante(self, self.cfg, self.base)

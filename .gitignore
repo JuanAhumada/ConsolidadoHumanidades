@@ -3,7 +3,8 @@
 venv/
 env/
 __pycache__/
-*.py[cod]
+*.pyc
+*.pyo
 *$py.class
 *.egg-info/
 .eggs/
@@ -14,9 +15,21 @@ dist-info/
 .coverage
 htmlcov/
 
-# Build del ejecutable (no subir a GitHub; generar localmente con build_exe.bat)
+# Build temporal de PyInstaller (el .exe distribuible sí se versiona)
 build/
-dist/
+
+# Datos que genera el .exe si se ejecuta desde dist/
+dist/ConsolidadoHumanidades/datos/*.db
+dist/ConsolidadoHumanidades/datos/*.db-journal
+dist/ConsolidadoHumanidades/datos/entrada/*.xlsx
+dist/ConsolidadoHumanidades/datos/historico/
+dist/ConsolidadoHumanidades/salida/*.xlsx
+dist/ConsolidadoHumanidades/salida/*.xls
+dist/ConsolidadoHumanidades/salida/*.xlsm
+
+# Excel: datos de entrada, salidas y ejemplos locales
+
+# Excel: datos de entrada, salidas y ejemplos locales
 
 # Excel: datos de entrada, salidas y ejemplos locales
 *.xlsx
@@ -30,6 +43,7 @@ dist/
 # Carpetas de datos generados (mantener solo .gitkeep)
 datos/entrada/*
 !datos/entrada/.gitkeep
+datos/historico/
 datos/*.db
 datos/*.db-journal
 salida/*

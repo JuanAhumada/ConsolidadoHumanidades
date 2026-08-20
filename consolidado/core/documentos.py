@@ -1,3 +1,4 @@
+"""Documentos adicionales configurables: se unen por identificación al consolidado."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -68,8 +69,9 @@ def _unir_documentos_adicionales(
     consolidado: pl.DataFrame,
     cfg: dict,
     base: Path,
+    carpeta: Path | None = None,
 ) -> pl.DataFrame:
-    carpeta = carpeta_excels(cfg, base)
+    carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
     resultado = consolidado.with_columns(
         pl.col("Identificación")
         .map_elements(normalizar_id, return_dtype=pl.Utf8)

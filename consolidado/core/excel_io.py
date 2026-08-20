@@ -1,3 +1,8 @@
+"""
+Lectura de Excel (openpyxl/polars) y diálogos si el archivo está bloqueado.
+
+En web use permitir_seleccionar_otro=False para no abrir Tk.
+"""
 from __future__ import annotations
 
 import subprocess

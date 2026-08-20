@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Versiones{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Historial de versiones</h2>
+    <p class="sub">Snapshots del consolidado en SQL. Cada generación o importación crea un registro nuevo; no se sobrescribe ninguno. Para montar datos viejos use <a href="/datos-antiguos">Datos antiguos</a>. El detalle de cambios está en <a href="/modificaciones">Modificaciones</a>.</p>
+  </div>
+</div>
+
+<div class="grid grid-3">
+  <div class="stat"><div class="n">{{ versiones|length }}</div><div class="l">Snapshots</div></div>
+  <div class="stat"><div class="n">{% if estado.ultima %}{{ estado.ultima.fecha_version }}{% else %}—{% endif %}</div><div class="l">Fecha más reciente</div></div>
+  <div class="stat"><div class="n">{% if estado.ultima %}{{ estado.ultima.num_estudiantes }}{% else %}0{% endif %}</div><div class="l">Estudiantes (última fecha)</div></div>
+</div>
+
+<div class="card card-table">
+  <h3>Snapshots guardados</h3>
+  <div class="table-wrap" style="max-height:calc(100vh - 18rem);">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Periodo</th>
+          <th>Fecha</th>
+          <th>Estudiantes</th>
+          <th>Guardado</th>
+          <th>Notas</th>
+          <th>Excel</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for v in versiones %}
+        <tr>
+          <td>{{ v.id }}</td>
+          <td>{{ v.periodo }}</td>
+          <td>{{ v.fecha_version }}</td>
+          <td>{{ v.num_estudiantes }}</td>
+          <td>{{ v.creado_en }}</td>
+          <td class="muted" title="{{ v.notas or '' }}">{{ v.notas or '—' }}</td>
+          <td class="muted">{{ v.ruta_excel.rsplit('/', 1)[-1] if v.ruta_excel else '—' }}</td>
+          <td>
+            <a class="btn sm secondary" href="/versiones/{{ v.id }}/excel">Descargar</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="8" class="muted">Sin versiones todavía.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

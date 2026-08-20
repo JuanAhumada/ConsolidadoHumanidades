@@ -22,9 +22,12 @@ if errorlevel 1 (
 
 set DIST=dist\ConsolidadoHumanidades
 copy /Y config.json "%DIST%\config.json" >nul
+copy /Y config_fabrica.json "%DIST%\config_fabrica.json" >nul
 if not exist "%DIST%\datos\entrada" mkdir "%DIST%\datos\entrada"
 if not exist "%DIST%\salida" mkdir "%DIST%\salida"
-if exist "datos\priorizados_propios.json" copy /Y "datos\priorizados_propios.json" "%DIST%\datos\priorizados_propios.json" >nul
+if not exist "%DIST%\datos\entrada\.gitkeep" type nul > "%DIST%\datos\entrada\.gitkeep"
+if not exist "%DIST%\salida\.gitkeep" type nul > "%DIST%\salida\.gitkeep"
+copy /Y LEEME_EXE.txt "%DIST%\LEEME.txt" >nul
 
 echo.
 echo Listo: %DIST%\ConsolidadoHumanidades.exe

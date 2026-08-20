@@ -1,3 +1,4 @@
+"""Materias repetidas (bd_rep): marcan celdas de horario, no filas nuevas."""
 from __future__ import annotations
 
 import re
@@ -169,8 +170,10 @@ def aplicar_repitiendo(
     return consolidado.with_columns(pl.Series(COL_REPITIENDO, valores, dtype=pl.Int8))
 
 
-def _cargar_repitiendo_cfg(cfg: dict, base: Path) -> dict[str, int]:
-    carpeta = carpeta_excels(cfg, base)
+def _cargar_repitiendo_cfg(
+    cfg: dict, base: Path, carpeta: Path | None = None
+) -> dict[str, int]:
+    carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
     slot = next((s for s in cfg.get("archivos_fuente", []) if s.get("tipo") == "bd_rep"), None)
     if not slot:
         return {}
@@ -186,8 +189,9 @@ def _cargar_repitiendo_cfg(cfg: dict, base: Path) -> dict[str, int]:
 def _cargar_materias_repetidas_cfg(
     cfg: dict,
     base: Path,
+    carpeta: Path | None = None,
 ) -> dict[str, set[str]]:
-    carpeta = carpeta_excels(cfg, base)
+    carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
     slot = next((s for s in cfg.get("archivos_fuente", []) if s.get("tipo") == "bd_rep"), None)
     if not slot:
         return {}

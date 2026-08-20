@@ -3,3 +3,10 @@
 *.bat text eol=crlf
 *.json text eol=lf
 *.md text eol=lf
+
+# Binarios del paquete Windows (GitHub limita a 100 MB por archivo)
+dist/**/*.exe filter=lfs diff=lfs merge=lfs -text
+dist/**/*.dll filter=lfs diff=lfs merge=lfs -text
+dist/**/*.pyd filter=lfs diff=lfs merge=lfs -text
+dist/**/*.so filter=lfs diff=lfs merge=lfs -text
+dist/**/*.lib filter=lfs diff=lfs merge=lfs -text
