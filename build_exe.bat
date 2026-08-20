@@ -28,6 +28,8 @@ if not exist "%DIST%\salida" mkdir "%DIST%\salida"
 if not exist "%DIST%\datos\entrada\.gitkeep" type nul > "%DIST%\datos\entrada\.gitkeep"
 if not exist "%DIST%\salida\.gitkeep" type nul > "%DIST%\salida\.gitkeep"
 copy /Y LEEME_EXE.txt "%DIST%\LEEME.txt" >nul
+copy /Y empaquetado\Ejecutar.bat "%DIST%\Ejecutar.bat" >nul
+copy /Y empaquetado\SI_NO_ABRE.txt "%DIST%\SI_NO_ABRE.txt" >nul
 
 echo.
 echo Listo: %DIST%\ConsolidadoHumanidades.exe

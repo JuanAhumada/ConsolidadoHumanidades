@@ -338,11 +338,16 @@ Al cargar, `_fusionar_con_default` **añade** claves y columnas nuevas del códi
 build_exe.bat
 ```
 
-Salida: `dist/ConsolidadoHumanidades/`. El spec (`ConsolidadoHumanidades.spec`) empaqueta plantillas, estáticos, Polars y FastAPI. Consola visible (Ctrl+C para parar).
+Salida: `dist/ConsolidadoHumanidades/`. El spec empaqueta plantillas, estáticos, Polars y FastAPI.
 
-`.gitignore` ignora `build/` y datos de estudiantes; **no** ignora `dist/`. `.pyd` / `.dll` / `.exe` de `dist/` van por Git LFS (Polars ~185 MB; GitHub rechaza &gt;100 MB en git normal).
+**Distribución a usuarios:** no sirve «Download ZIP» del repositorio: GitHub no incluye objetos Git LFS, el `.exe` queda en ~130 bytes de texto y Windows muestra *No se puede ejecutar esta aplicación en el equipo*. Hay que:
 
-Tras clonar: `git lfs pull` si los binarios no bajaron. Distribuir siempre la carpeta completa.
+- Publicar `ConsolidadoHumanidades-Windows.zip` en **GitHub Releases**, o
+- Clonar con `git lfs pull`.
+
+`Ejecutar.bat` comprueba el tamaño del `.exe` y la carpeta `_internal` antes de lanzar. Tras un `build_exe.bat`, esos archivos se copian desde `empaquetado/`.
+
+`.gitignore` ignora `build/` y datos de estudiantes; **no** ignora `dist/`. Los `.pyd` / `.dll` / `.exe` de `dist/` van por Git LFS (Polars ~185 MB).
 
 ---
 

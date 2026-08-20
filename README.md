@@ -4,6 +4,8 @@ Aplicación para fusionar Excels de estudiantes (matriculados, becas, priorizado
 
 La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI.
 
+**Usuarios (Windows, sin Python):** descargue [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/blob/Torre/release/ConsolidadoHumanidades-Windows.zip) (o el archivo dentro de `release/` si ya tiene el repo), extraiga **esa** carpeta y abra `Ejecutar.bat`. No use el `.exe` que viene en el ZIP del código fuente: GitHub no incluye Git LFS y Windows dirá que no se puede ejecutar.
+
 ## Requisitos
 
 - Python 3.11+ (recomendado 3.13)
@@ -135,11 +137,14 @@ No mezcle el periodo de la **versión** (`periodo_desde_fecha`) con el **Periodo
 
 ## Ejecutable
 
-En el repositorio está el paquete Windows listo para usar:
+**No use «Code → Download ZIP».** Ese ZIP no trae los `.exe` / `.dll` (están en Git LFS) y Windows muestra *No se puede ejecutar esta aplicación en el equipo*.
 
-`dist/ConsolidadoHumanidades/ConsolidadoHumanidades.exe`
+Opciones:
 
-Descargue o clone esa carpeta **completa** (`_internal` incluida). Al abrir el `.exe` arranca la web en el navegador (usuario inicial `admin` / `admin`).
+1. **Release (recomendado para usuarios):** [Releases](https://github.com/JuanAhumada/ConsolidadoHumanidades/releases) → `ConsolidadoHumanidades-Windows.zip`. Extraiga y use `Ejecutar.bat`.
+2. **Clone con Git LFS:** `git clone …` y `git lfs pull`, luego `dist/ConsolidadoHumanidades/Ejecutar.bat`.
+
+La carpeta `dist/ConsolidadoHumanidades/` tiene que ir **completa** (`_internal` incluida). Usuario inicial `admin` / `admin`.
 
 Para regenerarlo:
 
@@ -147,4 +152,4 @@ Para regenerarlo:
 build_exe.bat
 ```
 
-Los binarios grandes (`.exe`, `.dll`, `.pyd`) van con Git LFS. No suba `build/` (es temporal).
+Los binarios grandes van con Git LFS. No suba `build/` (es temporal).

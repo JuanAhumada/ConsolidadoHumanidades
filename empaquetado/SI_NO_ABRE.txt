@@ -1,0 +1,21 @@
+Si Windows dice «No se puede ejecutar esta aplicación en el equipo»
+==================================================================
+
+Eso pasa si descargó el ZIP del código fuente (Code → Download ZIP).
+GitHub deja el .exe como un archivo de texto de ~130 bytes (puntero Git LFS),
+no como el programa real.
+
+Qué hacer
+---------
+A) Recomendado: descargue el Release
+   https://github.com/JuanAhumada/ConsolidadoHumanidades/releases
+   Archivo: ConsolidadoHumanidades-Windows.zip
+   Extraiga la carpeta completa y use Ejecutar.bat
+
+B) O clone con Git (incluye LFS):
+   git clone https://github.com/JuanAhumada/ConsolidadoHumanidades.git
+   cd ConsolidadoHumanidades
+   git lfs pull
+   dist\ConsolidadoHumanidades\Ejecutar.bat
+
+No separe el .exe de la carpeta _internal.

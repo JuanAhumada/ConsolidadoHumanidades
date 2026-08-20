@@ -1,10 +1,14 @@
 Consolidado de Humanidades
 ==========================
 
-1. Abra la carpeta completa (no separe el .exe de _internal).
-2. Ejecute ConsolidadoHumanidades.exe.
+1. Extraiga la carpeta completa (el .exe y _internal tienen que quedar juntos).
+2. Use Ejecutar.bat (comprueba que el .exe sea el real).
 3. Se abre el navegador en http://127.0.0.1:8765/
 4. Usuario inicial: admin / admin (cámbielo en Usuarios).
 5. Cargue los Excel en Data. La base SQLite se crea en datos\consolidado.db.
+
+NO use «Code → Download ZIP» de GitHub: ese ZIP no trae los binarios (Git LFS)
+y Windows dirá que no se puede ejecutar la aplicación.
+Descargue el Release ConsolidadoHumanidades-Windows.zip o clone con: git lfs pull
 
 Para detener la aplicación cierre la ventana negra (consola) o pulse Ctrl+C.

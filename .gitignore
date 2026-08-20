@@ -27,6 +27,13 @@ dist/ConsolidadoHumanidades/salida/*.xlsx
 dist/ConsolidadoHumanidades/salida/*.xls
 dist/ConsolidadoHumanidades/salida/*.xlsm
 
+# ZIP de distribución: se versiona ConsolidadoHumanidades-Windows.zip
+# (sin Git LFS, para que «Download ZIP» del repo lo traiga de verdad)
+release/*
+!release/.gitkeep
+!release/README.md
+!release/ConsolidadoHumanidades-Windows.zip
+
 # Excel: datos de entrada, salidas y ejemplos locales
 
 # Excel: datos de entrada, salidas y ejemplos locales
