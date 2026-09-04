@@ -29,7 +29,7 @@ No hay un maestro único de estudiante: cada generación es un snapshot `(identi
 | GUI legado | CustomTkinter (`python main.py --gui`) |
 | Empaque Windows | PyInstaller (`build_exe.bat` → `dist/ConsolidadoHumanidades/`) |
 
-Dependencias: `requirements.txt`. El `.exe` no requiere Python en el equipo destino; hay que copiar la carpeta completa (`_internal` incluida). Los binarios grandes van con Git LFS.
+Dependencias: `requirements.txt`. El `.exe` no requiere Python en el equipo destino; hay que copiar la carpeta completa (`_internal` incluida). `dist/` no se versiona. El ZIP de `release/` va con Git LFS.
 
 ---
 
@@ -357,7 +357,8 @@ No publique a git desde `build_exe.bat`.
 ## 14. Convenciones y límites
 
 - Los `.xlsx` de `datos/entrada/` y la `.db` **no** se versionan (datos personales).
-- `ArchivosPrueba2026-1.zip` (Excels de prueba, ~19 MB) **sí** se versiona, sin Git LFS, para que quepa en GitHub (< 100 MB).
+- `ArchivosPrueba2026-1.zip` (Excels de prueba, ~19 MB) **sí** se versiona en git normal (< 100 MB).
+- `release/ConsolidadoHumanidades-Windows.zip` va con Git LFS (el paquete PyInstaller supera 100 MB). `dist/` no se sube: se regenera con `build_exe.bat`.
 - Identificación es la clave de cruce; un mismo nombre con dos IDs son dos personas; dos IDs con el mismo nombre pueden colapsar en `deduplicar_por_nombre`.
 - `bd2` y permanencia **no crean** filas: solo completan IDs que ya salieron de matriculados/becas.
 - Un estudiante de `bd12` que no esté en priorizados, alertas o permanencia quedará con esos campos vacíos (el cruce es por documento, no por programa).

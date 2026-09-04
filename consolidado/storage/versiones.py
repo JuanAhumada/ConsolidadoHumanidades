@@ -160,24 +160,22 @@ def sembrar_version_inicial(
             return None
         excel_origen = candidatos[0]
 
-    fecha_version = fecha_version or date(2026, 5, 10)
-    periodo = periodo or "2026-1"
-
     df, num_materias = leer_dataframe_desde_excel_consolidado(
         excel_origen, cfg=cfg, base=base
     )
     if df.height == 0:
         return None
 
-    # Copiar/renombrar Excel de referencia con el esquema de versión
-    carpeta_salida = (base / "salida")
-    carpeta_salida.mkdir(parents=True, exist_ok=True)
-    nombre = nombre_excel_version(periodo, fecha_version)
-    destino_excel = carpeta_salida / nombre
+    from consolidado.storage.periodos import periodo_de_consolidado
 
-    # Regenerar Excel con formato de la app desde el dataframe leído
+    fecha_version = fecha_version or date(2026, 5, 10)
+    periodo = periodo or periodo_de_consolidado(df) or "2026-1"
+
     from consolidado.core.export import guardar_excel_consolidado
 
+    carpeta_salida = base / "salida"
+    carpeta_salida.mkdir(parents=True, exist_ok=True)
+    destino_excel = carpeta_salida / nombre_excel_version(periodo, fecha_version)
     destino_excel = guardar_excel_consolidado(
         df, destino_excel, cfg=cfg, num_materias=num_materias
     )
@@ -189,7 +187,7 @@ def sembrar_version_inicial(
         periodo=periodo,
         num_materias=num_materias,
         ruta_excel=destino_excel,
-        notas="Registro inicial importado del consolidado existente (periodo 2026-1, mayo).",
+        notas=f"Registro inicial importado del consolidado existente (periodo {periodo}).",
     )
 
 
@@ -217,8 +215,13 @@ def importar_excel_como_version(
     if df.height == 0:
         raise ValueError("El Excel no contiene estudiantes.")
 
+    from consolidado.storage.periodos import periodo_de_consolidado
+
     destino, periodo, fecha_v = resolver_destino_versionado(
-        cfg, base, fecha_version=fecha_version
+        cfg,
+        base,
+        fecha_version=fecha_version,
+        periodo=periodo_de_consolidado(df),
     )
     destino = guardar_excel_consolidado(
         df, destino, cfg=cfg, num_materias=num_materias

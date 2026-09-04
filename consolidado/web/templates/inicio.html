@@ -45,6 +45,29 @@
   </a>
 </section>
 
+<section class="land-atajos" aria-label="Accesos rápidos">
+  <a class="land-atajo" href="/versiones">
+    <span class="land-atajo-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4.5v11"/><path d="m8 12 4 4 4-4"/><path d="M5 19.5h14"/></svg>
+    </span>
+    <div>
+      <h3>Descargar último Excel</h3>
+      <p>Abre el historial de versiones para bajar el consolidado más reciente u otro corte.</p>
+    </div>
+  </a>
+  {% if es_admin %}
+  <a class="land-atajo" href="/archivos#generar">
+    <span class="land-atajo-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h3L11 7h6.5A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-9Z"/><path d="M12 11v5M9.5 13.5h5"/></svg>
+    </span>
+    <div>
+      <h3>Generar nuevo consolidado</h3>
+      <p>En Data: cargue los Excel y genere la versión desde esa misma pantalla.</p>
+    </div>
+  </a>
+  {% endif %}
+</section>
+
 <section class="land-showcase" aria-label="Qué puede hacer">
   <a class="land-card" href="/estudiante">
     <figure class="land-shot">
@@ -66,6 +89,16 @@
       <p>Quienes tienen nivel 1 o más, por componente. Marque a los contactados.</p>
     </div>
   </a>
+  <a class="land-card" href="/proyeccion">
+    <figure class="land-shot land-shot-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 19V8.5L12 5l7 3.5V19"/><path d="M9 19v-6h6v6"/></svg>
+    </figure>
+    <div class="land-copy">
+      <p class="hub-kicker">Graduación</p>
+      <h3>Proyección a Grado</h3>
+      <p>Quién está próximo a graduarse. En la ficha marque si se gradúa este semestre; aquí se parte entre Sí y Aún no.</p>
+    </div>
+  </a>
   <a class="land-card" href="/graficas">
     <figure class="land-shot">
       <img src="/static/landing/graficas.jpg" alt=""/>
@@ -74,6 +107,26 @@
       <p class="hub-kicker">Tablero</p>
       <h3>Gráficas</h3>
       <p>Hasta cuatro visualizaciones. Compare programas, niveles o cualquier columna.</p>
+    </div>
+  </a>
+  <a class="land-card" href="/parcializado">
+    <figure class="land-shot land-shot-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 5.5h6.5v13H5z"/><path d="M13.5 5.5H19v6h-5.5z"/><path d="M13.5 13.5H19V18.5h-5.5z"/></svg>
+    </figure>
+    <div class="land-copy">
+      <p class="hub-kicker">Exportar</p>
+      <h3>Parcializado</h3>
+      <p>De cualquier versión, elija columnas y carreras (una, varias o todas) y baje un Excel recortado.</p>
+    </div>
+  </a>
+  <a class="land-card" href="/informacion">
+    <figure class="land-shot land-shot-ico" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="7.5"/><path d="M12 11v5"/><path d="M12 8.2h.01"/></svg>
+    </figure>
+    <div class="land-copy">
+      <p class="hub-kicker">Reglas</p>
+      <h3>Puntajes de prioridad</h3>
+      <p>Cómo se calcula el puntaje: fórmula, puntos por beca, priorizado, reintegro y ruta de grado.</p>
     </div>
   </a>
   <a class="land-card" href="/metas">

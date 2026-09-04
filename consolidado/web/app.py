@@ -1,13 +1,14 @@
 """
 Rutas FastAPI, sesión y control de acceso.
 
-Consultor: hasta /versiones (GET). Admin: Data, Historial, Config, Usuarios,
+Consultor: hasta /versiones, /parcializado y /proyeccion (GET). Admin: Data, Historial, Config, Usuarios,
 Datos antiguos y POST de generar/importar.
 Las plantillas reciben es_admin y el usuario de sesión vía _render.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import webbrowser
@@ -41,7 +42,9 @@ from consolidado.core.priorizados import (
     buscar_estudiantes_en_fuentes,
 )
 from consolidado.core.seguimiento import CATEGORIAS_SEGUIMIENTO, listar_seguimiento
+from consolidado.core.proyeccion_grado import listar_proyeccion
 from consolidado.paths import BUNDLE_DIR, PROJECT_ROOT
+from consolidado.version import APP_VERSION
 from consolidado.storage.alertas_fuente import (
     descartar_alerta_fuente,
 )
@@ -51,6 +54,9 @@ from consolidado.storage.alertas_propias import (
     quitar_alerta_propia,
 )
 from consolidado.storage.contactados import estadisticas_atenciones, marcar_contactado
+from consolidado.storage.graduacion import marcar_gradua
+from consolidado.storage.ediciones import GRUPOS_EDITABLES, borrar_ediciones_grupo, clave_campo_edicion, guardar_ediciones
+from consolidado.storage.notas import agregar_nota, quitar_nota
 from consolidado.storage.db import (
     buscar_estudiantes,
     listar_versiones,
@@ -90,7 +96,7 @@ def _web_dir() -> Path:
 WEB_DIR = _web_dir()
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
-app = FastAPI(title="Consolidado de Humanidades")
+app = FastAPI(title="Consolidado de Humanidades", version=APP_VERSION)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 _RUTAS_PUBLICAS = {"/login", "/logout", "/api/apagar"}
@@ -103,6 +109,8 @@ _PREFIJOS_ADMIN = (
     "/datos-antiguos",
     "/modificaciones",
     "/generar",
+    "/api/documento",
+    "/api/fuente",
 )
 _RUTAS_ADMIN_EXTRA = {"/versiones/importar", "/versiones/generar"}
 
@@ -182,6 +190,7 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "cat": "",
         "vista": "pendientes",
         "manual_usuario": MANUAL_USUARIO,
+        "app_version": APP_VERSION,
     }
     data.update(extra)
     data["ayuda_clave"] = data.get("ayuda_clave") or data.get("nav") or "inicio"
@@ -242,6 +251,7 @@ async def pagina_login(request: Request) -> HTMLResponse:
             "siguiente": request.query_params.get("next") or "/",
             "manual_usuario": MANUAL_USUARIO,
             "ayuda_clave": "login",
+            "app_version": APP_VERSION,
         },
     )
 
@@ -285,7 +295,30 @@ async def pagina_colores(request: Request) -> HTMLResponse:
 
 @app.get("/archivos", response_class=HTMLResponse)
 async def pagina_archivos(request: Request) -> HTMLResponse:
-    return _render(request, "archivos.html", nav="archivos")
+    return _render(
+        request,
+        "archivos.html",
+        nav="archivos",
+        fuentes_mapeo=services.listar_fuentes_para_mapa(),
+        paquete_inicial=services.hay_paquete_inicial(),
+    )
+
+
+def _redir_carga_fuentes(resultado: dict[str, Any]) -> RedirectResponse:
+    n_ok = len(resultado.get("ok") or [])
+    partes: list[str] = []
+    if n_ok:
+        partes.append(f"Se cargaron {n_ok} archivo{'s' if n_ok != 1 else ''} de fuente.")
+    if resultado.get("sin_slot"):
+        nombres = ", ".join(resultado["sin_slot"][:8])
+        extra = f" y {len(resultado['sin_slot']) - 8} más" if len(resultado["sin_slot"]) > 8 else ""
+        partes.append(f"No se reconocieron: {nombres}{extra}.")
+    if resultado.get("errores"):
+        partes.append(" ".join(str(e) for e in resultado["errores"][:4]))
+    texto = " ".join(partes) or "Ningún archivo se pudo cargar."
+    if not n_ok:
+        return _redir("/archivos", err=texto)
+    return _redir("/archivos", msg=texto)
 
 
 @app.post("/upload/varios")
@@ -299,28 +332,46 @@ async def upload_varios(archivos: list[UploadFile] = File(...)) -> RedirectRespo
         lote.append((nombre, contenido))
     if not lote:
         return _redir("/archivos", err="No se eligió ningún Excel.")
+    if len(lote) == 1 and Path(lote[0][0]).suffix.lower() == ".zip":
+        try:
+            resultado = services.importar_paquete_fuentes(lote[0][1], nombre_zip=lote[0][0])
+        except Exception as exc:
+            return _redir("/archivos", err=str(exc))
+        return _redir_carga_fuentes(resultado)
     try:
         resultado = services.subir_varios(lote)
     except Exception as exc:
         return _redir("/archivos", err=str(exc))
-    n_ok = len(resultado["ok"])
-    partes: list[str] = []
-    if n_ok:
-        partes.append(
-            f"Se actualizaron {n_ok} archivo{'s' if n_ok != 1 else ''}."
+    return _redir_carga_fuentes(resultado)
+
+
+@app.post("/upload/paquete")
+async def upload_paquete(archivo: UploadFile = File(...)) -> RedirectResponse:
+    nombre = archivo.filename or "paquete.zip"
+    contenido = await archivo.read()
+    if not contenido:
+        return _redir("/archivos", err="El ZIP está vacío.")
+    try:
+        resultado = services.importar_paquete_fuentes(contenido, nombre_zip=nombre)
+    except Exception as exc:
+        return _redir("/archivos", err=str(exc))
+    return _redir_carga_fuentes(resultado)
+
+
+@app.post("/upload/paquete/ejemplo")
+async def upload_paquete_ejemplo() -> RedirectResponse:
+    info = services.hay_paquete_inicial()
+    if not info:
+        return _redir(
+            "/archivos",
+            err="No hay un paquete inicial junto a la aplicación. Suba el ZIP a mano.",
         )
-    if resultado["sin_slot"]:
-        nombres = ", ".join(resultado["sin_slot"][:8])
-        extra = f" y {len(resultado['sin_slot']) - 8} más" if len(resultado["sin_slot"]) > 8 else ""
-        partes.append(f"No se reconocieron: {nombres}{extra}.")
-    if resultado["errores"]:
-        partes.append(" ".join(resultado["errores"][:4]))
-    if not n_ok:
-        return _redir("/archivos", err=" ".join(partes) or "Ningún archivo se pudo cargar.")
-    msg = " ".join(partes)
-    if resultado["sin_slot"] or resultado["errores"]:
-        return _redir("/archivos", msg=msg)
-    return _redir("/archivos", msg=msg)
+    ruta = Path(info["ruta"])
+    try:
+        resultado = services.importar_paquete_fuentes(ruta.read_bytes(), nombre_zip=ruta.name)
+    except Exception as exc:
+        return _redir("/archivos", err=str(exc))
+    return _redir_carga_fuentes(resultado)
 
 
 @app.post("/upload/lote")
@@ -367,6 +418,114 @@ async def upload_slot(slot_id: str, archivo: UploadFile = File(...)) -> Redirect
     return _redir("/archivos", msg="Archivo actualizado")
 
 
+@app.post("/api/documento/preview")
+async def api_documento_preview(
+    archivo: UploadFile = File(...),
+    hoja: str = Form(""),
+) -> JSONResponse:
+    try:
+        contenido = await archivo.read()
+        data = services.previsualizar_excel_bytes(
+            contenido, archivo.filename or "archivo.xlsx", hoja=hoja or None
+        )
+    except Exception as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return JSONResponse(data)
+
+
+@app.get("/api/documento/{doc_id}")
+async def api_documento_guardado(doc_id: str, hoja: str = "") -> JSONResponse:
+    try:
+        data = services.previsualizar_documento_guardado(doc_id, hoja=hoja or None)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return JSONResponse(data)
+
+
+def _columnas_desde_form(texto: str) -> list[dict[str, Any]]:
+    raw = (texto or "").strip()
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError("No se pudieron leer las columnas seleccionadas.") from exc
+    if not isinstance(data, list):
+        raise ValueError("El listado de columnas no es válido.")
+    return [item for item in data if isinstance(item, dict)]
+
+
+@app.get("/api/fuente/{slot_id}")
+async def api_fuente_preview(slot_id: str, hoja: str = "") -> JSONResponse:
+    try:
+        data = services.previsualizar_slot_fuente(slot_id, hoja=hoja or None)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return JSONResponse(data)
+
+
+@app.post("/archivos/fuente/{slot_id}/mapeo")
+async def guardar_mapeo_fuente(
+    slot_id: str,
+    hoja: str = Form(""),
+    mapeo: str = Form("[]"),
+) -> RedirectResponse:
+    try:
+        services.guardar_mapeo_slot(
+            slot_id, hoja=hoja or None, mapeo=_columnas_desde_form(mapeo)
+        )
+    except Exception as exc:
+        return _redir("/archivos", err=str(exc))
+    return _redir("/archivos", msg="Se guardó el mapeo de esa base de datos.")
+
+
+@app.post("/archivos/documento")
+async def guardar_documento_web(
+    titulo: str = Form(""),
+    grupo: str = Form(""),
+    pk: str = Form(""),
+    hoja: str = Form(""),
+    columnas: str = Form("[]"),
+    doc_id: str = Form(""),
+    archivo: UploadFile | None = File(default=None),
+) -> RedirectResponse:
+    try:
+        contenido = None
+        nombre = ""
+        if archivo is not None and archivo.filename:
+            contenido = await archivo.read()
+            nombre = archivo.filename
+            if not contenido:
+                contenido = None
+        info = services.guardar_documento_adicional(
+            titulo=titulo,
+            grupo=grupo,
+            pk=pk,
+            columnas=_columnas_desde_form(columnas),
+            hoja=hoja or None,
+            contenido=contenido,
+            nombre_archivo=nombre,
+            doc_id=doc_id or None,
+        )
+    except Exception as exc:
+        return _redir("/archivos", err=str(exc))
+    verbo = "actualizó" if doc_id else "añadió"
+    return _redir("/archivos", msg=f"Se {verbo} «{info['titulo']}».")
+
+
+@app.post("/archivos/documento/{doc_id}/eliminar")
+async def eliminar_documento_web(doc_id: str) -> RedirectResponse:
+    try:
+        services.eliminar_documento_adicional(doc_id)
+    except Exception as exc:
+        return _redir("/archivos", err=str(exc))
+    return _redir("/archivos", msg="Documento adicional eliminado.")
+
+
 @app.post("/generar")
 async def generar_consolidado(
     fecha_version: str = Form(""),
@@ -381,12 +540,29 @@ async def generar_consolidado(
             msg=f"Versión {fecha.isoformat()} guardada: {n} estudiantes. Se abrió el Excel.",
         )
     except Exception as exc:
-        return _redir("/", err=str(exc))
+        return _redir("/archivos", err=str(exc))
 
 
 @app.get("/consolidado", response_class=HTMLResponse)
 async def vista_consolidado() -> RedirectResponse:
     return RedirectResponse("/graficas", status_code=303)
+
+
+def _tabs_ficha(request: Request, ficha: dict | None) -> tuple[str, str]:
+    cat = (request.query_params.get("cat") or "").strip()
+    sec = (request.query_params.get("sec") or "").strip()
+    cats: list[str] = []
+    if ficha:
+        cats.extend(
+            str(c.get("clave") or "")
+            for c in (ficha.get("categorias") or [])
+            if c.get("clave") and c.get("clave") != "datos"
+        )
+    if cat not in cats:
+        cat = cats[0] if cats else "academico"
+    if sec not in {"notas", "nueva", "grado", "horario"}:
+        sec = "notas"
+    return cat, sec
 
 
 @app.get("/estudiante", response_class=HTMLResponse)
@@ -403,6 +579,7 @@ async def pagina_estudiante(request: Request, q: str = "") -> HTMLResponse:
             ficha = obtener_ficha_estudiante(cfg, PROJECT_ROOT, resultados[0]["identificacion"])
         elif q.strip().isdigit() or len(q.strip()) >= 5:
             ficha = obtener_ficha_estudiante(cfg, PROJECT_ROOT, q.strip())
+    ficha_cat, ficha_sec = _tabs_ficha(request, ficha)
     return _render(
         request,
         "estudiante.html",
@@ -410,6 +587,8 @@ async def pagina_estudiante(request: Request, q: str = "") -> HTMLResponse:
         q=q,
         resultados=resultados,
         ficha=ficha,
+        ficha_cat=ficha_cat,
+        ficha_sec=ficha_sec,
     )
 
 
@@ -425,8 +604,11 @@ async def ficha_estudiante(request: Request, identificacion: str) -> HTMLRespons
             q=identificacion,
             resultados=[],
             ficha=None,
+            ficha_cat="academico",
+            ficha_sec="notas",
             error="No se encontró el estudiante en el consolidado actual.",
         )
+    ficha_cat, ficha_sec = _tabs_ficha(request, ficha)
     return _render(
         request,
         "estudiante.html",
@@ -434,6 +616,8 @@ async def ficha_estudiante(request: Request, identificacion: str) -> HTMLRespons
         q=identificacion,
         resultados=[],
         ficha=ficha,
+        ficha_cat=ficha_cat,
+        ficha_sec=ficha_sec,
     )
 
 
@@ -443,6 +627,21 @@ def _url_seguimiento(cat: str, vista: str, programas: list[str] | None = None) -
         if programa:
             pares.append(("prog", programa))
     return "/seguimiento?" + urlencode(pares)
+
+
+def _url_proyeccion(vista: str, programas: list[str] | None = None) -> str:
+    pares: list[tuple[str, str]] = [("vista", vista)]
+    for programa in programas or []:
+        if programa:
+            pares.append(("prog", programa))
+    return "/proyeccion?" + urlencode(pares)
+
+
+def _volver_interno(raw: str, fallback: str) -> str:
+    destino = (raw or "").strip()
+    if destino.startswith("/") and not destino.startswith("//"):
+        return destino
+    return fallback
 
 
 @app.get("/seguimiento", response_class=HTMLResponse)
@@ -495,6 +694,157 @@ async def pagina_seguimiento(
         href_estadisticas="/seguimiento/estadisticas",
         alertas_propias=cargar_alertas_propias(PROJECT_ROOT) if cat_id == "alertas" else [],
     )
+
+
+@app.get("/proyeccion", response_class=HTMLResponse)
+async def pagina_proyeccion(
+    request: Request,
+    vista: str = "aun_no",
+    prog: list[str] = Query(default=[]),
+) -> HTMLResponse:
+    data = listar_proyeccion(vista=vista, programas=prog, base=PROJECT_ROOT)
+    vista_ok = data["vista"]
+    sel = list(data["programas_sel"])
+    programas_ui = []
+    for nombre in data["programas"]:
+        if nombre in sel:
+            nuevo = [p for p in sel if p != nombre]
+        else:
+            nuevo = sel + [nombre]
+        programas_ui.append(
+            {
+                "nombre": nombre,
+                "corta": color_programa(nombre).get("corta") or nombre,
+                "activo": nombre in sel,
+                "href": _url_proyeccion(vista_ok, nuevo),
+            }
+        )
+    return _render(
+        request,
+        "proyeccion.html",
+        nav="proyeccion",
+        filas=data["filas"],
+        total=data["total"],
+        visibles=data["visibles"],
+        n_si=data["n_si"],
+        n_aun_no=data["n_aun_no"],
+        vista=vista_ok,
+        periodo=data["periodo"],
+        meta=data["meta"],
+        programas=programas_ui,
+        programas_sel=sel,
+        filtro_general=not sel,
+        href_carreras_general=_url_proyeccion(vista_ok, []),
+        href_aun_no=_url_proyeccion("aun_no", sel),
+        href_si=_url_proyeccion("si", sel),
+    )
+
+
+@app.post("/estudiante/gradua")
+async def guardar_gradua_semestre(
+    identificacion: str = Form(...),
+    se_gradua: str = Form(...),
+    volver: str = Form(""),
+) -> RedirectResponse:
+    destino = _volver_interno(volver, f"/estudiante/{identificacion.strip()}")
+    si = se_gradua in {"1", "true", "on", "si", "sí"}
+    marcar_gradua(identificacion, se_gradua=si, base=PROJECT_ROOT)
+    registrar_modificacion(
+        accion="gradua_semestre",
+        resumen=f"Marcó {identificacion} como {'sí' if si else 'no'} se gradúa este semestre",
+        entidad="estudiante",
+        identificacion=identificacion,
+    )
+    return _redir(destino, msg="Se guardó si se gradúa este semestre.")
+
+
+@app.post("/estudiante/editar")
+async def editar_ficha_estudiante(request: Request) -> RedirectResponse:
+    form = await request.form()
+    identificacion = str(form.get("identificacion") or "").strip()
+    grupo = str(form.get("grupo") or "").strip().lower()
+    destino = _volver_interno(
+        str(form.get("volver") or ""),
+        f"/estudiante/{identificacion}" if identificacion else "/estudiante",
+    )
+    columnas = GRUPOS_EDITABLES.get(grupo)
+    if not identificacion:
+        return _redir(destino, err="Falta la identificación.")
+    if not columnas:
+        return _redir(destino, err="No se reconoció el bloque a editar.")
+    campos = {}
+    for col in columnas:
+        clave = clave_campo_edicion(col)
+        if clave in form:
+            val = form.get(clave)
+            campos[col] = "" if val is None else str(val).strip()
+    if not campos:
+        return _redir(destino, err="No hay campos para guardar.")
+    guardar_ediciones(identificacion, campos, base=PROJECT_ROOT)
+    registrar_modificacion(
+        accion="edicion_ficha",
+        resumen=f"Editó {grupo} de {identificacion}",
+        entidad="estudiante",
+        identificacion=identificacion,
+    )
+    titulo = "priorizado" if grupo == "priorizado" else "ruta de grado"
+    return _redir(destino, msg=f"Se guardaron los datos de {titulo}.")
+
+
+@app.post("/estudiante/editar/restablecer")
+async def restablecer_ficha_estudiante(
+    identificacion: str = Form(...),
+    grupo: str = Form(...),
+    volver: str = Form(""),
+) -> RedirectResponse:
+    destino = _volver_interno(volver, f"/estudiante/{identificacion.strip()}")
+    clave = (grupo or "").strip().lower()
+    if clave not in GRUPOS_EDITABLES:
+        return _redir(destino, err="No se reconoció el bloque a restablecer.")
+    borrar_ediciones_grupo(identificacion, clave, base=PROJECT_ROOT)
+    registrar_modificacion(
+        accion="edicion_ficha",
+        resumen=f"Restableció {clave} de {identificacion}",
+        entidad="estudiante",
+        identificacion=identificacion,
+    )
+    return _redir(destino, msg="Se restablecieron los datos de la fuente.")
+
+
+@app.post("/notas/anadir")
+async def anadir_nota_seguimiento(
+    identificacion: str = Form(...),
+    nota: str = Form(...),
+    nombre: str = Form(""),
+    volver: str = Form(""),
+) -> RedirectResponse:
+    destino = _volver_interno(volver, f"/estudiante/{identificacion.strip()}")
+    texto = (nota or "").strip()
+    if not texto:
+        return _redir(destino, err="Escriba la nota.")
+    agregar_nota(identificacion, texto, base=PROJECT_ROOT)
+    registrar_modificacion(
+        accion="nota_seguimiento",
+        resumen=f"Añadió nota a {identificacion}" + (f" ({nombre})" if nombre.strip() else ""),
+        entidad="estudiante",
+        identificacion=identificacion,
+    )
+    return _redir(destino, msg="Nota guardada.")
+
+
+@app.post("/notas/quitar")
+async def quitar_nota_seguimiento(
+    nota_id: int = Form(...),
+    volver: str = Form(""),
+) -> RedirectResponse:
+    destino = _volver_interno(volver, "/seguimiento?cat=notas")
+    quitar_nota(nota_id, base=PROJECT_ROOT)
+    registrar_modificacion(
+        accion="nota_seguimiento",
+        resumen=f"Quitó una nota de seguimiento (id {nota_id})",
+        entidad="estudiante",
+    )
+    return _redir(destino, msg="Nota eliminada.")
 
 
 @app.get("/seguimiento/estadisticas", response_class=HTMLResponse)
@@ -686,28 +1036,41 @@ async def pagina_config(request: Request) -> HTMLResponse:
         excluidos=cfg.get("programas_excluidos", []),
         motivos=cfg.get("columnas_motivo_priorizado", []),
         documentos=cfg.get("documentos_adicionales", []),
+        aliases_filas=services.aliases_para_editar(),
+        cols_grafica=services.columnas_config_graficas(),
     )
 
 
 @app.post("/config/guardar")
-async def guardar_config_web(
-    programas: str = Form(""),
-    excluidos: str = Form(""),
-    motivos: str = Form(""),
-) -> RedirectResponse:
+async def guardar_config_web(request: Request) -> RedirectResponse:
+    form = await request.form()
     cfg = cargar_config(PROJECT_ROOT)
 
     def _lineas(texto: str) -> list[str]:
-        return [ln.strip() for ln in texto.splitlines() if ln.strip()]
+        return [ln.strip() for ln in str(texto).splitlines() if ln.strip()]
 
-    cfg["programas_permitidos"] = _lineas(programas)
-    cfg["programas_excluidos"] = _lineas(excluidos)
-    cfg["columnas_motivo_priorizado"] = _lineas(motivos)
+    if "programas" in form:
+        cfg["programas_permitidos"] = _lineas(str(form.get("programas") or ""))
+    if "excluidos" in form:
+        cfg["programas_excluidos"] = _lineas(str(form.get("excluidos") or ""))
+    if "motivos" in form:
+        cfg["columnas_motivo_priorizado"] = _lineas(str(form.get("motivos") or ""))
+    aliases = dict(cfg.get("aliases") or {})
+    for clave in list(aliases.keys()):
+        campo = form.get(f"alias_{clave}")
+        if campo is None:
+            continue
+        aliases[clave] = [p.strip() for p in str(campo).split(",") if p.strip()]
+    cfg["aliases"] = aliases
+    if "graficas_presentes" in form:
+        cfg["columnas_graficas"] = [
+            str(v).strip() for v in form.getlist("grafica") if str(v).strip()
+        ]
     guardar_config(cfg, PROJECT_ROOT)
     aplicar_config(cfg, PROJECT_ROOT)
     registrar_modificacion(
         accion="config",
-        resumen="Guardó la configuración (programas, exclusiones y motivos)",
+        resumen="Guardó la configuración (programas, encabezados y motivos)",
         entidad="config",
     )
     return RedirectResponse("/config?msg=Configuración+guardada", status_code=303)
@@ -832,6 +1195,83 @@ async def descargar_excel_version(version_id: int) -> FileResponse:
         path=str(ruta.resolve()),
         filename=ruta.name,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@app.get("/parcializado", response_class=HTMLResponse)
+async def pagina_parcializado(
+    request: Request,
+    version: int | None = None,
+) -> HTMLResponse:
+    versiones = services.listar_versiones_parcializado()
+    datos = None
+    if versiones:
+        vid = version if version is not None else int(versiones[0]["id"])
+        try:
+            datos = services.datos_parcializado(vid)
+        except ValueError as exc:
+            return _render(
+                request,
+                "parcializado.html",
+                nav="parcializado",
+                versiones=versiones,
+                datos=None,
+                error=str(exc),
+            )
+    return _render(
+        request,
+        "parcializado.html",
+        nav="parcializado",
+        versiones=versiones,
+        datos=datos,
+    )
+
+
+@app.get("/api/parcializado/{version_id}")
+async def api_parcializado(version_id: int) -> JSONResponse:
+    try:
+        return JSONResponse(services.datos_parcializado(version_id))
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.get("/api/parcializado/{version_id}/conteo")
+async def api_parcializado_conteo(
+    version_id: int,
+    programa: list[str] = Query(default=[]),
+) -> JSONResponse:
+    try:
+        n = services.conteo_parcializado(version_id, programa or None)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return JSONResponse({"filas": n})
+
+
+@app.post("/parcializado/descargar")
+async def descargar_parcializado(request: Request) -> Response:
+    form = await request.form()
+    try:
+        version_id = int(str(form.get("version_id") or "0"))
+    except ValueError as exc:
+        raise HTTPException(400, "Indique una versión.") from exc
+    columnas = [str(v).strip() for v in form.getlist("columna") if str(v).strip()]
+    todas = str(form.get("todas_carreras") or "") in {"1", "on", "true"}
+    programas = [] if todas else [str(v).strip() for v in form.getlist("programa") if str(v).strip()]
+    try:
+        contenido, nombre = services.excel_parcializado(
+            version_id, columnas=columnas, programas=programas or None
+        )
+    except ValueError as exc:
+        return _redir("/parcializado", err=str(exc))
+    ascii_name = nombre.encode("ascii", "ignore").decode() or "parcializado.xlsx"
+    return Response(
+        content=contenido,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{quote(nombre)}'
+            )
+        },
     )
 
 
@@ -961,10 +1401,30 @@ async def generar_version_fechada_legacy() -> RedirectResponse:
     )
 
 
+@app.get("/informacion", response_class=HTMLResponse)
+async def pagina_informacion(request: Request) -> HTMLResponse:
+    return _render(
+        request,
+        "informacion.html",
+        nav="informacion",
+        info=services.definicion_puntajes(),
+    )
+
+
+@app.post("/config/puntajes")
+async def guardar_puntajes_web(notas: str = Form("")) -> RedirectResponse:
+    services.guardar_notas_puntajes(notas)
+    return _redir("/informacion", msg="Se guardó la información de puntajes.")
+
+
 @app.get("/graficas", response_class=HTMLResponse)
 async def pagina_graficas(request: Request) -> HTMLResponse:
     df, meta = services.df_ultima_version()
-    columnas = columnas_graficables(df) if df is not None else []
+    cfg = services.cfg_actual()
+    permitidas = cfg.get("columnas_graficas")
+    if not isinstance(permitidas, list):
+        permitidas = None
+    columnas = columnas_graficables(df, permitidas=permitidas) if df is not None else []
     return _render(
         request,
         "graficas.html",
@@ -972,16 +1432,31 @@ async def pagina_graficas(request: Request) -> HTMLResponse:
         columnas=columnas,
         tipos=TIPOS_GRAFICA,
         meta=meta,
+        programas=services.programas_ultima_version(),
     )
 
 
 @app.get("/api/grafica")
-async def api_grafica(columna: str, tipo: str = "bar", top: int = 25) -> JSONResponse:
+async def api_grafica(
+    columna: str,
+    tipo: str = "bar",
+    top: int = 25,
+    programa: str = "",
+) -> JSONResponse:
     df, _ = services.df_ultima_version()
     if df is None or df.height == 0:
         raise HTTPException(400, "No hay datos del consolidado. Genere uno primero.")
+    cfg = services.cfg_actual()
+    permitidas = cfg.get("columnas_graficas")
+    if not isinstance(permitidas, list):
+        permitidas = None
+    habilitadas = columnas_graficables(df, permitidas=permitidas)
+    if columna not in habilitadas:
+        raise HTTPException(400, "Esa columna no está habilitada para gráficas.")
     try:
-        data = preparar_datos_grafica(df, columna=columna, tipo=tipo, top=top)
+        data = preparar_datos_grafica(
+            df, columna=columna, tipo=tipo, top=top, programa=programa or None
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return JSONResponse(data)
@@ -992,6 +1467,11 @@ async def api_grafica_powerbi(payload: dict[str, Any] = Body(...)) -> Response:
     df, _ = services.df_ultima_version()
     if df is None or df.height == 0:
         raise HTTPException(400, "No hay datos del consolidado. Genere uno primero.")
+    cfg = services.cfg_actual()
+    permitidas = cfg.get("columnas_graficas")
+    if not isinstance(permitidas, list):
+        permitidas = None
+    habilitadas = columnas_graficables(df, permitidas=permitidas)
     items = payload.get("graficas") if isinstance(payload, dict) else None
     if not items:
         raise HTTPException(400, "Indique al menos una gráfica lista.")
@@ -999,9 +1479,14 @@ async def api_grafica_powerbi(payload: dict[str, Any] = Body(...)) -> Response:
     try:
         for item in items:
             columna = str(item.get("columna") or "")
+            if columna not in habilitadas:
+                raise ValueError(f"La columna «{columna}» no está habilitada para gráficas.")
             tipo = str(item.get("tipo") or "bar")
             top = int(item.get("top") or 20)
-            data = preparar_datos_grafica(df, columna=columna, tipo=tipo, top=top)
+            programa = str(item.get("programa") or "")
+            data = preparar_datos_grafica(
+                df, columna=columna, tipo=tipo, top=top, programa=programa or None
+            )
             series.append(data)
         contenido = excel_powerbi_desde_graficas(series)
     except ValueError as exc:

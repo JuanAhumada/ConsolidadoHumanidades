@@ -9,10 +9,32 @@
 </div>
 
 {% if estado.listo_generar %}
-<article class="hub-banner ok" role="status">Listo para generar el consolidado. Los archivos obligatorios ya están cargados. Use «Generar nuevo consolidado» en el menú.</article>
+<article class="hub-banner ok" role="status">Listo para generar el consolidado. Los archivos obligatorios ya están cargados. Use el recuadro «Generar» de esta pantalla.</article>
 {% else %}
 <article class="hub-banner warn" role="status">Aún no está listo para generar: faltan {{ estado.obligatorios_total - estado.obligatorios_listos }} de {{ estado.obligatorios_total }} archivos obligatorios.</article>
 {% endif %}
+
+<div class="card" id="generar">
+  <h3>Generar nuevo consolidado</h3>
+  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Cruza los Excel cargados, calcula prioridad y guarda una versión nueva. El periodo sale de los estudiantes, no de la fecha que elija aquí.</p>
+  <form method="post" action="/generar" class="form-row" style="align-items:end;flex-wrap:wrap;gap:.7rem;">
+    <div class="field">
+      <label for="fecha-gen">Fecha de la versión</label>
+      <input id="fecha-gen" type="date" name="fecha_version" value="{{ hoy }}"/>
+    </div>
+    <div class="field">
+      <button class="btn" type="submit"
+              {% if not estado.listo_generar %}disabled title="Faltan archivos obligatorios"{% endif %}>
+        Generar nuevo consolidado
+      </button>
+    </div>
+  </form>
+  {% set pct = ((estado.obligatorios_listos / estado.obligatorios_total * 100) if estado.obligatorios_total else 0)|int %}
+  <div class="cta-progress data-progress" aria-hidden="true"><span style="width:{{ pct }}%"></span></div>
+  <p class="muted" style="font-size:.78rem;margin:.35rem 0 0;">
+    {{ estado.obligatorios_listos }}/{{ estado.obligatorios_total }} archivos obligatorios
+  </p>
+</div>
 
 <div class="grid grid-3">
   <div class="stat"><div class="n">{{ estado.obligatorios_listos }}/{{ estado.obligatorios_total }}</div><div class="l">Obligatorios listos</div></div>
@@ -21,12 +43,35 @@
 </div>
 
 <div class="card">
+  <h3>Paquete inicial</h3>
+  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">
+    Un ZIP con los Excel fuente del primer consolidado. En el paquete de Windows se llama <strong>Archivos iniciales.zip</strong> y queda junto al lanzador al extraer.
+    Se asignan solos por el nombre. El periodo del consolidado será el que traigan los estudiantes, no la fecha en que se genere.
+  </p>
+  <div class="form-actions-row" style="flex-wrap:wrap;gap:.6rem;">
+    <form method="post" action="/upload/paquete" enctype="multipart/form-data" class="file-row" style="padding:0;border:0;flex:1;">
+      <label class="file-pick">
+        <input type="file" name="archivo" accept=".zip" required/>
+        <span class="file-pick-btn">Elegir ZIP</span>
+        <span class="file-pick-name">Ningún archivo</span>
+      </label>
+      <button class="btn" type="submit">Importar paquete</button>
+    </form>
+    {% if paquete_inicial %}
+    <form method="post" action="/upload/paquete/ejemplo">
+      <button class="btn secondary" type="submit">Cargar {{ paquete_inicial.nombre }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
   <h3>Cargar varios por nombre</h3>
-  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Elija varios Excel a la vez. Se asignan solos según el nombre del archivo.</p>
+  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Elija varios Excel o un ZIP. Se asignan solos según el nombre del archivo.</p>
   <form method="post" action="/upload/varios" enctype="multipart/form-data" class="file-row" style="padding:.2rem 0 0;border:0;">
     <label class="file-pick">
-      <input type="file" name="archivos" accept=".xlsx,.xlsm,.xls" multiple required/>
-      <span class="file-pick-btn">Elegir varios Excel</span>
+      <input type="file" name="archivos" accept=".xlsx,.xlsm,.xls,.zip" multiple required/>
+      <span class="file-pick-btn">Elegir varios Excel o un ZIP</span>
       <span class="file-pick-name">Ningún archivo</span>
     </label>
     <button class="btn" type="submit">Cargar por nombre</button>
@@ -47,11 +92,14 @@
         {% if slot.cargado %}Cargado · {{ slot.nombre_guardado }}{% else %}Sin cargar{% endif %}
       </div>
     </div>
+    <div class="docs-row-btns">
     <label class="file-pick">
       <input type="file" name="archivo_{{ slot.id }}" accept=".xlsx,.xlsm,.xls"/>
       <span class="file-pick-btn">Elegir Excel</span>
       <span class="file-pick-name">Ningún archivo</span>
     </label>
+    <button class="btn sm secondary" type="button" data-mapear-slot="{{ slot.id }}" {% if not slot.cargado %}disabled title="Cargue el Excel primero"{% endif %}>Editar datos</button>
+    </div>
   </div>
   {% endfor %}
 </div>
@@ -62,8 +110,19 @@
 </div>
 </form>
 
-<div class="card">
-  <h3>Documentos adicionales</h3>
+<div class="card" id="docs-extra">
+  <div class="card-head-row">
+    <h3>Archivos adicionales</h3>
+    <div class="docs-extra-actions">
+      <label class="file-pick">
+        <input type="file" id="doc-nuevo-file" accept=".xlsx,.xlsm,.xls"/>
+        <span class="file-pick-btn">Añadir Excel</span>
+        <span class="file-pick-name">Ningún archivo</span>
+      </label>
+      <button class="btn secondary" type="button" id="btn-encabezados">Editar encabezados</button>
+    </div>
+  </div>
+  <p class="muted" style="margin-top:-.2rem;margin-bottom:.7rem;">Opcional: otras hojas que se cruzan por identificación. Al abrir el Excel verá una previa, un nombre sugerido, la clave primaria y las columnas a usar.</p>
   {% if estado.documentos %}
     {% for doc in estado.documentos %}
     <div class="file-row">
@@ -71,12 +130,520 @@
         <span class="dot {% if doc.cargado %}ok{% else %}opt{% endif %}"></span>
         <strong>{{ doc.titulo }}</strong>
         <span class="muted">· {{ doc.grupo_encabezado or doc.categoria or 'Extra' }} · {{ doc.num_columnas }} cols</span>
+        <div class="muted" style="margin-left:1.1rem;font-size:.85rem;">{{ doc.nombre_guardado or 'Sin archivo' }}</div>
       </div>
-      <span class="muted">{{ doc.nombre_guardado }}</span>
+      <div class="docs-row-btns">
+        <button class="btn sm secondary" type="button" data-editar-doc="{{ doc.id }}">Editar</button>
+        <form method="post" action="/archivos/documento/{{ doc.id }}/eliminar" onsubmit="return confirm('¿Quitar «{{ doc.titulo }}» de archivos adicionales?');">
+          <button class="btn sm secondary" type="submit">Quitar</button>
+        </form>
+      </div>
     </div>
     {% endfor %}
   {% else %}
-    <p class="muted">No hay documentos adicionales. Puede gestionarlos desde la app de escritorio o ampliar esta vista más adelante.</p>
+    <p class="muted" id="docs-vacio">No hay archivos adicionales. Pulse «Añadir Excel» para cargar uno.</p>
   {% endif %}
 </div>
+
+<section class="card doc-config" id="doc-config" hidden>
+  <h3 id="doc-config-title">Nuevo archivo adicional</h3>
+  <p class="muted" id="doc-config-status"></p>
+  <form method="post" action="/archivos/documento" enctype="multipart/form-data" id="form-doc">
+    <input type="hidden" name="doc_id" id="doc-id" value=""/>
+    <input type="hidden" name="columnas" id="doc-columnas" value="[]"/>
+    <input type="file" name="archivo" id="doc-archivo-hidden" hidden/>
+    <div class="form-row doc-config-fields">
+      <div class="field">
+        <label for="doc-titulo">Nombre</label>
+        <input id="doc-titulo" type="text" name="titulo" required placeholder="Nombre sugerido del documento"/>
+      </div>
+      <div class="field">
+        <label for="doc-grupo">Grupo en el consolidado</label>
+        <input id="doc-grupo" type="text" name="grupo" list="doc-grupos" placeholder="Extra"/>
+        <datalist id="doc-grupos"></datalist>
+      </div>
+      <div class="field">
+        <label for="doc-hoja">Hoja</label>
+        <select id="doc-hoja" name="hoja"></select>
+      </div>
+      <div class="field">
+        <label for="doc-pk">Clave primaria</label>
+        <select id="doc-pk" name="pk" required></select>
+      </div>
+    </div>
+    <p class="muted" id="doc-meta"></p>
+    <div class="table-wrap doc-preview-wrap">
+      <table class="doc-preview" id="doc-preview">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <h4 class="doc-cols-title">Campo de entrada → campo de salida</h4>
+    <p class="muted">A la izquierda, el nombre en el Excel. A la derecha, cómo se llamará en el consolidado.</p>
+    <div class="doc-cols-head" aria-hidden="true">
+      <span></span>
+      <span>Campo de entrada</span>
+      <span>Campo de salida</span>
+    </div>
+    <div class="doc-cols-toolbar">
+      <button class="btn sm secondary" type="button" id="doc-cols-todas">Todas</button>
+      <button class="btn sm secondary" type="button" id="doc-cols-ninguna">Ninguna</button>
+    </div>
+    <div class="doc-cols" id="doc-cols"></div>
+    <div class="form-actions-row doc-config-actions">
+      <label class="file-pick">
+        <input type="file" id="doc-cambiar-file" accept=".xlsx,.xlsm,.xls"/>
+        <span class="file-pick-btn">Cambiar Excel</span>
+        <span class="file-pick-name">Mismo archivo</span>
+      </label>
+      <button class="btn" type="submit" id="doc-guardar">Guardar documento</button>
+      <button class="btn secondary" type="button" id="doc-cancelar">Cancelar</button>
+    </div>
+  </form>
+</section>
+
+<section class="card" id="encabezados" hidden>
+  <h3>Qué datos toma cada archivo</h3>
+  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Elija la base de datos. Verá las hojas internas, una previa de las filas y el campo de entrada (Excel) frente al de salida (consolidado).</p>
+  <div class="form-row doc-config-fields">
+    <div class="field">
+      <label for="map-fuente">Base de datos</label>
+      <select id="map-fuente">
+        <option value="">Elija un archivo…</option>
+        {% for f in fuentes_mapeo or [] %}
+        <option value="{{ f.kind }}:{{ f.id }}" {% if not f.cargado %}disabled{% endif %}>
+          {{ f.grupo }} · {{ f.titulo }}{% if not f.cargado %} (sin Excel){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="map-hoja">Hoja interna</label>
+      <select id="map-hoja" disabled></select>
+    </div>
+  </div>
+  <p class="muted" id="map-status"></p>
+  <p class="muted" id="map-meta"></p>
+  <div class="table-wrap doc-preview-wrap" id="map-preview-wrap" hidden>
+    <table class="doc-preview" id="map-preview">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <form method="post" id="form-mapeo" hidden>
+    <input type="hidden" name="hoja" id="map-hoja-hidden" value=""/>
+    <input type="hidden" name="mapeo" id="map-mapeo-json" value="[]"/>
+    <h4 class="doc-cols-title">Campo de entrada → campo de salida</h4>
+    <p class="muted">Para cada dato del consolidado, elija la columna del Excel de este archivo.</p>
+    <div class="doc-cols-head" aria-hidden="true">
+      <span>Campo de entrada (Excel)</span>
+      <span>Campo de salida (consolidado)</span>
+    </div>
+    <div class="doc-cols" id="map-rows"></div>
+    <div class="form-actions-row doc-config-actions">
+      <button class="btn" type="submit" id="map-guardar">Guardar mapeo</button>
+      <button class="btn secondary" type="button" id="map-cerrar">Cerrar</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const fileInput = document.getElementById("doc-nuevo-file");
+  const panel = document.getElementById("doc-config");
+  const statusEl = document.getElementById("doc-config-status");
+  const titleEl = document.getElementById("doc-config-title");
+  const hiddenFile = document.getElementById("doc-archivo-hidden");
+  const form = document.getElementById("form-doc");
+  const selHoja = document.getElementById("doc-hoja");
+  const selPk = document.getElementById("doc-pk");
+  const colsBox = document.getElementById("doc-cols");
+  const encabezados = document.getElementById("encabezados");
+  let previewFile = null;
+  let currentCols = [];
+  let usedMap = {};
+  let ignoreHoja = false;
+
+  function setStatus(msg, isError) {
+    statusEl.textContent = msg || "";
+    statusEl.classList.toggle("flash-inline-err", !!isError);
+  }
+
+  function fillSelect(sel, values, selected) {
+    sel.innerHTML = "";
+    values.forEach((v) => {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      if (v === selected) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+
+  function fillGrupos(cats, selected) {
+    const list = document.getElementById("doc-grupos");
+    list.innerHTML = "";
+    (cats || []).forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      list.appendChild(opt);
+    });
+    if (selected) document.getElementById("doc-grupo").value = selected;
+    else if (cats && cats.length && !document.getElementById("doc-grupo").value) {
+      document.getElementById("doc-grupo").value = cats[0];
+    }
+  }
+
+  function renderPreview(data) {
+    const table = document.getElementById("doc-preview");
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+    const cols = data.columnas || [];
+    const trh = document.createElement("tr");
+    cols.forEach((c) => {
+      const th = document.createElement("th");
+      th.textContent = c;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+    (data.filas || []).forEach((row) => {
+      const tr = document.createElement("tr");
+      cols.forEach((c) => {
+        const td = document.createElement("td");
+        td.textContent = row[c] || "";
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    document.getElementById("doc-meta").textContent =
+      `${data.total_filas || 0} filas · mostrando ${ (data.filas || []).length } muestras`;
+  }
+
+  function renderCols(cols, pk, usados) {
+    currentCols = cols;
+    usedMap = usados || {};
+    colsBox.innerHTML = "";
+    const hayUsados = Object.keys(usedMap).length > 0;
+    cols.forEach((c) => {
+      const marcada = hayUsados ? Object.prototype.hasOwnProperty.call(usedMap, c) : c !== pk;
+      const salida = usedMap[c] || c;
+      const row = document.createElement("label");
+      row.className = "doc-col-row";
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.dataset.origen = c;
+      chk.checked = marcada;
+      const origen = document.createElement("span");
+      origen.className = "doc-col-origen";
+      origen.title = c;
+      origen.textContent = c;
+      const out = document.createElement("input");
+      out.type = "text";
+      out.className = "doc-col-salida";
+      out.value = salida;
+      out.setAttribute("aria-label", "Encabezado de " + c);
+      row.appendChild(chk);
+      row.appendChild(origen);
+      row.appendChild(out);
+      colsBox.appendChild(row);
+    });
+  }
+
+  function applyPreview(data, { isEdit, keepTitle } = {}) {
+    ignoreHoja = true;
+    fillSelect(selHoja, data.hojas || [], data.hoja);
+    fillSelect(selPk, data.columnas || [], (data.documento && data.documento.pk) || data.pk_sugerida);
+    fillGrupos(data.categorias, data.documento && data.documento.grupo_encabezado);
+    if (!keepTitle) {
+      document.getElementById("doc-titulo").value =
+        (data.documento && data.documento.titulo) || data.titulo_sugerido || "";
+    }
+    if (data.documento && data.documento.id) {
+      document.getElementById("doc-id").value = data.documento.id;
+    }
+    renderPreview(data);
+    const usados = (data.documento && data.documento.columnas_usadas) || usedMap;
+    renderCols(data.columnas || [], selPk.value, isEdit ? usados : {});
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    ignoreHoja = false;
+  }
+
+  async function previewFromFile(file, hoja, keepTitle) {
+    setStatus("Leyendo el Excel…");
+    const fd = new FormData();
+    fd.append("archivo", file);
+    if (hoja) fd.append("hoja", hoja);
+    const res = await fetch("/api/documento/preview", { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "No se pudo leer el Excel.");
+    previewFile = file;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    hiddenFile.files = dt.files;
+    applyPreview(data, {
+      isEdit: !!document.getElementById("doc-id").value,
+      keepTitle: !!hoja || !!keepTitle,
+    });
+    setStatus(`Archivo: ${file.name}`);
+  }
+
+  async function previewSaved(docId, hoja) {
+    setStatus("Cargando documento…");
+    const url = `/api/documento/${encodeURIComponent(docId)}${hoja ? `?hoja=${encodeURIComponent(hoja)}` : ""}`;
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "No se pudo abrir el documento.");
+    previewFile = null;
+    hiddenFile.value = "";
+    titleEl.textContent = "Editar archivo adicional";
+    document.getElementById("doc-id").value = docId;
+    applyPreview(data, { isEdit: true, keepTitle: !!hoja });
+    setStatus(`Guardado: ${data.nombre_archivo || ""}`);
+  }
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    document.getElementById("doc-id").value = "";
+    titleEl.textContent = "Nuevo archivo adicional";
+    usedMap = {};
+    try {
+      await previewFromFile(file);
+    } catch (e) {
+      setStatus(e.message || String(e), true);
+      panel.hidden = false;
+    }
+  });
+
+  selHoja.addEventListener("change", async () => {
+    if (ignoreHoja) return;
+    try {
+      if (previewFile) await previewFromFile(previewFile, selHoja.value, true);
+      else if (document.getElementById("doc-id").value) {
+        await previewSaved(document.getElementById("doc-id").value, selHoja.value);
+      }
+    } catch (e) {
+      setStatus(e.message || String(e), true);
+    }
+  });
+
+  document.getElementById("doc-cols-todas").addEventListener("click", () => {
+    colsBox.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.checked = true; });
+  });
+  document.getElementById("doc-cols-ninguna").addEventListener("click", () => {
+    colsBox.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.checked = false; });
+  });
+  document.getElementById("doc-cambiar-file").addEventListener("change", async () => {
+    const input = document.getElementById("doc-cambiar-file");
+    const file = input.files && input.files[0];
+    if (!file) return;
+    try {
+      await previewFromFile(file, "", true);
+    } catch (e) {
+      setStatus(e.message || String(e), true);
+    }
+  });
+  document.getElementById("doc-cancelar").addEventListener("click", () => {
+    panel.hidden = true;
+    fileInput.value = "";
+    hiddenFile.value = "";
+    previewFile = null;
+  });
+  document.getElementById("btn-encabezados").addEventListener("click", () => {
+    const open = encabezados.hidden;
+    encabezados.hidden = !open;
+    if (open) encabezados.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  if (location.hash === "#encabezados") {
+    encabezados.hidden = false;
+  }
+  document.querySelectorAll("[data-editar-doc]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        await previewSaved(btn.getAttribute("data-editar-doc"));
+      } catch (e) {
+        setStatus(e.message || String(e), true);
+        panel.hidden = false;
+      }
+    });
+  });
+
+  form.addEventListener("submit", () => {
+    const cols = [];
+    colsBox.querySelectorAll(".doc-col-row").forEach((row) => {
+      const chk = row.querySelector('input[type="checkbox"]');
+      const salida = row.querySelector(".doc-col-salida");
+      if (!chk || !chk.checked) return;
+      cols.push({ origen: chk.dataset.origen, salida: (salida && salida.value.trim()) || chk.dataset.origen });
+    });
+    document.getElementById("doc-columnas").value = JSON.stringify(cols);
+  });
+
+  const mapFuente = document.getElementById("map-fuente");
+  const mapHoja = document.getElementById("map-hoja");
+  const mapStatus = document.getElementById("map-status");
+  const mapMeta = document.getElementById("map-meta");
+  const mapForm = document.getElementById("form-mapeo");
+  const mapRows = document.getElementById("map-rows");
+  const mapPreviewWrap = document.getElementById("map-preview-wrap");
+  let mapIgnoreHoja = false;
+  let mapSlotId = "";
+
+  function mapSetStatus(msg, isError) {
+    mapStatus.textContent = msg || "";
+    mapStatus.classList.toggle("flash-inline-err", !!isError);
+  }
+
+  function fillPreviewTable(table, data) {
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+    const cols = data.columnas || [];
+    const trh = document.createElement("tr");
+    cols.forEach((c) => {
+      const th = document.createElement("th");
+      th.textContent = c;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+    (data.filas || []).forEach((row) => {
+      const tr = document.createElement("tr");
+      cols.forEach((c) => {
+        const td = document.createElement("td");
+        td.textContent = row[c] || "";
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderMapeo(data) {
+    mapRows.innerHTML = "";
+    const cols = data.columnas || [];
+    (data.mapeo || []).forEach((item) => {
+      const row = document.createElement("div");
+      row.className = "doc-col-row map-row";
+      const sel = document.createElement("select");
+      sel.dataset.canon = item.canon;
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "(no usar / detectar)";
+      sel.appendChild(empty);
+      cols.forEach((c) => {
+        const opt = document.createElement("option");
+        opt.value = c;
+        opt.textContent = c;
+        if (c === item.origen) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      const salida = document.createElement("span");
+      salida.className = "doc-col-origen";
+      salida.textContent = item.salida;
+      row.appendChild(sel);
+      row.appendChild(salida);
+      mapRows.appendChild(row);
+    });
+  }
+
+  async function loadSlot(slotId, hoja) {
+    mapSlotId = slotId;
+    mapSetStatus("Leyendo el Excel…");
+    const url = `/api/fuente/${encodeURIComponent(slotId)}${hoja ? `?hoja=${encodeURIComponent(hoja)}` : ""}`;
+    const res = await fetch(url);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "No se pudo leer este archivo.");
+    mapIgnoreHoja = true;
+    fillSelect(mapHoja, data.hojas || [], data.hoja);
+    mapHoja.disabled = !(data.hojas && data.hojas.length);
+    document.getElementById("map-hoja-hidden").value = data.hoja || "";
+    fillPreviewTable(document.getElementById("map-preview"), data);
+    mapPreviewWrap.hidden = false;
+    mapMeta.textContent = `${data.total_filas || 0} filas · ${data.hojas ? data.hojas.length : 0} hojas · mostrando ${(data.filas || []).length} muestras`;
+    renderMapeo(data);
+    mapForm.hidden = false;
+    mapForm.action = `/archivos/fuente/${encodeURIComponent(slotId)}/mapeo`;
+    mapSetStatus(`Archivo: ${data.nombre_archivo || ""} · hoja «${data.hoja || ""}»`);
+    mapIgnoreHoja = false;
+  }
+
+  async function abrirFuente(kind, id) {
+    encabezados.hidden = false;
+    encabezados.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (kind === "doc") {
+      mapForm.hidden = true;
+      mapPreviewWrap.hidden = true;
+      mapHoja.innerHTML = "";
+      mapHoja.disabled = true;
+      mapSetStatus("Este archivo adicional se edita en el panel de arriba (entrada → salida).");
+      mapMeta.textContent = "";
+      mapFuente.value = `doc:${id}`;
+      await previewSaved(id);
+      return;
+    }
+    panel.hidden = true;
+    mapFuente.value = `slot:${id}`;
+    await loadSlot(id);
+  }
+
+  mapFuente.addEventListener("change", async () => {
+    const raw = mapFuente.value || "";
+    if (!raw) {
+      mapForm.hidden = true;
+      mapPreviewWrap.hidden = true;
+      mapHoja.innerHTML = "";
+      mapHoja.disabled = true;
+      mapSetStatus("");
+      mapMeta.textContent = "";
+      return;
+    }
+    const [kind, ...rest] = raw.split(":");
+    const id = rest.join(":");
+    try {
+      await abrirFuente(kind, id);
+    } catch (e) {
+      mapSetStatus(e.message || String(e), true);
+    }
+  });
+
+  mapHoja.addEventListener("change", async () => {
+    if (mapIgnoreHoja || !mapSlotId) return;
+    document.getElementById("map-hoja-hidden").value = mapHoja.value;
+    try {
+      await loadSlot(mapSlotId, mapHoja.value);
+    } catch (e) {
+      mapSetStatus(e.message || String(e), true);
+    }
+  });
+
+  mapForm.addEventListener("submit", () => {
+    const items = [];
+    mapRows.querySelectorAll("select[data-canon]").forEach((sel) => {
+      items.push({ canon: sel.dataset.canon, origen: sel.value });
+    });
+    document.getElementById("map-mapeo-json").value = JSON.stringify(items);
+    document.getElementById("map-hoja-hidden").value = mapHoja.value;
+  });
+
+  document.getElementById("map-cerrar").addEventListener("click", () => {
+    encabezados.hidden = true;
+  });
+
+  document.querySelectorAll("[data-mapear-slot]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        await abrirFuente("slot", btn.getAttribute("data-mapear-slot"));
+      } catch (e) {
+        encabezados.hidden = false;
+        mapSetStatus(e.message || String(e), true);
+      }
+    });
+  });
+})();
+</script>
 {% endblock %}

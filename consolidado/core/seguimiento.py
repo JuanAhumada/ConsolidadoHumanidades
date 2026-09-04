@@ -24,6 +24,8 @@ from consolidado.storage.alertas_fuente import partir_tipos_alerta
 from consolidado.storage.alertas_propias import cargar_alertas_propias
 from consolidado.storage.contactados import cargar_ids_contactados
 from consolidado.storage.db import cargar_dataframe_version, ultima_version
+from consolidado.storage.ediciones import cargar_ediciones, overlay_ediciones_fila
+from consolidado.storage.notas import resumen_notas
 
 CATEGORIAS_SEGUIMIENTO: tuple[dict[str, str], ...] = (
     {"id": "general", "titulo": "General", "columna": "Puntaje prioridad", "grupo": "general"},
@@ -35,6 +37,7 @@ CATEGORIAS_SEGUIMIENTO: tuple[dict[str, str], ...] = (
     {"id": "activacion", "titulo": "Activación", "columna": "Ptje Activacion", "grupo": "puntaje"},
     {"id": "ruta", "titulo": "Ruta", "columna": "Ptje Ruta", "grupo": "puntaje"},
     {"id": "alertas", "titulo": "Alertas", "columna": "", "grupo": "alertas"},
+    {"id": "notas", "titulo": "Notas", "columna": "", "grupo": "notas"},
 )
 
 def _numero(val: Any) -> float:
@@ -128,6 +131,8 @@ def _fila_base(fila: dict[str, Any], ids_contactados: set[str]) -> dict[str, Any
         "alertas_final": alertas_fin,
         "alerta_propia": alerta_propia,
         "num_alertas": n_alertas,
+        "n_notas": 0,
+        "ultima_nota": "",
         "contactado": ident in ids_contactados,
         "color": color,
         "estilo": estilo_color(color),
@@ -140,6 +145,8 @@ def _puntaje_categoria(item: dict[str, Any], cat: dict[str, str]) -> float:
         return float(item["puntaje"])
     if cid == "alertas":
         return float(item["num_alertas"])
+    if cid == "notas":
+        return float(item.get("n_notas") or 0)
     mapa = {
         "beca": "ptje_beca",
         "priorizado": "ptje_priorizado",
@@ -158,6 +165,8 @@ def _entra_en_categoria(item: dict[str, Any], cat: dict[str, str]) -> bool:
         return True
     if cid == "alertas":
         return item["num_alertas"] > 0 or bool(item["alerta_propia"])
+    if cid == "notas":
+        return int(item.get("n_notas") or 0) > 0
     if cid == "priorizado":
         return item["ptje_priorizado"] > 0 or item["priorizado"]
     return _puntaje_categoria(item, cat) > 0
@@ -198,9 +207,12 @@ def listar_seguimiento(
         for a in cargar_alertas_propias(base)
         if normalizar_id(a.get("identificacion"))
     }
+    notas = resumen_notas(base)
+    ediciones = cargar_ediciones(base)
 
     universo: list[dict[str, Any]] = []
     for fila in df.iter_rows(named=True):
+        fila = overlay_ediciones_fila(fila, ediciones)
         item = _fila_base(fila, ids_contactados)
         if item is None:
             continue
@@ -208,6 +220,9 @@ def listar_seguimiento(
         if propia and not item["alerta_propia"]:
             item["alerta_propia"] = _texto(propia.get("detalle"))
             item["num_alertas"] = int(item["num_alertas"]) + 1
+        res = notas.get(item["identificacion"]) or {}
+        item["n_notas"] = int(res.get("n") or 0)
+        item["ultima_nota"] = str(res.get("ultima") or "")
         universo.append(item)
 
     programas_opciones = sorted({f["programa"] for f in universo if f["programa"]})

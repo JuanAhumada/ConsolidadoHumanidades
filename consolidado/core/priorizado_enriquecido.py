@@ -9,7 +9,12 @@ import polars as pl
 
 from consolidado.config.settings import COLUMNAS_PRIORIZADO_ENRIQUECIDO, carpeta_excels
 from consolidado.core.archivos import _leer_hoja_datos
-from consolidado.core.columnas import _buscar_columna_por_aliases
+from consolidado.core.columnas import (
+    _buscar_columna_por_aliases,
+    aliases_identificacion_efectivos,
+    aliases_para_slot,
+    usando_aliases,
+)
 from consolidado.core.constants import (
     COL_ACTIVACION_RUTA,
     COL_AJUSTE_RAZONABLE,
@@ -200,7 +205,10 @@ def procesar_archivo_prio_psi(ruta: Path, *, hoja: str | None = None) -> pl.Data
     df = _leer_hoja_datos(ruta, tipo="bd_prio_psi", hoja=hoja)
     cols = list(df.columns)
     col_id = _buscar_columna_por_aliases(
-        cols, ["num identificacion", "identificacion", "identificación", "documento"]
+        cols,
+        aliases_identificacion_efectivos(
+            ["num identificacion", "identificacion", "identificación", "documento"]
+        ),
     )
     col_ajuste = _col_por_palabras(cols, "ajuste", "razonable")
     col_recom = _col_por_palabras(cols, "ajuste", "recomendacion") or _col_por_palabras(
@@ -243,7 +251,10 @@ def procesar_archivo_prio_lic(ruta: Path, *, hoja: str | None = None) -> pl.Data
     df = _leer_hoja_datos(ruta, tipo="bd_prio_lic", hoja=hoja)
     cols = list(df.columns)
     col_id = _buscar_columna_por_aliases(
-        cols, ["identificacion", "identificación", "documento", "cedula", "cédula"]
+        cols,
+        aliases_identificacion_efectivos(
+            ["identificacion", "identificación", "documento", "cedula", "cédula"]
+        ),
     )
     col_ajuste = _col_por_palabras(cols, "ajustes", "razonables") or _col_por_palabras(
         cols, "ajuste", "razonable"
@@ -325,7 +336,8 @@ def _cargar_priorizado_enriquecido_cfg(
         if not p.is_file():
             continue
         try:
-            partes.append(procesador(p, hoja=slot.get("hoja")))
+            with usando_aliases(aliases_para_slot(slot)):
+                partes.append(procesador(p, hoja=slot.get("hoja")))
         except Exception:
             continue
     return _fusionar_enriquecidos(partes)

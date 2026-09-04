@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Proyección a Grado{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Proyección a Grado</h2>
+    <p class="sub">
+      Estudiantes activos próximos a graduarse según ruta de grado y permanencia
+      (cohorte, créditos, opción de grado, inglés o Saber Pro).
+      {{ visibles }} en esta vista de {{ total }}.
+      {% if meta %}Versión {{ meta.periodo }} · {{ meta.fecha_version }}{% endif %}
+      · Corte {{ periodo }}
+    </p>
+  </div>
+  <div class="segment">
+    <a class="btn sm {% if vista!='aun_no' %}secondary{% endif %}" href="{{ href_aun_no }}">Aún no ({{ n_aun_no }})</a>
+    <a class="btn sm {% if vista!='si' %}secondary{% endif %}" href="{{ href_si }}">Se gradúan ({{ n_si }})</a>
+  </div>
+</div>
+
+{% if programas %}
+<nav class="seg-carreras" aria-label="Filtrar por carrera">
+  <a class="{% if filtro_general %}active{% endif %}" href="{{ href_carreras_general }}">General</a>
+  {% for p in programas %}
+  <a class="{% if p.activo %}active{% endif %}" href="{{ p.href }}" title="{{ p.nombre }}">{{ p.corta }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+<div class="seg-lista">
+  {% for f in filas %}
+  <article class="seg-card {% if f.se_gradua %}is-marcado{% endif %}" style="{{ f.estilo }}">
+    <h3><a href="/estudiante/{{ f.identificacion }}">{{ f.nombre }}</a></h3>
+    <p class="seg-card-score"><strong>{{ f.pct_txt }}</strong> créditos</p>
+    <p class="proy-card-meta">
+      Cohorte {{ f.cohorte }}
+      {% if f.periodo_grado and f.periodo_grado != '—' %} · Grado {{ f.periodo_grado }}{% endif %}
+    </p>
+    {% if f.motivos %}
+    <p class="proy-card-motivos">{{ f.motivos[0] }}{% if f.motivos|length > 1 %} · +{{ f.motivos|length - 1 }}{% endif %}</p>
+    {% endif %}
+    {% if f.n_notas %}<p class="seg-card-nota">{{ f.n_notas }} nota{% if f.n_notas != 1 %}s{% endif %}{% if f.ultima_nota %}: {{ f.ultima_nota }}{% endif %}</p>{% endif %}
+    <p class="proy-card-estado">
+      {% if f.se_gradua == True %}Se gradúa este semestre{% elif f.se_gradua == False %}No se gradúa este semestre{% else %}Sin respuesta{% endif %}
+    </p>
+    <a class="btn sm secondary" href="/estudiante/{{ f.identificacion }}">Abrir ficha</a>
+  </article>
+  {% else %}
+  <div class="card">
+    <p class="muted">
+      {% if vista=='si' %}Nadie está marcado como que se gradúa este semestre.{% else %}No hay estudiantes próximos a grado pendientes de confirmar.{% endif %}
+    </p>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

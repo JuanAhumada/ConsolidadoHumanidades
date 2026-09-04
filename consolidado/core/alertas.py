@@ -9,7 +9,12 @@ import polars as pl
 from consolidado.config.settings import COLUMNAS_ALERTAS, carpeta_excels
 from consolidado.core.archivos import _elegir_hoja_datos
 from consolidado.core.excel_io import _leer_hoja_excel
-from consolidado.core.columnas import _buscar_columna_por_aliases
+from consolidado.core.columnas import (
+    _buscar_columna_por_aliases,
+    aliases_identificacion_efectivos,
+    aliases_para_slot,
+    usando_aliases,
+)
 from consolidado.core.constants import (
     COL_NUM_ALERTA_FINAL,
     COL_NUM_ALERTA_INICIAL,
@@ -78,7 +83,10 @@ def procesar_archivo_alertas(
     df = _leer_hoja_excel(ruta, nombre_hoja)
     cols = list(df.columns)
     col_cedula = _buscar_columna_por_aliases(
-        cols, ["cedula", "cédula", "identificacion", "identificación", "documento"]
+        cols,
+        aliases_identificacion_efectivos(
+            ["cedula", "cédula", "identificacion", "identificación", "documento"]
+        ),
     )
     col_num_src = _columna_num_alertas(cols)
     schema = {"_id_key": pl.Utf8, col_num: pl.Int64, col_tipo: pl.Utf8}
@@ -174,9 +182,10 @@ def _cargar_alertas_cfg(
         if not p.is_file():
             continue
         try:
-            por_fase[fase].append(
-                procesar_archivo_alertas(p, hoja=slot.get("hoja"), fase=fase)
-            )
+            with usando_aliases(aliases_para_slot(slot)):
+                por_fase[fase].append(
+                    procesar_archivo_alertas(p, hoja=slot.get("hoja"), fase=fase)
+                )
         except Exception:
             continue
 

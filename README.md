@@ -6,7 +6,7 @@ La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI
 
 **Usuarios (Windows, sin Python):** doble clic en `ConsolidadoHumanidades.exe`.
 
-- Si bajó [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Windows.zip), extraiga y pulse el `.exe` de la **raíz** de lo extraído.
+- Si bajó [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Windows.zip) (va con Git LFS), extraiga: en la raíz están el `.exe` y **`Archivos iniciales.zip`** (cárguelo en Data). El «Download ZIP» del código no trae ese paquete real.
 - Si bajó el ZIP del código, pulse el `ConsolidadoHumanidades.exe` de la **raíz del repo** (es un lanzador de 7 KB; localiza o descomprime el paquete). Usuario inicial: `admin` / `admin`.
 
 ## Requisitos
@@ -100,7 +100,7 @@ Al cargar, los defaults se fusionan con el JSON: columnas nuevas del código se 
 | `empaque/` | Lanzador Windows (sin consola) |
 | `consolidado/` | Código |
 
-Los `.xlsx` sueltos y la `.db` **no van al repositorio** (datos de estudiantes). El paquete de prueba `ArchivosPrueba2026-1.zip` (~19 MB) **sí se versiona** para poder subirlo a GitHub (límite 100 MB por archivo; no hace falta Git LFS).
+Los `.xlsx` sueltos y la `.db` **no van al repositorio** (datos de estudiantes). El paquete de prueba `ArchivosPrueba2026-1.zip` (~19 MB) **sí se versiona** en git normal. El instalable `release/ConsolidadoHumanidades-Windows.zip` va con **Git LFS** (supera 100 MB). Tras clonar: `git lfs install` y `git lfs pull`. `dist/` no se versiona: regenerar con `build_exe.bat`.
 
 ## Mapa del código
 

@@ -15,20 +15,11 @@ dist-info/
 .coverage
 htmlcov/
 
-# Build temporal de PyInstaller (el .exe distribuible sí se versiona)
+# Artefactos de PyInstaller (regenerar con build_exe.bat)
 build/
+dist/
 
-# Datos que genera el .exe si se ejecuta desde dist/
-dist/ConsolidadoHumanidades/datos/*.db
-dist/ConsolidadoHumanidades/datos/*.db-journal
-dist/ConsolidadoHumanidades/datos/entrada/*.xlsx
-dist/ConsolidadoHumanidades/datos/historico/
-dist/ConsolidadoHumanidades/salida/*.xlsx
-dist/ConsolidadoHumanidades/salida/*.xls
-dist/ConsolidadoHumanidades/salida/*.xlsm
-
-# ZIP de distribución: se versiona ConsolidadoHumanidades-Windows.zip
-# (sin Git LFS, para que «Download ZIP» del repo lo traiga de verdad)
+# ZIP de distribución: se versiona con Git LFS (supera el límite de 100 MB de git)
 release/*
 !release/.gitkeep
 !release/README.md
@@ -36,6 +27,7 @@ release/*
 
 # Paquete de Excels de prueba (raíz). GitHub admite hasta 100 MB por archivo.
 !ArchivosPrueba2026-1.zip
+empaque/paquete_inicial.zip
 
 # Residuos locales
 installed.txt

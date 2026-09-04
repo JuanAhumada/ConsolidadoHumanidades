@@ -237,8 +237,8 @@ class AppConsolidado(ctk.CTk):
 
         self.marco_docs = Seccion(
             scroll.inner,
-            titulo="Documentos adicionales",
-            ayuda="Opcional: otras hojas Excel que se añaden como columnas extra.",
+            titulo="Archivos adicionales",
+            ayuda="Opcional: otras hojas Excel. Al abrirlas verá una previa, elegirá la clave primaria y las columnas.",
         )
         self.marco_docs.pack(fill="x", pady=(0, 8))
         self.marco_filas_docs = ctk.CTkFrame(self.marco_docs.body, fg_color="transparent")
@@ -637,7 +637,7 @@ class AppConsolidado(ctk.CTk):
         if not docs:
             ctk.CTkLabel(
                 self.marco_filas_docs,
-                text="No hay documentos adicionales. Use «Añadir documento» para agregar uno.",
+                text="No hay archivos adicionales. Use «Añadir documento» para agregar uno.",
                 text_color=COLOR_TEXTO_MUTED,
             ).pack(anchor="w")
         else:

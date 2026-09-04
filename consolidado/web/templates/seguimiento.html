@@ -85,6 +85,27 @@
 </div>
 {% endif %}
 
+{% if cat == 'notas' %}
+<div class="card seg-panel">
+  <h3>Añadir nota de seguimiento</h3>
+  <p class="muted" style="margin-top:-.35rem;">Queda en la ficha del estudiante. Indique su cédula.</p>
+  <form method="post" action="/notas/anadir" class="form-row">
+    <input type="hidden" name="volver" value="/seguimiento?cat=notas&amp;vista={{ vista }}"/>
+    <div class="field">
+      <label for="nota-id">Identificación</label>
+      <input id="nota-id" type="text" name="identificacion" required placeholder="Cédula o documento"/>
+    </div>
+    <div class="field" style="grid-column:1/-1;">
+      <label for="nota-texto">Nota</label>
+      <input id="nota-texto" type="text" name="nota" required placeholder="Qué le dijo el estudiante u observación"/>
+    </div>
+    <div class="form-actions-row">
+      <button class="btn" type="submit">Guardar nota</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
 <div class="seg-lista">
   {% for f in filas %}
   <article class="seg-card {% if f.contactado %}is-marcado{% endif %}" style="{{ f.estilo }}">
@@ -98,7 +119,8 @@
       <span class="seg-check-lbl">{% if f.contactado %}Marcado{% else %}Marcar{% endif %}</span>
     </button>
     <h3><a href="/estudiante/{{ f.identificacion }}">{{ f.nombre }}</a></h3>
-    <p class="seg-card-score"><strong>{{ f.puntaje_txt }}</strong> {% if cat == 'alertas' %}alertas{% else %}pts{% endif %}</p>
+    <p class="seg-card-score"><strong>{{ f.puntaje_txt }}</strong> {% if cat == 'alertas' %}alertas{% elif cat == 'notas' %}notas{% else %}pts{% endif %}</p>
+    {% if cat == 'notas' and f.ultima_nota %}<p class="seg-card-nota">{{ f.ultima_nota }}</p>{% endif %}
   </article>
   {% else %}
   <div class="card"><p class="muted">No hay estudiantes en esta categoría{% if vista=='pendientes' %} pendientes de marcar{% endif %}.</p></div>
@@ -206,6 +228,7 @@
     idInp.value = pending.dataset.id;
     onInp.value = ya ? "0" : "1";
     pending = null;
+    if (typeof marcarNavegacionInterna === "function") marcarNavegacionInterna();
     form.submit();
   });
 })();
