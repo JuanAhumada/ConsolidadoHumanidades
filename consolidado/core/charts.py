@@ -8,6 +8,7 @@ from io import BytesIO
 from typing import Any
 
 from consolidado.core.colores_programa import colores_para_etiquetas
+from consolidado.core.constants import es_columna_materia_horario
 
 import polars as pl
 from openpyxl import Workbook
@@ -79,8 +80,82 @@ _ALIAS_TIPO = {
 }
 
 
-def columnas_graficables(df: pl.DataFrame) -> list[str]:
-    return list(df.columns)
+COLUMNAS_GRAFICA_UNICAS = frozenset(
+    {
+        "Identificación",
+        "Nombre y apellidos",
+        "Teléfono celular",
+        "Correo institucional",
+        "Correo personal",
+        "Fecha de nacimiento",
+        "Lugar de nacimiento",
+        "Lugar de residencia",
+        "Dirección residencia",
+        "Detalle prioridad",
+        "Detalle GPrio.",
+        "Detalle Propio",
+    }
+)
+
+_CLAVES_UNICAS = (
+    "identificación",
+    "identificacion",
+    "cédula",
+    "cedula",
+    "nombre y apellido",
+    "nombres y apellido",
+    "nombre completo",
+    "nombre del estudiante",
+    "nombre estudiante",
+    "teléfono",
+    "telefono",
+    "celular",
+    "correo",
+    "e-mail",
+    "email",
+    "fecha de nacimiento",
+    "lugar de nacimiento",
+    "lugar de residencia",
+    "dirección",
+    "direccion",
+)
+_RE_MATERIA_AMPLIA = re.compile(r"^(materia|horario|profesor)s?\b", re.I)
+
+
+def _parece_informacion_unica(nombre: str) -> bool:
+    n = str(nombre or "").strip().casefold()
+    if n in {"nombre", "nombres", "apellido", "apellidos"}:
+        return True
+    return any(clave in n for clave in _CLAVES_UNICAS)
+
+
+def es_columna_materia_grafica(col: str) -> bool:
+    nombre = str(col or "").strip()
+    return bool(es_columna_materia_horario(nombre) or _RE_MATERIA_AMPLIA.match(nombre))
+
+
+def columna_excluida_grafica(col: str) -> bool:
+    nombre = str(col or "").strip()
+    if not nombre:
+        return True
+    if es_columna_materia_grafica(nombre):
+        return True
+    if nombre in COLUMNAS_GRAFICA_UNICAS:
+        return True
+    return _parece_informacion_unica(nombre)
+
+
+def columnas_graficables(
+    df: pl.DataFrame | None,
+    permitidas: list[str] | None = None,
+) -> list[str]:
+    if df is None:
+        return []
+    cols = [str(c) for c in df.columns]
+    if permitidas is not None:
+        ok = {str(c).strip() for c in permitidas if str(c).strip()}
+        return [c for c in cols if c in ok and not es_columna_materia_grafica(c)]
+    return [c for c in cols if not columna_excluida_grafica(c)]
 
 
 def _partir_categorias(texto: str) -> list[str]:
@@ -89,12 +164,52 @@ def _partir_categorias(texto: str) -> list[str]:
     return partes or [str(texto).strip()]
 
 
+COL_PROGRAMA_GRAFICA = "Programa"
+
+
+def programas_disponibles(df: pl.DataFrame | None) -> list[str]:
+    if df is None or COL_PROGRAMA_GRAFICA not in df.columns:
+        return []
+    vistos: list[str] = []
+    for val in df.get_column(COL_PROGRAMA_GRAFICA).to_list():
+        if val is None:
+            continue
+        for parte in _partir_categorias(str(val)):
+            if parte and parte not in vistos:
+                vistos.append(parte)
+    return sorted(vistos, key=lambda s: s.casefold())
+
+
+def filtrar_df_por_carreras(df: pl.DataFrame, carreras: list[str] | None) -> pl.DataFrame:
+    claves = [str(c).strip() for c in (carreras or []) if str(c).strip()]
+    if not claves or COL_PROGRAMA_GRAFICA not in df.columns:
+        return df
+    claves_cf = {c.casefold() for c in claves}
+
+    def _coincide(val: Any) -> bool:
+        if val is None:
+            return False
+        return any(p.casefold() in claves_cf for p in _partir_categorias(str(val)))
+
+    return df.filter(
+        pl.col(COL_PROGRAMA_GRAFICA).map_elements(_coincide, return_dtype=pl.Boolean)
+    )
+
+
+def filtrar_df_por_carrera(df: pl.DataFrame, carrera: str | None) -> pl.DataFrame:
+    clave = (carrera or "").strip()
+    if not clave:
+        return df
+    return filtrar_df_por_carreras(df, [clave])
+
+
 def preparar_datos_grafica(
     df: pl.DataFrame,
     *,
     columna: str,
     tipo: str = "bar",
     top: int = 25,
+    programa: str | None = None,
 ) -> dict[str, Any]:
     """
     Devuelve labels/valores listos para Chart.js.
@@ -102,6 +217,11 @@ def preparar_datos_grafica(
     tipo = _ALIAS_TIPO.get((tipo or "bar").strip().lower(), (tipo or "bar").strip().lower())
     if tipo not in TIPOS_GRAFICA:
         raise ValueError(f"Tipo no soportado: {tipo}. Use: {', '.join(TIPOS_GRAFICA)}")
+    carrera = (programa or "").strip()
+    if carrera:
+        df = filtrar_df_por_carrera(df, carrera)
+        if df.height == 0:
+            raise ValueError(f"No hay estudiantes de la carrera «{carrera}».")
     if columna not in df.columns:
         raise ValueError(f"Columna «{columna}» no encontrada.")
 
@@ -133,6 +253,7 @@ def preparar_datos_grafica(
         "colores": colores_para_etiquetas(labels) if es_programa else paleta_categorias(len(labels)),
         "total_filas": len(valores),
         "categorias": len(labels),
+        "programa": carrera,
     }
 
 

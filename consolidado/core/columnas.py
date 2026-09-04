@@ -7,6 +7,9 @@ Periodo ingreso.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
+from typing import Iterator
+
 import polars as pl
 
 from consolidado.config.settings import COLUMNAS_PRIORIZADO
@@ -28,6 +31,57 @@ from consolidado.core.normalizacion import (
     normalizar_telefono_celda,
     _entero_o_texto,
 )
+
+_ALIASES_OVERRIDE: dict[str, list[str]] | None = None
+
+
+def aliases_para_slot(slot: dict | None) -> dict[str, list[str]] | None:
+    """Combina aliases globales con los del archivo (el mapeo del slot gana)."""
+    if not slot:
+        return None
+    extra = slot.get("aliases")
+    if not extra or not isinstance(extra, dict):
+        return None
+    if not _ALIASES_RUNTIME:
+        aplicar_config()
+    merged = {k: list(v) for k, v in _ALIASES_RUNTIME.items()}
+    for canon, vals in extra.items():
+        nombres = vals if isinstance(vals, list) else [vals]
+        nombres = [str(x).strip() for x in nombres if str(x).strip()]
+        if not nombres:
+            continue
+        previos = [a for a in merged.get(str(canon), []) if a not in nombres]
+        merged[str(canon)] = nombres + previos
+    return merged
+
+
+@contextmanager
+def usando_aliases(aliases: dict[str, list[str]] | None) -> Iterator[None]:
+    global _ALIASES_OVERRIDE
+    prev = _ALIASES_OVERRIDE
+    _ALIASES_OVERRIDE = aliases
+    try:
+        yield
+    finally:
+        _ALIASES_OVERRIDE = prev
+
+
+def _aliases_activos() -> dict[str, list[str]]:
+    if _ALIASES_OVERRIDE:
+        return _ALIASES_OVERRIDE
+    if not _ALIASES_RUNTIME:
+        aplicar_config()
+    return _ALIASES_RUNTIME
+
+
+def aliases_identificacion_efectivos(extra: list[str] | None = None) -> list[str]:
+    base = [str(a) for a in (_aliases_activos().get("identificacion") or []) if str(a).strip()]
+    for alias in extra or []:
+        if alias not in base:
+            base.append(alias)
+    return base
+
+
 def construir_mapa_columnas(columns: list[str]) -> dict[str, str]:
     """Devuelve canónico -> nombre real de columna en el DataFrame."""
     norm_to_real: dict[str, str] = {}
@@ -37,9 +91,7 @@ def construir_mapa_columnas(columns: list[str]) -> dict[str, str]:
             norm_to_real[k] = c
 
     resultado: dict[str, str] = {}
-    if not _ALIASES_RUNTIME:
-        aplicar_config()
-    for canon, aliases in _ALIASES_RUNTIME.items():
+    for canon, aliases in _aliases_activos().items():
         for alias in aliases:
             key = normalizar_encabezado(alias)
             if key in norm_to_real:
@@ -103,21 +155,21 @@ def _expr_telefono_celular(df: pl.DataFrame, m: dict[str, str], nr: dict[str, st
 
 def _expr_total_beca(df: pl.DataFrame, m: dict[str, str], nr: dict[str, str]) -> pl.Expr:
     """Valor monetario de la beca (columna TOTAL en hoja BECAS Y CRÉDITOS)."""
+    if "total_beca" in m:
+        return pl.col(m["total_beca"]).alias("Total beca")
     if "total" in nr:
         return pl.col(nr["total"]).alias("Total beca")
-    if not _ALIASES_RUNTIME:
-        aplicar_config()
-    col = _buscar_columna_por_aliases(list(df.columns), _ALIASES_RUNTIME.get("total_beca", []))
+    col = _buscar_columna_por_aliases(list(df.columns), _aliases_activos().get("total_beca", []))
     if col:
         return pl.col(col).alias("Total beca")
     return pl.lit(None).alias("Total beca")
 
 
 def _expr_funcionario_beca(df: pl.DataFrame, m: dict[str, str], nr: dict[str, str]) -> pl.Expr:
-    if "responsable" in nr:
-        return pl.col(nr["responsable"]).alias("Funcionario que tiene a cargo la beca")
     if "funcionario_beca" in m:
         return pl.col(m["funcionario_beca"]).alias("Funcionario que tiene a cargo la beca")
+    if "responsable" in nr:
+        return pl.col(nr["responsable"]).alias("Funcionario que tiene a cargo la beca")
     return pl.lit(None).alias("Funcionario que tiene a cargo la beca")
 
 

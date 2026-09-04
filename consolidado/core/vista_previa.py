@@ -7,7 +7,6 @@ from pathlib import Path
 import polars as pl
 
 from consolidado.config.settings import (
-    ALIAS_ETIQUETAS,
     COLUMNAS_ALERTAS,
     COLUMNAS_PRIORIZADO,
     COLUMNAS_PRIORIZADO_ENRIQUECIDO,
@@ -30,6 +29,50 @@ from consolidado.core.constants import (
 from consolidado.core.normalizacion import _es_nulo, _mapa_norm_a_real, _str_celda, normalizar_encabezado
 from consolidado.core.priorizado_enriquecido import _col_por_palabras
 
+_CAMPOS_LISTADO = [
+    "identificacion",
+    "nombre_estudiante",
+    "fecha_nacimiento",
+    "telefono_celular",
+    "programa",
+    "correo_institucional",
+    "correo_personal",
+    "periodo_ingreso",
+    "periodo_actual",
+    "periodo_ultima_matricula",
+    "reintegros",
+    "lugar_nacimiento",
+    "lugar_residencia",
+    "direccion_residencia",
+]
+_CAMPOS_BECAS = [
+    "identificacion",
+    "programa",
+    "total_beca",
+    "tipo_beca_credito",
+    "funcionario_beca",
+]
+_CAMPOS_ID = ["identificacion"]
+
+CAMPOS_POR_TIPO: dict[str, list[str]] = {
+    "bd1": _CAMPOS_LISTADO,
+    "bd12": _CAMPOS_LISTADO,
+    "bd3": _CAMPOS_BECAS,
+    "bd2": _CAMPOS_ID,
+    "bd_rep": _CAMPOS_ID,
+    "bd_alertas_com": _CAMPOS_ID,
+    "bd_alertas_psi": _CAMPOS_ID,
+    "bd_prio_psi": _CAMPOS_ID,
+    "bd_prio_lic": _CAMPOS_ID,
+    "bd_permanencia": _CAMPOS_ID,
+    "bd_graduacion": _CAMPOS_ID,
+}
+
+
+def campos_editables_tipo(tipo: str) -> list[str]:
+    return list(CAMPOS_POR_TIPO.get(tipo or "", _CAMPOS_ID))
+
+
 _CANON_A_SALIDA: dict[str, str] = {
     "identificacion": "Identificación",
     "nombre_estudiante": "Nombre y apellidos",
@@ -40,9 +83,11 @@ _CANON_A_SALIDA: dict[str, str] = {
     "correo_personal": "Correo personal",
     "periodo_ingreso": "Periodo ingreso",
     "periodo_actual": "Periodo actual",
+    "periodo_ultima_matricula": "Periodo última matrícula",
     "reintegros": "Reintegros",
     "lugar_nacimiento": "Lugar de nacimiento",
     "lugar_residencia": "Lugar de residencia",
+    "direccion_residencia": "Dirección residencia",
     "tipo_beca_credito": "Tipo de beca o crédito",
     "total_beca": "Total beca",
     "funcionario_beca": "Funcionario que tiene a cargo la beca",

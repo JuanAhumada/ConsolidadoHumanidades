@@ -386,6 +386,7 @@ def config_default(base: Path | None = None) -> dict[str, Any]:
         "programas_excluidos": list(PROGRAMAS_EXCLUIDOS_DEFAULT),
         "columnas_motivo_priorizado": list(COLUMNAS_MOTIVO_PRIO_DEFAULT),
         "colores_prioridad": deepcopy(COLORES_PRIORIDAD_DEFAULT),
+        "info_puntajes": {"notas": ""},
         "categorias_fuente": deepcopy(CATEGORIAS_FUENTE_DEFAULT),
         "grupos_salida": [
             {"nombre": "Datos", "columnas": list(COLUMNAS_DATOS)},

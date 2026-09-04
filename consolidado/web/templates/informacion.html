@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Información{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Información de puntajes</h2>
+    <p class="sub">Cómo se calcula el puntaje de prioridad de cada estudiante. La fórmula se aplica al generar el consolidado.</p>
+  </div>
+</div>
+
+<section class="leyenda-block">
+  <h3>Fórmula</h3>
+  <p class="info-formula">{{ info.formula }}</p>
+  <p class="muted">El nivel numérico sale del total: 5 = activación de ruta · 4 = 10–19 · 3 = 7–9 · 2 = 4–6 · 1 = 1–3 · 0 = sin señal.</p>
+</section>
+
+<section class="leyenda-block">
+  <h3>Cómo se suman los puntos</h3>
+  <div class="info-bloques">
+    {% for b in info.bloques %}
+    <article class="info-bloque">
+      <h4>{{ b.titulo }}</h4>
+      {% if b.nota %}<p class="muted">{{ b.nota }}</p>{% endif %}
+      <ul>
+        {% for item in b["items"] %}
+        <li>{{ item.etiqueta }} <strong>+{{ item.puntos }}</strong></li>
+        {% endfor %}
+      </ul>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="leyenda-block">
+  <h3>Niveles de prioridad</h3>
+  <ul class="leyenda-niveles">
+    {% for n in info.niveles %}
+    <li><span class="leyenda-nivel">{{ n.nivel }}</span> {{ n.nombre }} · {{ n.rango }}</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="leyenda-block">
+  <h3>Color de fila en el Excel</h3>
+  <p class="muted">El color sigue el componente con puntaje más alto (beca, priorizado, reintegro…). No es el color de la carrera.</p>
+  <ul class="leyenda-list">
+    {% for c in info.colores %}
+    <li class="leyenda-row leyenda-row-plain">
+      <span class="leyenda-row-name">{{ c.etiqueta }}</span>
+      <span class="leyenda-row-note">{{ c.nota }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="leyenda-block">
+  <h3>Notas de la facultad</h3>
+  <p class="muted">Texto libre para documentar acuerdos o excepciones. Solo el administrador puede guardarlo.</p>
+  {% if es_admin %}
+  <form method="post" action="/config/puntajes">
+    <textarea name="notas" rows="8" placeholder="Ejemplo: la beca de Call Center cuenta a la mitad; priorizado propio suma 3 puntos…">{{ info.notas }}</textarea>
+    <div class="form-actions-row" style="margin-top:0.85rem;">
+      <button class="btn" type="submit">Guardar información</button>
+    </div>
+  </form>
+  {% elif info.notas %}
+  <div class="info-notas">{{ info.notas }}</div>
+  {% else %}
+  <p class="muted">Aún no hay notas guardadas.</p>
+  {% endif %}
+</section>
+{% endblock %}

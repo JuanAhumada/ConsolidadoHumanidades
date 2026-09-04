@@ -1,17 +1,170 @@
 """Documentos adicionales configurables: se unen por identificación al consolidado."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
+from typing import Any
 
 import polars as pl
 
-from consolidado.config.settings import carpeta_excels
-from consolidado.core.archivos import _leer_hoja_datos
-from consolidado.core.excel_io import _leer_hoja_excel
+from consolidado.config.settings import (
+    CATEGORIAS_FUENTE_DEFAULT,
+    ORDEN_CATEGORIAS_FUENTE,
+    carpeta_excels,
+)
+from consolidado.core.archivos import _elegir_hoja_datos, _leer_hoja_datos
 from consolidado.core.columnas import _buscar_columna_por_aliases
-from consolidado.core.constants import _ALIASES_RUNTIME
+from consolidado.core.constants import _ALIASES_RUNTIME, aplicar_config
+from consolidado.core.excel_io import _leer_hoja_excel, _nombres_hojas_excel
 from consolidado.core.fusion import filtrar_filas_programas_permitidos
-from consolidado.core.normalizacion import combinar_valores, normalizar_id
+from consolidado.core.normalizacion import combinar_valores, normalizar_encabezado, normalizar_id
+
+MUESTRAS_PREVIA = 20
+_PISTAS_IDENTIFICACION = (
+    "identific",
+    "cedula",
+    "cédula",
+    "documento",
+    "num id",
+    "nro id",
+)
+
+
+def _texto_celda_preview(val: Any) -> str:
+    if val is None:
+        return ""
+    if hasattr(val, "strftime") and not isinstance(val, (str, int, float, bool)):
+        try:
+            return val.strftime("%Y-%m-%d")
+        except (ValueError, TypeError, OverflowError):
+            pass
+    texto = str(val).strip()
+    if texto.lower() in {"none", "null", "nan"}:
+        return ""
+    if len(texto) > 80:
+        return texto[:77] + "…"
+    return texto
+
+
+def sugerir_titulo_documento(nombre_archivo: str) -> str:
+    stem = Path(nombre_archivo or "").stem
+    texto = re.sub(r"[_\-]+", " ", stem).strip()
+    return texto.title() if texto else "Documento extra"
+
+
+def slug_documento_id(titulo: str, existentes: set[str] | None = None) -> str:
+    usados = existentes or set()
+    base = re.sub(r"[^a-z0-9]+", "_", (titulo or "").lower()).strip("_") or "doc"
+    doc_id = base
+    n = 1
+    while doc_id in usados:
+        doc_id = f"{base}_{n}"
+        n += 1
+    return doc_id
+
+
+def categorias_documento(cfg: dict[str, Any] | None = None) -> list[str]:
+    cfg = cfg or {}
+    cats: list[str] = []
+    for g in cfg.get("grupos_salida", []):
+        nombre = str(g.get("nombre", "")).strip()
+        if nombre and nombre not in cats:
+            cats.append(nombre)
+    etiquetas = cfg.get("categorias_fuente", CATEGORIAS_FUENTE_DEFAULT)
+    for key in ORDEN_CATEGORIAS_FUENTE:
+        etiqueta = str(etiquetas.get(key, key.title())).strip()
+        if etiqueta and etiqueta not in cats:
+            cats.append(etiqueta)
+    for doc in cfg.get("documentos_adicionales", []):
+        grupo = str(doc.get("grupo_encabezado") or doc.get("titulo") or "").strip()
+        if grupo and grupo not in cats:
+            cats.append(grupo)
+    return cats or ["Extra"]
+
+
+def aliases_identificacion(cfg: dict[str, Any] | None = None) -> list[str]:
+    if not _ALIASES_RUNTIME:
+        aplicar_config(cfg)
+    if cfg:
+        vals = cfg.get("aliases", {}).get("identificacion")
+        if isinstance(vals, list) and vals:
+            return [str(v) for v in vals if str(v).strip()]
+    return list(_ALIASES_RUNTIME.get("identificacion") or [])
+
+
+def sugerir_columna_identificacion(
+    columnas: list[str],
+    aliases: list[str] | None = None,
+) -> str | None:
+    if not columnas:
+        return None
+    ids = aliases or aliases_identificacion()
+    hallada = _buscar_columna_por_aliases(columnas, ids)
+    if hallada:
+        return hallada
+    for col in columnas:
+        norma = normalizar_encabezado(col)
+        if any(pista in norma for pista in _PISTAS_IDENTIFICACION):
+            return col
+    return columnas[0]
+
+
+def vista_previa_excel(
+    ruta: Path,
+    *,
+    hoja: str | None = None,
+    n: int = MUESTRAS_PREVIA,
+    cfg: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Lee un Excel y devuelve columnas + hasta n filas de muestra."""
+    hojas = _nombres_hojas_excel(ruta)
+    if not hojas:
+        raise ValueError(f"El Excel no tiene hojas: {ruta.name}")
+    hoja_usada = (hoja or "").strip() or _elegir_hoja_datos(ruta)
+    if hoja_usada not in hojas:
+        hoja_usada = hojas[0]
+    df = _leer_hoja_excel(ruta, hoja_usada)
+    columnas = [str(c) for c in df.columns]
+    if not columnas:
+        raise ValueError(f"La hoja «{hoja_usada}» no tiene columnas.")
+    muestra = df.head(max(1, min(n, 50)))
+    filas: list[dict[str, str]] = []
+    for row in muestra.iter_rows(named=True):
+        filas.append({str(k): _texto_celda_preview(v) for k, v in row.items()})
+    return {
+        "hojas": hojas,
+        "hoja": hoja_usada,
+        "columnas": columnas,
+        "filas": filas,
+        "total_filas": int(df.height),
+        "pk_sugerida": sugerir_columna_identificacion(
+            columnas, aliases_identificacion(cfg)
+        ),
+    }
+
+
+def columnas_config_documento(
+    seleccion: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Normaliza {origen, salida} de las columnas marcadas para usar."""
+    out: list[dict[str, Any]] = []
+    vistos: set[str] = set()
+    for item in seleccion:
+        origen = str(item.get("origen") or "").strip()
+        if not origen:
+            aliases = item.get("aliases") or []
+            if aliases:
+                origen = str(aliases[0]).strip()
+        salida = str(item.get("salida") or origen).strip()
+        if not origen or not salida:
+            continue
+        if salida in vistos:
+            raise ValueError(f"Hay dos columnas con el mismo nombre de salida: «{salida}».")
+        vistos.add(salida)
+        out.append({"salida": salida, "aliases": [origen]})
+    return out
+
+
 def procesar_documento_adicional(ruta: Path, doc: dict) -> pl.DataFrame:
     """Lee un Excel adicional y devuelve columnas configuradas indexadas por _id_key."""
     hoja = doc.get("hoja")
@@ -65,6 +218,7 @@ def procesar_documento_adicional(ruta: Path, doc: dict) -> pl.DataFrame:
         filas.append(fila)
     return pl.DataFrame(filas)
 
+
 def _unir_documentos_adicionales(
     consolidado: pl.DataFrame,
     cfg: dict,
@@ -99,4 +253,3 @@ def _unir_documentos_adicionales(
             if c not in todas:
                 resultado = resultado.with_columns(pl.lit(None).alias(c))
     return resultado
-

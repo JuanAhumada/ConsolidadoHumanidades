@@ -6,6 +6,9 @@
     <h2>Historial de versiones</h2>
     <p class="sub">Snapshots del consolidado en SQL. Cada generación o importación crea un registro nuevo; no se sobrescribe ninguno. Para montar datos viejos use <a href="/datos-antiguos">Datos antiguos</a>. El detalle de cambios está en <a href="/modificaciones">Modificaciones</a>.</p>
   </div>
+  {% if estado.ultima %}
+  <a class="btn" href="/versiones/ultima/excel">Descargar último Excel</a>
+  {% endif %}
 </div>
 
 <div class="grid grid-3">

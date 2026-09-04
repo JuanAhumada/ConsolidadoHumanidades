@@ -31,6 +31,17 @@ from consolidado.storage.contactados import (  # noqa: F401
     listar_contactados,
     marcar_contactado,
 )
+from consolidado.storage.graduacion import (  # noqa: F401
+    cargar_marcas_gradua,
+    marcar_gradua,
+    obtener_marca_gradua,
+)
+from consolidado.storage.notas import (  # noqa: F401
+    agregar_nota,
+    listar_notas,
+    quitar_nota,
+    resumen_notas,
+)
 from consolidado.storage.db import (  # noqa: F401
     buscar_estudiantes,
     buscar_estudiantes_version,

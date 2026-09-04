@@ -1,13 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Estudiante{% endblock %}
+{% block body_class %}{% if ficha %}page-ficha{% endif %}{% endblock %}
 {% block content %}
-<div class="topbar">
+{% set cat_sel = ficha_cat or 'academico' %}
+{% set sec_sel = ficha_sec or 'notas' %}
+{% set ficha_path = ('/estudiante/' ~ ficha.identificacion) if ficha else '/estudiante' %}
+{% set ficha_volver = ficha_path ~ '?cat=' ~ cat_sel ~ '&sec=' ~ sec_sel %}
+<div class="topbar{% if ficha %} ficha-topbar{% endif %}">
   <div>
     <h2>Consulta individual</h2>
+    {% if not ficha %}
     <p class="sub">Busque por cédula o nombre. Si hay varias coincidencias, elija una ficha.</p>
+    {% endif %}
   </div>
+  {% if ficha %}
+  <form method="get" action="/estudiante" class="ficha-busca">
+    <label class="sr-only" for="q">Cédula o nombre</label>
+    <input id="q" type="search" name="q" value="{{ q or '' }}" placeholder="Cédula o nombre"/>
+    <button class="btn sm" type="submit">Buscar</button>
+  </form>
+  {% endif %}
 </div>
 
+{% if not ficha %}
 <div class="card">
   <form method="get" action="/estudiante" class="form-row" style="align-items:end;">
     <div class="field">
@@ -19,6 +34,7 @@
     </div>
   </form>
 </div>
+{% endif %}
 
 {% if resultados and not ficha %}
 <div class="card">
@@ -43,180 +59,385 @@
 
 {% if ficha %}
 <div class="ficha-view" {% if ficha.estilo %}style="{{ ficha.estilo }}"{% endif %}>
-  <div class="ficha-board">
-    <aside class="ficha-side">
-      <div class="ficha-side-hero">
-        <div class="ficha-side-avatar-wrap">
-          <p class="ficha-side-id">{{ ficha.identificacion }}</p>
-          <div class="ficha-side-avatar" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="96" height="96" fill="none">
-              <circle cx="32" cy="24" r="12" fill="#fff"/>
-              <path d="M12 54c3.5-12 11-18 20-18s16.5 6 20 18" fill="#fff"/>
-            </svg>
-          </div>
-          {% if ficha.nivel_prioridad %}
-          <p class="ficha-side-nivel">Nivel {{ ficha.nivel_prioridad }}</p>
-          {% endif %}
+  <aside class="ficha-side">
+    <div class="ficha-side-hero">
+      <div class="ficha-side-avatar-wrap">
+        <p class="ficha-side-id">{{ ficha.identificacion }}</p>
+        <div class="ficha-side-avatar" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="96" height="96" fill="none">
+            <circle cx="32" cy="24" r="12" fill="#fff"/>
+            <path d="M12 54c3.5-12 11-18 20-18s16.5 6 20 18" fill="#fff"/>
+          </svg>
         </div>
-        <div class="ficha-side-who">
-          <h3 class="ficha-side-name">{{ ficha.nombre or 'Sin nombre' }}</h3>
-          <p class="ficha-side-meta">
-            {{ ficha.programa or 'Sin programa' }}{% if ficha.periodo_ingreso and ficha.periodo_ingreso != '—' %} – {{ ficha.periodo_ingreso }}{% endif %}
-          </p>
-        </div>
+        {% if ficha.nivel_prioridad %}
+        <p class="ficha-side-nivel">Nivel {{ ficha.nivel_prioridad }}</p>
+        {% endif %}
       </div>
-      <div class="ficha-side-contacto">
-        <p>
-          <span class="e">Correo institucional</span>
-          <span class="v">{{ ficha.correo_institucional or '—' }}</span>
-        </p>
-        <p>
-          <span class="e">Celular</span>
-          <span class="v">{{ ficha.telefono or '—' }}</span>
-        </p>
-        <p>
-          <span class="e">Correo personal</span>
-          <span class="v">{{ ficha.correo_personal or '—' }}</span>
+      <div class="ficha-side-who">
+        <h3 class="ficha-side-name">{{ ficha.nombre or 'Sin nombre' }}</h3>
+        <p class="ficha-side-meta">
+          {{ ficha.programa or 'Sin programa' }}{% if ficha.periodo_ingreso and ficha.periodo_ingreso != '—' %} – {{ ficha.periodo_ingreso }}{% endif %}
         </p>
       </div>
-      <div class="ficha-chart" aria-label="Puntajes de prioridad">
-        {% for p in ficha.puntajes %}
-        <div class="ficha-chart-col" title="{{ p.etiqueta }}: {{ p.texto }}">
-          <div class="ficha-chart-track">
-            <div class="ficha-chart-fill" style="height: {{ p.pct }}%"></div>
-          </div>
-          <span class="ficha-chart-val">{{ p.texto }}</span>
-          <span class="ficha-chart-lbl">{{ p.etiqueta }}</span>
-        </div>
-        {% endfor %}
-      </div>
-    </aside>
-
-    <div class="ficha-main">
-      {% if ficha.datos %}
-      <section class="ficha-datos">
-        <h3>Datos del Estudiante</h3>
-        <div class="ficha-datos-grid">
-          {% for campo in ficha.datos %}
-          <div>
-            <div class="e">{{ campo.etiqueta }}</div>
-            <div class="v">{{ campo.valor }}</div>
-          </div>
-          {% endfor %}
-        </div>
-      </section>
-      {% endif %}
-
-      {% if ficha.categorias %}
-      <div class="ficha-cats" data-n="{{ ficha.n_categorias }}">
-        {% for cat in ficha.categorias %}
-        <section class="ficha-cat">
-          <h4>{{ cat.titulo }}</h4>
-          {% if cat.tipo == 'alertas' %}
-            {% if cat.inicial %}
-            <p class="ficha-fase">Inicial</p>
-            <ul class="ficha-alerta-lista">
-              {% for t in cat.inicial %}
-              <li>
-                <span>{{ t }}</span>
-                <form method="post" action="/alertas/fuente/quitar" onsubmit="return confirm('¿Descartar esta alerta? No volverá a aparecer al generar el consolidado.');">
-                  <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
-                  <input type="hidden" name="fase" value="inicial"/>
-                  <input type="hidden" name="tipo" value="{{ t }}"/>
-                  <button class="btn sm danger" type="submit">Eliminar</button>
-                </form>
-              </li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-            {% if cat.final %}
-            <p class="ficha-fase">Final</p>
-            <ul class="ficha-alerta-lista">
-              {% for t in cat.final %}
-              <li>
-                <span>{{ t }}</span>
-                <form method="post" action="/alertas/fuente/quitar" onsubmit="return confirm('¿Descartar esta alerta? No volverá a aparecer al generar el consolidado.');">
-                  <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
-                  <input type="hidden" name="fase" value="final"/>
-                  <input type="hidden" name="tipo" value="{{ t }}"/>
-                  <button class="btn sm danger" type="submit">Eliminar</button>
-                </form>
-              </li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-            {% if cat.campos %}
-            <div class="ficha-cat-campos">
-              {% for campo in cat.campos %}
-              <div class="campo">
-                <div class="e">{{ campo.etiqueta }}</div>
-                <div class="v">{{ campo.valor }}</div>
-              </div>
-              {% endfor %}
-            </div>
-            {% endif %}
-          {% else %}
-            <div class="ficha-cat-campos">
-              {% for campo in cat.campos %}
-              <div class="campo">
-                <div class="e">{{ campo.etiqueta }}</div>
-                <div class="v">{{ campo.valor }}</div>
-              </div>
-              {% endfor %}
-            </div>
-          {% endif %}
-        </section>
-        {% endfor %}
-      </div>
-      {% endif %}
     </div>
-  </div>
-
-  {% if ficha.horario %}
-  <section class="ficha-horario" data-n="{{ ficha.horario.n_dias }}">
-    <header class="ficha-horario-head">
-      <h3>Horario{% if ficha.horario.periodo %}<span class="ficha-horario-periodo">{{ ficha.horario.periodo }}</span>{% elif ficha.periodo %}<span class="ficha-horario-periodo">{{ ficha.periodo }}</span>{% endif %}</h3>
-      {% if ficha.horario.campos %}
-      <div class="ficha-horario-extra">
-        {% for campo in ficha.horario.campos %}
-        <span>{{ campo.etiqueta }}: <strong>{{ campo.valor }}</strong></span>
-        {% endfor %}
-      </div>
-      {% endif %}
-    </header>
-    {% if ficha.horario.dias %}
-    <div class="ficha-semana" data-n="{{ ficha.horario.dias|length }}">
-      {% for dia in ficha.horario.dias %}
-      <div class="ficha-dia">
-        <h4>{{ dia }}</h4>
-        {% for m in ficha.horario.por_dia[dia] %}
-        <article class="ficha-clase">
-          <p class="ficha-clase-hora">{{ m.inicio }} – {{ m.fin }}</p>
-          <p class="ficha-clase-nom">{{ m.nombre }}</p>
-          {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
-          {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
-        </article>
-        {% endfor %}
+    <div class="ficha-chart" aria-label="Puntajes de prioridad">
+      {% for p in ficha.puntajes %}
+      <div class="ficha-chart-col" title="{{ p.etiqueta }}: {{ p.texto }}">
+        <div class="ficha-chart-track">
+          <div class="ficha-chart-fill" style="height: {{ p.pct }}%"></div>
+        </div>
+        <span class="ficha-chart-val">{{ p.texto }}</span>
+        <span class="ficha-chart-lbl">{{ p.etiqueta }}</span>
       </div>
       {% endfor %}
     </div>
-    {% endif %}
-    {% if ficha.horario.sin_dia %}
-    <div class="ficha-semana ficha-semana-extra" data-n="{{ [ficha.horario.sin_dia|length, 3]|min }}">
-      {% for m in ficha.horario.sin_dia %}
-      <article class="ficha-clase">
-        <p class="ficha-clase-hora">{{ m.horario }}</p>
-        <p class="ficha-clase-nom">{{ m.nombre }}</p>
-        {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
-        {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
-      </article>
+  </aside>
+
+  <section class="ficha-datos">
+    <h3>Datos del Estudiante</h3>
+    <div class="ficha-datos-grid">
+      <div>
+        <div class="e">Correo institucional</div>
+        <div class="v">{{ ficha.correo_institucional or '—' }}</div>
+      </div>
+      <div>
+        <div class="e">Celular</div>
+        <div class="v">{{ ficha.telefono or '—' }}</div>
+      </div>
+      <div>
+        <div class="e">Correo personal</div>
+        <div class="v">{{ ficha.correo_personal or '—' }}</div>
+      </div>
+      {% for campo in ficha.datos or [] %}
+      {% if campo.columna not in ['Correo institucional', 'Teléfono celular', 'Correo personal'] %}
+      <div>
+        <div class="e">{{ campo.etiqueta }}</div>
+        <div class="v">{{ campo.valor }}</div>
+      </div>
+      {% endif %}
       {% endfor %}
     </div>
-    {% endif %}
   </section>
-  {% endif %}
+
+  <div class="ficha-workspace" data-ident="{{ ficha.identificacion }}" data-cat="{{ cat_sel }}" data-sec="{{ sec_sel }}" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0.75rem;flex:1;min-height:0;align-items:stretch;">
+    <section class="ficha-pane" aria-label="Información académica">
+      <div class="ficha-pane-tabs" role="tablist" data-tabs="cat">
+        {% for cat in ficha.categorias %}
+        <button type="button" class="btn sm ficha-tab{% if cat_sel != cat.clave %} secondary{% endif %}" role="tab" data-tab="{{ cat.clave }}" aria-selected="{% if cat_sel == cat.clave %}true{% else %}false{% endif %}">{{ cat.titulo }}</button>
+        {% endfor %}
+      </div>
+      <div class="ficha-pane-body" data-panels="cat">
+        {% for cat in ficha.categorias %}
+        <div class="ficha-pane-panel" role="tabpanel" data-panel="{{ cat.clave }}" {% if cat_sel != cat.clave %}hidden{% endif %}>
+          <section class="ficha-cat{% if cat.editable %} ficha-cat-editable{% endif %}">
+            {% if cat.tipo == 'alertas' %}
+              {% if cat.inicial %}
+              <p class="ficha-fase">Inicial</p>
+              <ul class="ficha-alerta-lista">
+                {% for t in cat.inicial %}
+                <li>
+                  <span>{{ t }}</span>
+                  <form method="post" action="/alertas/fuente/quitar" onsubmit="return confirm('¿Descartar esta alerta? No volverá a aparecer al generar el consolidado.');">
+                    <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+                    <input type="hidden" name="fase" value="inicial"/>
+                    <input type="hidden" name="tipo" value="{{ t }}"/>
+                    <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_volver }}"/>
+                    <button class="btn sm danger" type="submit">Eliminar</button>
+                  </form>
+                </li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+              {% if cat.final %}
+              <p class="ficha-fase">Final</p>
+              <ul class="ficha-alerta-lista">
+                {% for t in cat.final %}
+                <li>
+                  <span>{{ t }}</span>
+                  <form method="post" action="/alertas/fuente/quitar" onsubmit="return confirm('¿Descartar esta alerta? No volverá a aparecer al generar el consolidado.');">
+                    <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+                    <input type="hidden" name="fase" value="final"/>
+                    <input type="hidden" name="tipo" value="{{ t }}"/>
+                    <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_volver }}"/>
+                    <button class="btn sm danger" type="submit">Eliminar</button>
+                  </form>
+                </li>
+                {% endfor %}
+              </ul>
+              {% endif %}
+              {% if not cat.inicial and not cat.final and not cat.campos %}
+              <p class="muted">No hay alertas registradas.</p>
+              {% endif %}
+              {% if cat.campos %}
+              <div class="ficha-cat-campos">
+                {% for campo in cat.campos %}
+                <div class="campo">
+                  <div class="e">{{ campo.etiqueta }}</div>
+                  <div class="v">{{ campo.valor }}</div>
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+            {% elif cat.editable %}
+              <div class="ficha-cat-vista">
+                <div class="ficha-cat-campos">
+                  {% for campo in cat.campos %}
+                  <div class="campo">
+                    <div class="e">{{ campo.etiqueta }}</div>
+                    <div class="v">{{ campo.valor }}</div>
+                  </div>
+                  {% endfor %}
+                </div>
+                <div class="ficha-edit-acciones">
+                  <button type="button" class="btn sm js-editar-estados">Editar estados</button>
+                </div>
+              </div>
+              <div class="ficha-cat-edicion" hidden>
+                <form method="post" action="/estudiante/editar" class="ficha-edit-form">
+                  <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+                  <input type="hidden" name="grupo" value="{{ cat.grupo_edicion }}"/>
+                  <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_volver }}"/>
+                  <div class="ficha-cat-campos ficha-cat-edit">
+                    {% for campo in cat.campos %}
+                    <div class="campo">
+                      <label class="e" for="ed-{{ cat.clave }}-{{ loop.index }}">{{ campo.etiqueta }}</label>
+                      {% if campo.input in ('si_no', 'select') %}
+                      <select id="ed-{{ cat.clave }}-{{ loop.index }}" name="{{ campo.name_key }}">
+                        {% for op in campo.opciones %}
+                        <option value="{{ op }}" {% if campo.valor_raw == op %}selected{% endif %}>{% if op %}{{ op }}{% else %}—{% endif %}</option>
+                        {% endfor %}
+                      </select>
+                      {% elif campo.input == 'date' %}
+                      <input id="ed-{{ cat.clave }}-{{ loop.index }}" type="date" name="{{ campo.name_key }}" value="{{ campo.valor_raw }}"/>
+                      {% elif campo.input == 'number' %}
+                      <input id="ed-{{ cat.clave }}-{{ loop.index }}" type="number" name="{{ campo.name_key }}" value="{{ campo.valor_raw }}" min="0" max="100" step="0.1"/>
+                      {% else %}
+                      <input id="ed-{{ cat.clave }}-{{ loop.index }}" type="text" name="{{ campo.name_key }}" value="{{ campo.valor_raw }}"/>
+                      {% endif %}
+                    </div>
+                    {% endfor %}
+                  </div>
+                  <div class="ficha-edit-acciones">
+                    <button class="btn sm" type="submit">Guardar</button>
+                    <button type="button" class="btn sm secondary js-cancelar-edicion">Cancelar</button>
+                  </div>
+                </form>
+                <form method="post" action="/estudiante/editar/restablecer" class="ficha-edit-reset" onsubmit="return confirm('¿Restablecer este bloque a los datos de la fuente?');">
+                  <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+                  <input type="hidden" name="grupo" value="{{ cat.grupo_edicion }}"/>
+                  <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_volver }}"/>
+                  <button class="btn sm secondary" type="submit">Restablecer</button>
+                </form>
+              </div>
+            {% else %}
+              <div class="ficha-cat-campos">
+                {% for campo in cat.campos %}
+                <div class="campo">
+                  <div class="e">{{ campo.etiqueta }}</div>
+                  <div class="v">{{ campo.valor }}</div>
+                </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </section>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="ficha-pane" aria-label="Notas, proyección y horario">
+      <div class="ficha-pane-tabs" role="tablist" data-tabs="sec">
+        <button type="button" class="btn sm ficha-tab{% if sec_sel != 'notas' %} secondary{% endif %}" role="tab" data-tab="notas" aria-selected="{% if sec_sel == 'notas' %}true{% else %}false{% endif %}">Notas{% if ficha.notas %} <span class="ficha-tab-n">{{ ficha.notas|length }}</span>{% endif %}</button>
+        <button type="button" class="btn sm ficha-tab{% if sec_sel != 'nueva' %} secondary{% endif %}" role="tab" data-tab="nueva" aria-selected="{% if sec_sel == 'nueva' %}true{% else %}false{% endif %}">Nueva nota</button>
+        <button type="button" class="btn sm ficha-tab{% if sec_sel != 'grado' %} secondary{% endif %}" role="tab" data-tab="grado" aria-selected="{% if sec_sel == 'grado' %}true{% else %}false{% endif %}">Proyección</button>
+        <button type="button" class="btn sm ficha-tab{% if sec_sel != 'horario' %} secondary{% endif %}" role="tab" data-tab="horario" aria-selected="{% if sec_sel == 'horario' %}true{% else %}false{% endif %}">Horario</button>
+      </div>
+      <div class="ficha-pane-body" data-panels="sec">
+        <div class="ficha-pane-panel ficha-notas" role="tabpanel" data-panel="notas" {% if sec_sel != 'notas' %}hidden{% endif %}>
+          <p class="muted">Observaciones de seguimiento: lo que dijo el estudiante u otra anotación.</p>
+          {% if ficha.notas %}
+          <ul class="ficha-notas-lista">
+            {% for n in ficha.notas %}
+            <li>
+              <p>{{ n.nota }}</p>
+              <p class="muted">{{ n.usuario or '—' }} · {{ n.creado_en }}</p>
+              <form method="post" action="/notas/quitar" onsubmit="return confirm('¿Quitar esta nota?');">
+                <input type="hidden" name="nota_id" value="{{ n.id }}"/>
+                <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_volver }}"/>
+                <button class="btn sm danger" type="submit">Quitar</button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="muted">Aún no hay notas. Use la pestaña «Nueva nota» para añadir una.</p>
+          {% endif %}
+        </div>
+
+        <div class="ficha-pane-panel ficha-notas" role="tabpanel" data-panel="nueva" {% if sec_sel != 'nueva' %}hidden{% endif %}>
+          <p class="muted">Queda en el seguimiento de este estudiante.</p>
+          <form method="post" action="/notas/anadir" class="ficha-notas-form" data-after-sec="notas">
+            <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+            <input type="hidden" name="nombre" value="{{ ficha.nombre }}"/>
+            <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_path }}?cat={{ cat_sel }}&sec=notas"/>
+            <label class="sr-only" for="ficha-nota">Texto</label>
+            <textarea id="ficha-nota" name="nota" rows="8" required placeholder="Qué le dijo el estudiante, acuerdos o observaciones"></textarea>
+            <div class="form-actions-row" style="margin-top:.7rem;">
+              <button class="btn" type="submit">Añadir nota</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="ficha-pane-panel ficha-gradua" role="tabpanel" data-panel="grado" {% if sec_sel != 'grado' %}hidden{% endif %}>
+          <p class="muted">{% if ficha.proximo_grado %}Aparece en Proyección a Grado por ruta de grado o permanencia.{% else %}Puede registrarlo aunque no figure aún en la proyección.{% endif %}</p>
+          <dl class="ficha-grado-resumen">
+            <div><dt>Periodo de grado</dt><dd>{{ ficha.periodo_grado or '—' }}</dd></div>
+            <div><dt>Cohorte</dt><dd>{{ ficha.cohorte_graduacion or '—' }}</dd></div>
+            <div><dt>Estado de graduación</dt><dd>{{ ficha.estado_graduacion or '—' }}</dd></div>
+          </dl>
+          <h4 class="ficha-grado-preg">¿Se gradúa este semestre?</h4>
+          <form method="post" action="/estudiante/gradua" class="ficha-gradua-acciones">
+            <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+            <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_volver }}"/>
+            <button class="btn {% if ficha.se_gradua != True %}secondary{% endif %}" type="submit" name="se_gradua" value="1">Sí</button>
+            <button class="btn {% if ficha.se_gradua != False %}secondary{% endif %}" type="submit" name="se_gradua" value="0">No</button>
+          </form>
+          {% if ficha.se_gradua is none %}
+          <p class="muted">Aún no hay respuesta guardada.</p>
+          {% else %}
+          <p class="muted">Registrado: <strong>{% if ficha.se_gradua %}Sí{% else %}No{% endif %}</strong>{% if ficha.gradua_por %} · {{ ficha.gradua_por }}{% endif %}{% if ficha.gradua_en %} · {{ ficha.gradua_en }}{% endif %}</p>
+          {% endif %}
+        </div>
+
+        <div class="ficha-pane-panel" role="tabpanel" data-panel="horario" {% if sec_sel != 'horario' %}hidden{% endif %}>
+          {% if ficha.horario %}
+          <section class="ficha-horario" data-n="{{ ficha.horario.n_dias }}">
+            <header class="ficha-horario-head">
+              {% if ficha.horario.periodo %}<span class="ficha-horario-periodo">{{ ficha.horario.periodo }}</span>{% elif ficha.periodo %}<span class="ficha-horario-periodo">{{ ficha.periodo }}</span>{% endif %}
+              {% if ficha.horario.campos %}
+              <div class="ficha-horario-extra">
+                {% for campo in ficha.horario.campos %}
+                <span>{{ campo.etiqueta }}: <strong>{{ campo.valor }}</strong></span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </header>
+            {% if ficha.horario.dias %}
+            <div class="ficha-semana" data-n="{{ ficha.horario.dias|length }}">
+              {% for dia in ficha.horario.dias %}
+              <div class="ficha-dia">
+                <h4>{{ dia }}</h4>
+                {% for m in ficha.horario.por_dia[dia] %}
+                <article class="ficha-clase">
+                  <p class="ficha-clase-hora">{{ m.inicio }} – {{ m.fin }}</p>
+                  <p class="ficha-clase-nom">{{ m.nombre }}</p>
+                  {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
+                  {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
+                </article>
+                {% endfor %}
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+            {% if ficha.horario.sin_dia %}
+            <div class="ficha-semana ficha-semana-extra" data-n="{{ [ficha.horario.sin_dia|length, 3]|min }}">
+              {% for m in ficha.horario.sin_dia %}
+              <article class="ficha-clase">
+                <p class="ficha-clase-hora">{{ m.horario }}</p>
+                <p class="ficha-clase-nom">{{ m.nombre }}</p>
+                {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
+                {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
+              </article>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </section>
+          {% else %}
+          <p class="muted" style="padding:1rem 1.1rem;">No hay horario cargado para este periodo.</p>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+  </div>
 </div>
 {% elif q and not resultados %}
 <div class="card"><p class="muted">Sin resultados para «{{ q }}».</p></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if ficha %}
+<script>
+(function () {
+  const root = document.querySelector(".ficha-workspace");
+  if (!root) return;
+  let cat = root.getAttribute("data-cat") || "academico";
+  let sec = root.getAttribute("data-sec") || "notas";
+
+  function urlFor(nextCat, nextSec) {
+    const u = new URL(location.href);
+    u.searchParams.set("cat", nextCat);
+    u.searchParams.set("sec", nextSec);
+    return u.pathname + "?" + u.searchParams.toString();
+  }
+  function syncVolver(afterSec) {
+    const href = urlFor(cat, afterSec || sec);
+    document.querySelectorAll(".js-ficha-volver").forEach((el) => {
+      const form = el.closest("form");
+      const force = form && form.getAttribute("data-after-sec");
+      el.value = urlFor(cat, force || afterSec || sec);
+    });
+  }
+  function activate(group, key) {
+    const tabs = root.querySelector("[data-tabs='" + group + "']");
+    const panels = root.querySelector("[data-panels='" + group + "']");
+    if (!tabs || !panels) return;
+    tabs.querySelectorAll(".ficha-tab").forEach((btn) => {
+      const on = btn.getAttribute("data-tab") === key;
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      btn.classList.toggle("secondary", !on);
+    });
+    panels.querySelectorAll("[data-panel]").forEach((p) => {
+      p.hidden = p.getAttribute("data-panel") !== key;
+    });
+    if (group === "cat") cat = key;
+    else sec = key;
+    root.setAttribute("data-cat", cat);
+    root.setAttribute("data-sec", sec);
+    try { history.replaceState(null, "", urlFor(cat, sec)); } catch (e) {}
+    syncVolver();
+  }
+  root.addEventListener("click", function (ev) {
+    const editar = ev.target.closest(".js-editar-estados");
+    if (editar && root.contains(editar)) {
+      const bloque = editar.closest(".ficha-cat-editable");
+      if (!bloque) return;
+      bloque.classList.add("is-editing");
+      const vista = bloque.querySelector(".ficha-cat-vista");
+      const edicion = bloque.querySelector(".ficha-cat-edicion");
+      if (vista) vista.hidden = true;
+      if (edicion) edicion.hidden = false;
+      return;
+    }
+    const cancelar = ev.target.closest(".js-cancelar-edicion");
+    if (cancelar && root.contains(cancelar)) {
+      const bloque = cancelar.closest(".ficha-cat-editable");
+      if (!bloque) return;
+      bloque.classList.remove("is-editing");
+      const vista = bloque.querySelector(".ficha-cat-vista");
+      const edicion = bloque.querySelector(".ficha-cat-edicion");
+      if (vista) vista.hidden = false;
+      if (edicion) edicion.hidden = true;
+      return;
+    }
+    const btn = ev.target.closest(".ficha-tab");
+    if (!btn || !root.contains(btn)) return;
+    const groupEl = btn.closest("[data-tabs]");
+    if (!groupEl) return;
+    activate(groupEl.getAttribute("data-tabs"), btn.getAttribute("data-tab"));
+  });
+  syncVolver();
+})();
+</script>
 {% endif %}
 {% endblock %}

@@ -4,6 +4,24 @@
   function marcarInterna() { interna = true; }
   window.marcarNavegacionInterna = marcarInterna;
 
+  /* form.submit() nativo no dispara el evento «submit»; sin esto, marcar
+     en Seguimiento dispara beforeunload y pagehide apaga el .exe. */
+  try {
+    const proto = HTMLFormElement.prototype;
+    const submitNativo = proto.submit;
+    proto.submit = function () {
+      marcarInterna();
+      return submitNativo.call(this);
+    };
+    if (typeof proto.requestSubmit === "function") {
+      const requestNativo = proto.requestSubmit;
+      proto.requestSubmit = function () {
+        marcarInterna();
+        return requestNativo.apply(this, arguments);
+      };
+    }
+  } catch (e) {}
+
   document.addEventListener("click", function (ev) {
     const a = ev.target.closest && ev.target.closest("a[href]");
     if (!a) return;

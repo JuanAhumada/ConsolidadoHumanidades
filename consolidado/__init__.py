@@ -9,6 +9,8 @@ Subpaquetes:
 - gui: escritorio (legado)
 """
 
+from consolidado.version import APP_VERSION as __version__
+
 from consolidado.config.settings import (
     ARCHIVOS_FUENTE_REQUERIDOS,
     COLUMNAS_ALERTAS,

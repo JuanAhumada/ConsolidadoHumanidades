@@ -4,7 +4,7 @@
 <div class="topbar">
   <div>
     <h2>Configuración</h2>
-    <p class="sub">Programas, exclusiones y motivos de priorizado. Restablecer usa config_fabrica.json.</p>
+    <p class="sub">Programas, columnas de gráficas, exclusiones y motivos de priorizado. Restablecer usa config_fabrica.json.</p>
   </div>
   <form method="post" action="/config/fabrica" onsubmit="return confirm('¿Restablecer valores de fábrica?');">
     <button class="btn secondary" type="submit">Restablecer de fábrica</button>
@@ -27,17 +27,73 @@
     <textarea name="motivos">{% for m in motivos %}{{ m }}
 {% endfor %}</textarea>
   </div>
+  <div class="card" id="graficas-cols">
+    <h3>Columnas de las gráficas</h3>
+    <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Qué campos aparecen en el tablero. De base quedan sin marcar los datos únicos (identificación, nombre, celular, correos, fechas, lugares). Las materias, horarios y profesores no se listan.</p>
+    <input type="hidden" name="graficas_presentes" value="1"/>
+    <div class="doc-cols-toolbar" style="margin-bottom:.6rem;">
+      <button class="btn sm secondary" type="button" id="grafica-todas">Todas</button>
+      <button class="btn sm secondary" type="button" id="grafica-ninguna">Ninguna</button>
+    </div>
+    <div class="grafica-cols">
+      {% for c in cols_grafica or [] %}
+      <label class="grafica-col">
+        <input type="checkbox" name="grafica" value="{{ c.nombre }}" {% if c.activa %}checked{% endif %}/>
+        <span>{{ c.nombre }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    {% if not cols_grafica %}
+    <p class="muted">Cuando exista un consolidado, aquí listará sus columnas (salvo materias).</p>
+    {% endif %}
+  </div>
+  <div class="card" id="encabezados">
+    <h3>Sinónimos de encabezados (todas las bases)</h3>
+    <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Respaldo global si un Excel no tiene mapeo propio. El mapeo por archivo (Data → Editar datos) tiene prioridad. Separe sinónimos con comas.</p>
+    <div class="table-wrap aliases-wrap">
+      <table class="aliases-table">
+        <thead>
+          <tr><th>Campo en el consolidado</th><th>Nombres en el Excel</th></tr>
+        </thead>
+        <tbody>
+          {% for a in aliases_filas %}
+          <tr>
+            <td>{{ a.etiqueta }}</td>
+            <td><input type="text" name="alias_{{ a.canon }}" value="{{ a.sinonimos }}"/></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
   <button class="btn" type="submit">Guardar cambios</button>
 </form>
 
 {% if documentos %}
 <div class="card" style="margin-top:1rem;">
-  <h3>Documentos adicionales configurados</h3>
+  <h3>Archivos adicionales configurados</h3>
   {% for d in documentos %}
   <div class="file-row">
     <div><strong>{{ d.titulo }}</strong> <span class="muted">· {{ d.grupo_encabezado }} · {{ (d.columnas or [])|length }} cols</span></div>
+    <a class="btn sm secondary" href="/archivos#docs-extra">Editar en Data</a>
   </div>
   {% endfor %}
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const box = document.querySelector(".grafica-cols");
+  if (!box) return;
+  const checks = () => box.querySelectorAll('input[name="grafica"]');
+  document.getElementById("grafica-todas")?.addEventListener("click", () => {
+    checks().forEach((c) => { c.checked = true; });
+  });
+  document.getElementById("grafica-ninguna")?.addEventListener("click", () => {
+    checks().forEach((c) => { c.checked = false; });
+  });
+})();
+</script>
 {% endblock %}

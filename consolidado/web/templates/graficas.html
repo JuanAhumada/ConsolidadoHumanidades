@@ -8,7 +8,7 @@
 <div class="graficas-workspace">
   <aside class="charts-tools">
     <h2>Gráficas</h2>
-    <p class="muted charts-tools-lead">Seleccione un espacio y aplique columna y tipo. Puede tener hasta 4.</p>
+    <p class="muted charts-tools-lead">Seleccione un espacio y aplique columna, carrera y tipo. Puede tener hasta 4.</p>
 
     <p class="charts-slot-label">Editando <strong id="slot-label">gráfica 1</strong></p>
 
@@ -17,6 +17,15 @@
       <select id="columna" {% if not columnas %}disabled{% endif %}>
         {% for c in columnas %}
         <option value="{{ c }}" {% if c == 'Programa' or c == 'Nivel prioridad' %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="programa">Carrera</label>
+      <select id="programa" {% if not columnas %}disabled{% endif %}>
+        <option value="">Todas</option>
+        {% for p in programas %}
+        <option value="{{ p }}">{{ p }}</option>
         {% endfor %}
       </select>
     </div>
@@ -97,7 +106,7 @@ const defaultCol = (() => {
 
 const slots = Array.from({ length: MAX_SLOTS }, (_, i) => ({
   chart: null,
-  config: { columna: defaultCol, tipo: 'bar', top: '20' },
+  config: { columna: defaultCol, tipo: 'bar', top: '20', programa: '' },
   ready: false,
 }));
 let visible = 1;
@@ -120,6 +129,7 @@ function readControls() {
     columna: el('columna').value,
     tipo: el('tipo').value,
     top: el('top').value,
+    programa: el('programa') ? el('programa').value : '',
   };
 }
 
@@ -128,6 +138,7 @@ function writeControls(cfg) {
   el('columna').value = cfg.columna;
   el('tipo').value = cfg.tipo;
   el('top').value = cfg.top;
+  if (el('programa')) el('programa').value = cfg.programa || '';
 }
 
 function slotEls() {
@@ -204,7 +215,7 @@ function removeSelected() {
     slots[i].metaText = s.metaText;
   });
   for (let i = kept.length; i < MAX_SLOTS; i++) {
-    slots[i].config = { columna: defaultCol, tipo: 'bar', top: '20' };
+    slots[i].config = { columna: defaultCol, tipo: 'bar', top: '20', programa: '' };
   }
   visible = kept.length;
   selected = Math.min(selected, visible - 1);
@@ -222,7 +233,13 @@ async function aplicar(index, persistControls = true) {
   if (!cfg.columna) return;
   metaEl.textContent = 'Cargando…';
   try {
-    const res = await fetch(`/api/grafica?columna=${encodeURIComponent(cfg.columna)}&tipo=${encodeURIComponent(cfg.tipo)}&top=${cfg.top}`);
+    const qs = new URLSearchParams({
+      columna: cfg.columna,
+      tipo: cfg.tipo,
+      top: cfg.top,
+    });
+    if (cfg.programa) qs.set('programa', cfg.programa);
+    const res = await fetch(`/api/grafica?${qs.toString()}`);
     const data = await res.json();
     if (!res.ok) {
       const detail = data.detail;
@@ -256,13 +273,15 @@ async function aplicar(index, persistControls = true) {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: data.chart_type === 'pie' },
-          title: { display: true, text: `${data.columna}` }
+          title: { display: true, text: data.programa ? `${data.columna} · ${data.programa}` : `${data.columna}` }
         }
       }
     });
     slots[i].ready = true;
     slots[i].data = data;
-    slots[i].metaText = `${data.categorias} categorías · ${data.columna}`;
+    slots[i].metaText = data.programa
+      ? `${data.categorias} categorías · ${data.columna} · ${data.programa}`
+      : `${data.categorias} categorías · ${data.columna}`;
     if (i === selected) metaEl.textContent = slots[i].metaText;
     refreshBoard();
   } catch (e) {
@@ -301,6 +320,7 @@ async function excelPowerBI() {
       columna: s.config.columna,
       tipo: s.config.tipo,
       top: Number(s.config.top),
+      programa: s.config.programa || '',
     }));
   if (!graficas.length) return;
   metaEl.textContent = 'Preparando Excel para Power BI…';

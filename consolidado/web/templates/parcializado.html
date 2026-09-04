@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Parcializado{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h2>Parcializado</h2>
+    <p class="sub">Elija un corte del consolidado, las carreras y las columnas. Se descarga un Excel solo con eso.</p>
+  </div>
+</div>
+
+{% if not versiones %}
+<div class="card">
+  <p class="muted">Aún no hay versiones. Cuando el administrador genere un consolidado, podrá recortarlo aquí.</p>
+</div>
+{% else %}
+<form method="post" action="/parcializado/descargar" id="form-parc">
+  <div class="card">
+    <h3>Versión</h3>
+    <div class="field">
+      <label for="parc-version">Corte del consolidado</label>
+      <select id="parc-version" name="version_id">
+        {% for v in versiones %}
+        <option value="{{ v.id }}" {% if datos and datos.version.id == v.id %}selected{% endif %}>{{ v.etiqueta }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <p class="muted" id="parc-meta">{% if datos %}{{ datos.filas }} estudiantes · {{ datos.columnas|length }} columnas{% endif %}</p>
+  </div>
+
+  <div class="card" id="parc-carreras-card">
+    <h3>Carreras</h3>
+    <p class="muted" style="margin-top:-.35rem;margin-bottom:.8rem;">Una, varias o todas. Si no marca ninguna, se incluyen todas.</p>
+    <label class="grafica-col parc-todas">
+      <input type="checkbox" name="todas_carreras" id="parc-todas" value="1" checked/>
+      <span>Todas las carreras</span>
+    </label>
+    <div class="grafica-cols" id="parc-carreras">
+      {% for p in (datos.programas if datos else []) %}
+      <label class="grafica-col">
+        <input type="checkbox" name="programa" value="{{ p.nombre }}"/>
+        <span>{{ p.nombre }} <span class="muted">({{ p.n }})</span></span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card" id="parc-cols-card">
+    <h3>Columnas</h3>
+    <p class="muted" style="margin-top:-.35rem;margin-bottom:.6rem;">De base van identificación, nombre y programa. Puede marcar las que le pidan.</p>
+    <div class="doc-cols-toolbar" style="margin-bottom:.7rem;">
+      <button class="btn sm secondary" type="button" id="parc-cols-todas">Todas</button>
+      <button class="btn sm secondary" type="button" id="parc-cols-basicas">Datos básicos</button>
+      <button class="btn sm secondary" type="button" id="parc-cols-ninguna">Ninguna</button>
+    </div>
+    <div id="parc-grupos">
+      {% if datos %}
+      {% for g in datos.grupos %}
+      <section class="parc-grupo">
+        <h4>{{ g.nombre }}</h4>
+        <div class="grafica-cols">
+          {% for c in g.columnas %}
+          <label class="grafica-col">
+            <input type="checkbox" name="columna" value="{{ c }}" {% if c in datos.basicas %}checked{% endif %}/>
+            <span>{{ c }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </section>
+      {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="form-actions-row" style="margin-top:.2rem;">
+    <button class="btn" type="submit" id="parc-descargar" {% if not datos %}disabled{% endif %}>Descargar Excel</button>
+    <p class="muted" id="parc-resumen" style="margin:0;">{% if datos %}Se exportarán las columnas marcadas de esta versión.{% endif %}</p>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const sel = document.getElementById("parc-version");
+  const form = document.getElementById("form-parc");
+  if (!sel || !form) return;
+
+  const meta = document.getElementById("parc-meta");
+  const resumen = document.getElementById("parc-resumen");
+  const boxCarreras = document.getElementById("parc-carreras");
+  const boxGrupos = document.getElementById("parc-grupos");
+  const chkTodas = document.getElementById("parc-todas");
+  const btnDesc = document.getElementById("parc-descargar");
+  let basicas = [];
+  let filasTotales = 0;
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function checksCols() {
+    return boxGrupos.querySelectorAll('input[name="columna"]');
+  }
+  function checksProg() {
+    return boxCarreras.querySelectorAll('input[name="programa"]');
+  }
+
+  function programasElegidos() {
+    if (chkTodas.checked) return [];
+    return Array.from(checksProg()).filter((c) => c.checked).map((c) => c.value);
+  }
+
+  async function actualizarConteo() {
+    const id = sel.value;
+    if (!id) return;
+    const progs = programasElegidos();
+    const qs = progs.map((p) => "programa=" + encodeURIComponent(p)).join("&");
+    const url = `/api/parcializado/${encodeURIComponent(id)}/conteo${qs ? "?" + qs : ""}`;
+    try {
+      const res = await fetch(url);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "No se pudo contar.");
+      const nCols = Array.from(checksCols()).filter((c) => c.checked).length;
+      const n = data.filas;
+      const carreras = chkTodas.checked || !progs.length ? "todas las carreras" : (progs.length === 1 ? progs[0] : progs.length + " carreras");
+      resumen.textContent = `${n} estudiantes · ${nCols} columnas · ${carreras}`;
+      meta.textContent = `${n} estudiantes visibles · ${filasTotales} en el corte`;
+    } catch (e) {
+      resumen.textContent = e.message || String(e);
+    }
+  }
+
+  function pintar(data) {
+    filasTotales = data.filas || 0;
+    basicas = data.basicas || [];
+    boxCarreras.innerHTML = "";
+    (data.programas || []).forEach((p) => {
+      const lab = document.createElement("label");
+      lab.className = "grafica-col";
+      lab.innerHTML = `<input type="checkbox" name="programa" value="${escapeHtml(p.nombre)}"/><span>${escapeHtml(p.nombre)} <span class="muted">(${p.n})</span></span>`;
+      boxCarreras.appendChild(lab);
+    });
+    boxGrupos.innerHTML = "";
+    (data.grupos || []).forEach((g) => {
+      const sec = document.createElement("section");
+      sec.className = "parc-grupo";
+      const h = document.createElement("h4");
+      h.textContent = g.nombre;
+      sec.appendChild(h);
+      const grid = document.createElement("div");
+      grid.className = "grafica-cols";
+      (g.columnas || []).forEach((c) => {
+        const lab = document.createElement("label");
+        lab.className = "grafica-col";
+        const on = basicas.includes(c) ? " checked" : "";
+        lab.innerHTML = `<input type="checkbox" name="columna" value="${escapeHtml(c)}"${on}/><span>${escapeHtml(c)}</span>`;
+        grid.appendChild(lab);
+      });
+      sec.appendChild(grid);
+      boxGrupos.appendChild(sec);
+    });
+    chkTodas.checked = true;
+    btnDesc.disabled = false;
+    actualizarConteo();
+  }
+
+  sel.addEventListener("change", async () => {
+    meta.textContent = "Leyendo el corte…";
+    btnDesc.disabled = true;
+    try {
+      const res = await fetch(`/api/parcializado/${encodeURIComponent(sel.value)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "No se pudo leer esta versión.");
+      pintar(data);
+    } catch (e) {
+      meta.textContent = e.message || String(e);
+    }
+  });
+
+  chkTodas.addEventListener("change", () => {
+    if (chkTodas.checked) {
+      checksProg().forEach((c) => { c.checked = false; });
+    }
+    actualizarConteo();
+  });
+  boxCarreras.addEventListener("change", (ev) => {
+    if (ev.target && ev.target.name === "programa" && ev.target.checked) {
+      chkTodas.checked = false;
+    }
+    if (ev.target && ev.target.name === "programa" && !Array.from(checksProg()).some((c) => c.checked)) {
+      chkTodas.checked = true;
+    }
+    actualizarConteo();
+  });
+  boxGrupos.addEventListener("change", actualizarConteo);
+
+  document.getElementById("parc-cols-todas")?.addEventListener("click", () => {
+    checksCols().forEach((c) => { c.checked = true; });
+    actualizarConteo();
+  });
+  document.getElementById("parc-cols-ninguna")?.addEventListener("click", () => {
+    checksCols().forEach((c) => { c.checked = false; });
+    actualizarConteo();
+  });
+  document.getElementById("parc-cols-basicas")?.addEventListener("click", () => {
+    checksCols().forEach((c) => { c.checked = basicas.includes(c.value); });
+    actualizarConteo();
+  });
+
+  form.addEventListener("submit", (ev) => {
+    if (typeof marcarNavegacionInterna === "function") marcarNavegacionInterna();
+    const nCols = Array.from(checksCols()).filter((c) => c.checked).length;
+    if (!nCols) {
+      ev.preventDefault();
+      resumen.textContent = "Marque al menos una columna.";
+    }
+  });
+
+  filasTotales = {{ (datos.filas if datos else 0) }};
+  basicas = ["Identificación", "Nombre y apellidos", "Programa"];
+  actualizarConteo();
+})();
+</script>
+{% endblock %}

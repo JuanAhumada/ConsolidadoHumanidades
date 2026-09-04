@@ -8,7 +8,12 @@ import polars as pl
 
 from consolidado.config.settings import carpeta_excels
 from consolidado.core.archivos import _leer_hoja_datos
-from consolidado.core.columnas import _buscar_columna_por_aliases
+from consolidado.core.columnas import (
+    _buscar_columna_por_aliases,
+    aliases_identificacion_efectivos,
+    aliases_para_slot,
+    usando_aliases,
+)
 from consolidado.core.constants import COL_REPITIENDO
 from consolidado.core.normalizacion import (
     _es_valor_vacio,
@@ -103,7 +108,9 @@ def procesar_materias_repetidas(ruta: Path, *, hoja: str | None = None) -> dict[
     cols = list(df.columns)
     col_id = _buscar_columna_por_aliases(
         cols,
-        ["num identificacion", "cedula", "cédula", "identificacion", "identificación"],
+        aliases_identificacion_efectivos(
+            ["num identificacion", "cedula", "cédula", "identificacion", "identificación"]
+        ),
     )
     col_materia = _buscar_columna_por_aliases(cols, ["nom materia", "materia", "asignatura"])
     col_estado = _buscar_columna_por_aliases(
@@ -130,7 +137,9 @@ def procesar_repitiendo_estudiantes(ruta: Path, *, hoja: str | None = None) -> d
     cols = list(df.columns)
     col_id = _buscar_columna_por_aliases(
         cols,
-        ["num identificacion", "cedula", "cédula", "identificacion", "identificación"],
+        aliases_identificacion_efectivos(
+            ["num identificacion", "cedula", "cédula", "identificacion", "identificación"]
+        ),
     )
     col_estado = _buscar_columna_por_aliases(
         cols, ["est matricula", "estado matricula", "est_matricula", "estado"]
@@ -181,7 +190,8 @@ def _cargar_repitiendo_cfg(
     if not p.is_file():
         return {}
     try:
-        return procesar_repitiendo_estudiantes(p, hoja=slot.get("hoja"))
+        with usando_aliases(aliases_para_slot(slot)):
+            return procesar_repitiendo_estudiantes(p, hoja=slot.get("hoja"))
     except Exception:
         return {}
 
@@ -199,7 +209,8 @@ def _cargar_materias_repetidas_cfg(
     if not p.is_file():
         return {}
     try:
-        return procesar_materias_repetidas(p, hoja=slot.get("hoja"))
+        with usando_aliases(aliases_para_slot(slot)):
+            return procesar_materias_repetidas(p, hoja=slot.get("hoja"))
     except Exception:
         return {}
 

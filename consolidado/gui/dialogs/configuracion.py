@@ -55,6 +55,7 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
             "Nunca se incluyen (p. ej. sedes o variantes). Aplica a becas y BD 2/3.",
         )
         self._pestana_priorizados()
+        self._pestana_graficas()
         self._pestana_documentos()
         # Estilos después de crear pestañas: CTkTabview falla si configure()
         # se llama con _current_name vacío.
@@ -209,6 +210,40 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
             "Columnas booleanas en BD 2 que indican el motivo de priorización.",
         )
 
+    def _pestana_graficas(self) -> None:
+        from consolidado.config.settings import construir_columnas_salida
+        from consolidado.core.charts import columna_excluida_grafica, es_columna_materia_grafica
+
+        marco = self.tabview.add("Gráficas")
+        ctk.CTkLabel(
+            marco,
+            text="Marque las columnas del tablero. De base se dejan fuera "
+            "identificación, nombres, celulares, correos, fechas y lugares. "
+            "Las materias, horarios y profesores no se listan.",
+            font=FONT_TEXTO,
+            wraplength=740,
+            justify="left",
+        ).pack(anchor="w", padx=8, pady=(8, 8))
+
+        scroll = ctk.CTkScrollableFrame(marco, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
+        todas = [
+            c
+            for c in construir_columnas_salida(self.cfg, 1)
+            if not es_columna_materia_grafica(c)
+        ]
+        guardadas = self.cfg.get("columnas_graficas")
+        if isinstance(guardadas, list):
+            activas = {str(c).strip() for c in guardadas if str(c).strip()}
+        else:
+            activas = {c for c in todas if not columna_excluida_grafica(c)}
+        self._vars_grafica: dict[str, tk.BooleanVar] = {}
+        for nombre in todas:
+            var = tk.BooleanVar(value=nombre in activas)
+            self._vars_grafica[nombre] = var
+            ctk.CTkCheckBox(scroll, text=nombre, variable=var).pack(anchor="w", pady=2)
+
     def _pestana_documentos(self) -> None:
         marco = self.tabview.add("Documentos extra")
         docs = self.cfg.get("documentos_adicionales", [])
@@ -298,6 +333,10 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
         self.cfg["programas_permitidos"] = list(self.lista_programas.get(0, tk.END))
         self.cfg["programas_excluidos"] = list(self.lista_excluidos.get(0, tk.END))
         self.cfg["columnas_motivo_priorizado"] = list(self.lista_motivos.get(0, tk.END))
+        if getattr(self, "_vars_grafica", None):
+            self.cfg["columnas_graficas"] = [
+                nombre for nombre, var in self._vars_grafica.items() if var.get()
+            ]
         guardar_config(self.cfg, self.base)
         merge.aplicar_config(self.cfg, self.base)
         self.callback()

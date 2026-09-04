@@ -3,7 +3,7 @@ SQLite del consolidado: versiones (snapshots) y estudiantes por categoría.
 
 guardar_version nunca pisa un corte anterior. La ficha se arma desde fila_json
 de las cuatro tablas (base, priorizado, rendimiento, alertas).
-Periodo de la versión = periodo_desde_fecha (mes del corte).
+Periodo de la versión = el Periodo actual más frecuente entre los estudiantes.
 Periodo del alumno = columna Periodo actual (COD_PERIODO).
 
 Al cambiar tablas, incremente SCHEMA_VERSION y migre en inicializar_db.
@@ -35,7 +35,7 @@ from consolidado.paths import PROJECT_ROOT
 
 DB_FILENAME = "consolidado.db"
 CARPETA_DATOS = "datos"
-SCHEMA_VERSION = 9  # última: Periodo actual en estudiantes_base
+SCHEMA_VERSION = 11  # última: ediciones de ficha (ruta de grado / priorizado)
 
 # Columnas canónicas → campos indexables (identidad en `estudiantes_base`).
 _CAMPOS_INDEXABLES: dict[str, str] = {
@@ -394,6 +394,37 @@ def _crear_tablas_modificaciones(conn: sqlite3.Connection) -> None:
             ON modificaciones(creado_en);
         CREATE INDEX IF NOT EXISTS idx_modificaciones_accion
             ON modificaciones(accion);
+        """
+    )
+
+
+def _crear_tablas_proyeccion(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS estudiante_gradua_semestre (
+            identificacion TEXT PRIMARY KEY,
+            se_gradua INTEGER NOT NULL DEFAULT 0,
+            periodo TEXT,
+            actualizado_en TEXT NOT NULL,
+            usuario TEXT
+        );
+        CREATE TABLE IF NOT EXISTS seguimiento_notas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            identificacion TEXT NOT NULL,
+            nota TEXT NOT NULL,
+            creado_en TEXT NOT NULL,
+            usuario TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_notas_ident
+            ON seguimiento_notas(identificacion, creado_en DESC);
+        CREATE TABLE IF NOT EXISTS estudiante_ediciones (
+            identificacion TEXT NOT NULL,
+            columna TEXT NOT NULL,
+            valor TEXT,
+            actualizado_en TEXT NOT NULL,
+            usuario TEXT,
+            PRIMARY KEY (identificacion, columna)
+        );
         """
     )
 
@@ -771,6 +802,7 @@ def inicializar_db(base: Path | None = None) -> Path:
         _crear_tablas_alertas_descartadas(conn)
         _crear_tablas_usuarios(conn)
         _crear_tablas_modificaciones(conn)
+        _crear_tablas_proyeccion(conn)
         _asegurar_periodo_actual(conn)
         _sembrar_atenciones_desde_contactados(conn)
         _marcar_schema_version(conn)

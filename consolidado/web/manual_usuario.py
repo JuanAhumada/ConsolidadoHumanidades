@@ -9,9 +9,11 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "pasos": [
             "A la derecha del título está el paso a paso y el número de estudiantes de la última versión.",
             "Las tarjetas de abajo abren ficha, seguimiento, gráficas y metas.",
+            "«Descargar último Excel» abre el historial de versiones; ahí puede bajar el más reciente u otro corte.",
+            "Si es administrador, «Generar nuevo consolidado» lo lleva a Data, que es el único sitio donde se genera.",
             "Si cierra la pestaña, el navegador preguntará; acéptelo para apagar la aplicación y liberar el puerto.",
             "Si es administrador, también verá accesos a Data, datos antiguos, historial, configuración y usuarios.",
-            "El aviso de si ya se puede generar el consolidado aparece en Data, no aquí.",
+            "El aviso de si ya se puede generar el consolidado aparece en Data, no en el menú.",
         ],
     },
     "estudiante": {
@@ -22,7 +24,10 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "El signo de interrogación abre la guía de esta pantalla en la barra de la derecha.",
             "Escriba la cédula o parte del nombre y pulse Buscar.",
             "Si hay varias coincidencias, elija «Ver ficha».",
-            "La ficha muestra contacto, beca, priorizado, alertas, ruta de grado y horario del periodo actual.",
+            "Los datos del estudiante (incluido correo y celular) quedan siempre visibles. Debajo hay dos grupos de pestañas, a media pantalla cada uno.",
+            "Izquierda: académico, priorizado, ruta de grado, becas y alertas. Derecha: notas, nueva nota, proyección a grado y horario.",
+            "En Priorizado y Ruta de grado pulse «Editar estados» para cambiar los campos. Guardar deja el cambio; Restablecer vuelve a la fuente.",
+            "En Proyección responda si se gradúa este semestre; queda en Proyección a Grado.",
             "El color de acento depende del programa (ver pestaña Colores).",
         ],
     },
@@ -35,6 +40,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "Cada tarjeta muestra nombre, puntaje y el botón para marcar que se atendió. El nombre abre la ficha completa.",
             "Al marcar se guarda la fecha y la pestaña (beca, priorizado, etc.). En Estadísticas verá cuántos se atendieron al día y el promedio.",
             "Alertas lista a quienes tienen alerta de las bases o una alerta propia.",
+            "Notas guarda observaciones de lo que dijo el estudiante. También puede añadirlas desde la ficha.",
         ],
     },
     "seguimiento-estadisticas": {
@@ -45,6 +51,16 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "El promedio por día usa solo los días en los que sí hubo al menos una marca.",
             "El promedio de 7 días incluye también los días en cero.",
             "La tabla por pestaña indica desde cuál vista (beca, priorizado, alertas…) se marcó.",
+        ],
+    },
+    "proyeccion": {
+        "titulo": "Proyección a Grado",
+        "resumen": "Estudiantes próximos a graduarse y si se gradúan este semestre.",
+        "pasos": [
+            "Entran quienes, según ruta de grado y permanencia, tienen cohorte o periodo de grado cercano, muchos créditos, o opción de grado / inglés / Saber Pro en curso.",
+            "Aún no: no han confirmado que se gradúan este semestre (incluye a quienes dijeron que no).",
+            "Se gradúan: los que en la ficha respondieron Sí a «¿Se gradúa este semestre?».",
+            "Abra la ficha desde la tarjeta para marcar Sí o No y para dejar notas de seguimiento.",
         ],
     },
     "metas": {
@@ -61,8 +77,19 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "titulo": "Gráficas",
         "resumen": "Tablero sobre la última versión del consolidado.",
         "pasos": [
-            "Elija el tipo de gráfica y la variable (programa, nivel, etc.).",
-            "El administrador puede descargar un Excel para Power BI.",
+            "Elija el tipo de gráfica, la variable (programa, nivel, etc.) y, si quiere, filtre por carrera.",
+            "Cada espacio de gráfica puede tener su propia carrera. «Todas» usa la facultad completa.",
+            "En Configuración marque las columnas que el tablero puede usar. Por defecto no salen identificación, nombres, celulares, correos ni materias.",
+        ],
+    },
+    "informacion": {
+        "titulo": "Información",
+        "resumen": "Cómo se definen los puntajes de prioridad.",
+        "pasos": [
+            "La fórmula suma beca, priorizado, repitiendo, reintegro, propio, activación y ruta de grado.",
+            "Cada bloque indica cuántos puntos aporta cada condición.",
+            "El administrador puede guardar notas de la facultad (acuerdos o excepciones) en esta misma pantalla.",
+            "El color de fila del Excel no es el color de la carrera; ese se ve en Colores.",
         ],
     },
     "colores": {
@@ -77,9 +104,19 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "titulo": "Versiones",
         "resumen": "Cortes históricos del consolidado.",
         "pasos": [
-            "Cada «Generar» crea una versión nueva; no se borra la anterior.",
-            "Descargue el Excel de un corte o el último consolidado.",
+            "Cada «Generar» (solo en Data) crea una versión nueva; no se borra la anterior.",
+            "Arriba puede descargar el último Excel; cada fila también tiene su propio archivo.",
             "Solo el administrador puede generar o importar versiones.",
+        ],
+    },
+    "parcializado": {
+        "titulo": "Parcializado",
+        "resumen": "Un Excel con solo las columnas y carreras que le pidan.",
+        "pasos": [
+            "Elija cualquier versión del consolidado (no solo la última).",
+            "Marque una carrera, varias o «Todas las carreras».",
+            "Marque las columnas. «Datos básicos» deja identificación, nombre y programa.",
+            "Descargue el Excel: una hoja con los datos y otra con el origen (versión, fecha y filtro).",
         ],
     },
     "datos-antiguos": {
@@ -104,10 +141,12 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "resumen": "Carga de los Excel fuente del periodo actual.",
         "pasos": [
             "Arriba verá si ya está listo para generar, o cuántos archivos obligatorios faltan.",
-            "Arriba puede cargar varios Excel de una vez por el nombre del archivo.",
+            "Arriba puede cargar un ZIP de fuentes (paquete inicial) o varios Excel de una vez por el nombre del archivo.",
             "En cada fila elija el Excel de ese apartado y, al final, pulse «Cargar seleccionados» para subirlos todos juntos.",
+            "En Archivos adicionales pulse «Añadir Excel»: se sugiere un nombre, se muestra una previa de unas 20 filas y elige la clave primaria y las columnas.",
+            "«Editar encabezados» o «Editar datos» abre una base concreta: hojas internas, previa de filas y el campo de entrada (Excel) frente al de salida (consolidado).",
             "Permanencia, gestión de graduación y algunas alertas son opcionales.",
-            "Cuando estén listos, use «Generar nuevo consolidado» en el menú.",
+            "Cuando estén listos, use «Generar nuevo consolidado» en esta misma pantalla (fecha de versión y botón).",
             "Los archivos se guardan en la carpeta de entrada de la aplicación.",
         ],
     },
@@ -115,7 +154,8 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "titulo": "Configuración",
         "resumen": "Programas, aliases de columnas y colores.",
         "pasos": [
-            "Cambie programas permitidos o nombres de columnas si un Excel nuevo usa encabezados distintos.",
+            "Marque las columnas que quiere ver en Gráficas. Identificación, nombres, teléfonos, correos y materias no entran por defecto.",
+            "Cambie programas permitidos o nombres de columnas (encabezados de origen) si un Excel nuevo usa títulos distintos.",
             "«Restaurar de fábrica» vuelve a los valores por defecto (puede conservar la carpeta de salida).",
             "Solo el administrador.",
         ],
@@ -124,7 +164,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "titulo": "Usuarios",
         "resumen": "Quién entra y con qué rol.",
         "pasos": [
-            "consulta: Inicio, ficha, seguimiento, metas, gráficas, colores y descargar versiones.",
+            "consulta: Inicio, ficha, seguimiento, proyección a grado, metas, gráficas, colores, información, versiones y parcializado.",
             "admin: además Data, generar, configuración, usuarios, datos antiguos e historial.",
             "Cambie la clave inicial admin / admin en cuanto instale la aplicación.",
         ],

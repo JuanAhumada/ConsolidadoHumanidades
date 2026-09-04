@@ -1,6 +1,8 @@
 # Paquete Windows
 
-Extraiga `ConsolidadoHumanidades-Windows.zip` y haga **doble clic** en `ConsolidadoHumanidades.exe` de la raíz.
-No se abre una consola. Si algo falla, aparece una tarjeta en pantalla.
+Extraiga `ConsolidadoHumanidades-Windows.zip`. En la raíz verá:
 
-El manual de cada pestaña está en la aplicación (signo **?**).
+- `ConsolidadoHumanidades.exe` — ábralo con doble clic (no se abre consola).
+- `Archivos iniciales.zip` — los Excel fuente para cargar todos de una vez en **Data → Paquete inicial**.
+
+Si algo falla, aparece una tarjeta en pantalla. El manual de cada pestaña está en la aplicación (signo **?**).

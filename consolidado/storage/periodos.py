@@ -30,6 +30,24 @@ def _insertar_columna_periodo(columnas: list[str]) -> list[str]:
     return out
 
 
+def periodo_de_consolidado(df) -> str | None:
+    """Periodo académico más frecuente en «Periodo actual» de los estudiantes."""
+    if df is None or COL_PERIODO_ACTUAL not in getattr(df, "columns", []):
+        return None
+    from collections import Counter
+
+    cont: Counter[str] = Counter()
+    for val in df.get_column(COL_PERIODO_ACTUAL).to_list():
+        periodo = formatear_periodo_cod(val)
+        if periodo:
+            cont[periodo] += 1
+    if not cont:
+        return None
+    tope = max(cont.values())
+    empatados = [p for p, n in cont.items() if n == tope]
+    return periodo_mas_reciente(empatados) or empatados[0]
+
+
 def _acumular_periodos(mapa: dict[str, str], df) -> None:
     if df is None or df.height == 0:
         return

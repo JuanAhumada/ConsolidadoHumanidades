@@ -9,9 +9,9 @@
 empaque/Lanzador.exe binary
 ArchivosPrueba2026-1.zip binary
 
-# Binarios del paquete Windows (GitHub limita a 100 MB por archivo)
-dist/**/*.exe filter=lfs diff=lfs merge=lfs -text
-dist/**/*.dll filter=lfs diff=lfs merge=lfs -text
+# Paquete Windows (>100 MB): GitHub no admite este tamaño en git normal
+release/ConsolidadoHumanidades-Windows.zip filter=lfs diff=lfs merge=lfs -text
+
+# GitHub Desktop mide el archivo en disco aunque se esté borrando de git.
+# Con LFS deja de bloquear el commit; dist/ sigue ignorado y no se vuelve a subir.
 dist/**/*.pyd filter=lfs diff=lfs merge=lfs -text
-dist/**/*.so filter=lfs diff=lfs merge=lfs -text
-dist/**/*.lib filter=lfs diff=lfs merge=lfs -text

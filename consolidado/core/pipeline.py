@@ -27,7 +27,7 @@ from consolidado.core.archivos import (
     preparar_archivo,
     procesar_tabla_priorizados_con_recuperacion,
 )
-from consolidado.core.columnas import alinear_dataframe_salida
+from consolidado.core.columnas import alinear_dataframe_salida, aliases_para_slot, usando_aliases
 from consolidado.core.constants import (
     COLUMNAS_EXCLUIDAS_LISTADO,
     COLUMNAS_PUNTAJE_COMPONENTES,
@@ -57,11 +57,13 @@ from consolidado.core.normalizacion import normalizar_id
 from consolidado.core.permanencia import aplicar_permanencia
 from consolidado.storage.alertas_fuente import aplicar_alertas_descartadas
 from consolidado.storage.alertas_propias import cargar_alertas_propias
+from consolidado.storage.ediciones import COLUMNAS_EDITABLES, aplicar_ediciones_columnas, cargar_ediciones
 from consolidado.storage.db import (
     guardar_version,
     nombre_excel_version,
     periodo_desde_fecha,
 )
+from consolidado.storage.periodos import periodo_de_consolidado
 from consolidado.storage.priorizados import cargar_priorizados_propios
 
 
@@ -76,19 +78,49 @@ def _carpeta_salida(cfg: dict, base: Path) -> Path:
     return carpeta
 
 
+def _aplicar_ediciones_ficha(consolidado: pl.DataFrame, base: Path) -> pl.DataFrame:
+    if consolidado.is_empty() or "Identificación" not in consolidado.columns:
+        return consolidado
+    ediciones = cargar_ediciones(base)
+    if not ediciones:
+        return consolidado
+    idents = [normalizar_id(v) for v in consolidado["Identificación"].to_list()]
+    presentes = {
+        col: consolidado[col].to_list()
+        for col in COLUMNAS_EDITABLES
+        if col in consolidado.columns
+    }
+    cambios = aplicar_ediciones_columnas(idents, presentes, ediciones)
+    if not cambios:
+        return consolidado
+    exprs = []
+    for col, vals in cambios.items():
+        textos = []
+        for v in vals:
+            if v is None:
+                textos.append(None)
+            elif isinstance(v, bool):
+                textos.append("Sí" if v else "No")
+            else:
+                textos.append(str(v))
+        exprs.append(pl.Series(col, textos, dtype=pl.Utf8).alias(col))
+    return consolidado.with_columns(exprs)
+
+
 def resolver_destino_versionado(
     cfg: dict,
     base: Path,
     *,
     fecha_version: date | None = None,
     salida_explicita: Path | None = None,
+    periodo: str | None = None,
 ) -> tuple[Path, str, date]:
     """
-    Destino Excel con periodo (YYYY-1 / YYYY-2) y fecha de versión.
-    Si salida_explicita es un archivo, se usa esa ruta (CLI/manual).
+    Destino Excel con periodo académico (el de los estudiantes) y fecha de corte.
+    Si no hay periodo en los datos, usa ene–jun → YYYY-1 / jul–dic → YYYY-2.
     """
     fecha_version = fecha_version or date.today()
-    periodo = periodo_desde_fecha(fecha_version)
+    periodo = (periodo or "").strip() or periodo_desde_fecha(fecha_version)
     if salida_explicita is not None:
         destino = Path(salida_explicita)
         if destino.suffix.lower() not in {".xlsx", ".xlsm", ".xls"}:
@@ -151,21 +183,22 @@ def generar_dataframe_consolidado(
         etiqueta = slot.get("titulo", p.name)
         tipo = slot.get("tipo") or _tipo_libro_desde_nombre(p)
         hoja = slot.get("hoja")
-        if tipo in _TIPOS_FUENTE_AUXILIARES:
-            continue
-        if tipo == "bd2":
-            priorizados, _ = procesar_tabla_priorizados_con_recuperacion(
+        with usando_aliases(aliases_para_slot(slot)):
+            if tipo in _TIPOS_FUENTE_AUXILIARES:
+                continue
+            if tipo == "bd2":
+                priorizados, _ = procesar_tabla_priorizados_con_recuperacion(
+                    p, etiqueta, tipo=tipo, hoja=hoja
+                )
+                continue
+            df_listado, df_horarios, _ = preparar_archivo(
                 p, etiqueta, tipo=tipo, hoja=hoja
             )
-            continue
-        df_listado, df_horarios, _ = preparar_archivo(
-            p, etiqueta, tipo=tipo, hoja=hoja
-        )
-        max_materias = max(max_materias, max_materias_en_dataframe(df_horarios))
-        partes.append(df_listado)
-        tipos_partes.append(tipo)
-        if df_horarios.height > 0:
-            horarios_partes.append(df_horarios)
+            max_materias = max(max_materias, max_materias_en_dataframe(df_horarios))
+            partes.append(df_listado)
+            tipos_partes.append(tipo)
+            if df_horarios.height > 0:
+                horarios_partes.append(df_horarios)
 
     columnas_listado = construir_columnas_salida(cfg, 1)
     columnas_listado = [
@@ -216,6 +249,8 @@ def generar_dataframe_consolidado(
         if normalizar_id(p.get("identificacion", ""))
     }
     consolidado = aplicar_prioridad(consolidado, ids_propios)
+    if carpeta_fuentes is None:
+        consolidado = _aplicar_ediciones_ficha(consolidado, base)
     return consolidado, max_materias
 
 
@@ -250,7 +285,11 @@ def ejecutar_consolidado(
     )
 
     destino, periodo, fecha_v = resolver_destino_versionado(
-        cfg, base, fecha_version=fecha_version, salida_explicita=salida
+        cfg,
+        base,
+        fecha_version=fecha_version,
+        salida_explicita=salida,
+        periodo=periodo_de_consolidado(consolidado),
     )
     destino = guardar_excel_consolidado(
         consolidado,

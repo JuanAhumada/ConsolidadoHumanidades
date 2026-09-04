@@ -33,10 +33,13 @@ ETIQUETAS_ACCION = {
     "alerta_propia": "Alerta propia",
     "quitar_alerta_propia": "Quitar alerta propia",
     "contactado": "Contactado",
+    "gradua_semestre": "Gradúa este semestre",
+    "nota_seguimiento": "Nota de seguimiento",
     "priorizado_activo": "Estado priorizado",
     "priorizado_propio": "Priorizado propio",
     "config": "Configuración",
     "usuario": "Usuarios",
+    "parcializado": "Excel parcializado",
 }
 
 _COLS_DIFF = (
