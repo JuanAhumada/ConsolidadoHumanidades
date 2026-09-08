@@ -16,6 +16,7 @@ import polars as pl
 
 from consolidado.config.settings import (
     carpeta_excels,
+    columnas_propias_documentos,
     construir_columnas_salida,
     guardar_config,
 )
@@ -201,10 +202,12 @@ def generar_dataframe_consolidado(
                 horarios_partes.append(df_horarios)
 
     columnas_listado = construir_columnas_salida(cfg, 1)
+    extras_doc = columnas_propias_documentos(cfg)
     columnas_listado = [
         c
         for c in columnas_listado
-        if not es_columna_materia_horario(c)
+        if c not in extras_doc
+        and not es_columna_materia_horario(c)
         and c not in COLUMNAS_EXCLUIDAS_LISTADO
         and c not in COLUMNAS_PUNTAJE_COMPONENTES
         and c not in ("Puntaje prioridad", "Nivel prioridad", "Detalle prioridad")

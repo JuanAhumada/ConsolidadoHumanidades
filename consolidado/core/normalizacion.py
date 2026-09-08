@@ -195,6 +195,22 @@ def normalizar_id(val) -> str:
     return s
 
 
+def clave_cruce_identificacion(val) -> str:
+    """Misma clave que Identificación al cruzar Excel adicionales.
+
+    Quita espacios, decimales de Excel y separadores de miles (1.234.567 → 1234567)
+    para que la llave foránea coincida con la identificación del consolidado.
+    """
+    base = _entero_o_texto(val)
+    s = normalizar_id(base if base is not None else val)
+    if not s:
+        return ""
+    compacto = re.sub(r"[.\-\s/]", "", s)
+    if compacto.isdigit():
+        return compacto
+    return s
+
+
 _RE_PERIODO_ETIQUETA = re.compile(r"^(19|20)\d{2}\s*[-–/\s]\s*([12])$")
 _ANIO_PERIODO_MIN = 1990
 _ANIO_PERIODO_MAX = 2099

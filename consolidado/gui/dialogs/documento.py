@@ -10,7 +10,9 @@ import customtkinter as ctk
 import consolidado as merge
 from consolidado.config.settings import carpeta_excels, guardar_config, guardar_excel_fuente
 from consolidado.core.documentos import (
+    canonizar_grupo_encabezado,
     categorias_documento,
+    etiqueta_grupo_ficha,
     slug_documento_id,
     sugerir_columna_identificacion,
     sugerir_titulo_documento,
@@ -61,8 +63,9 @@ class DialogoDocumento(ctk.CTkToplevel):
         ctk.CTkLabel(
             marco,
             text=(
-                "Abra el Excel: se sugiere un nombre, se muestran unas 20 filas "
-                "y elige la clave primaria y las columnas que usará el consolidado."
+                "Abra el Excel: se sugiere un nombre y una previa. "
+                "La llave foránea debe coincidir con Identificación: con esa clave se busca al estudiante y se añaden los datos a su fila (no crea personas nuevas). "
+                "Elija si los datos van a una categoría de la ficha ya existente o a una nueva."
             ),
             font=FONT_TEXTO,
             text_color=COLOR_TEXTO_MUTED,
@@ -77,7 +80,7 @@ class DialogoDocumento(ctk.CTkToplevel):
         self.ent_titulo = ctk.CTkEntry(marco, width=360)
         self.ent_titulo.grid(row=1, column=1, sticky="ew", pady=4)
 
-        ctk.CTkLabel(marco, text="Grupo en el consolidado:", anchor="w").grid(
+        ctk.CTkLabel(marco, text="Añadir a categoría existente:", anchor="w").grid(
             row=2, column=0, sticky="w"
         )
         cats = categorias_documento(self.cfg)
@@ -88,7 +91,7 @@ class DialogoDocumento(ctk.CTkToplevel):
 
         ctk.CTkLabel(
             marco,
-            text="O escriba un grupo nuevo:",
+            text="O nombre de categoría nueva:",
             anchor="w",
             font=FONT_PEQUENA,
             text_color=COLOR_TEXTO_MUTED,
@@ -96,7 +99,7 @@ class DialogoDocumento(ctk.CTkToplevel):
         self.ent_categoria_nueva = ctk.CTkEntry(
             marco,
             width=360,
-            placeholder_text="Dejar vacío para usar el del desplegable",
+            placeholder_text="Vacío = usar la categoría del desplegable",
         )
         self.ent_categoria_nueva.grid(row=3, column=1, sticky="ew", pady=4)
 
@@ -127,7 +130,7 @@ class DialogoDocumento(ctk.CTkToplevel):
         )
         self.combo_hoja.grid(row=6, column=1, sticky="ew", pady=4)
 
-        ctk.CTkLabel(marco, text="Clave primaria:", anchor="w").grid(
+        ctk.CTkLabel(marco, text="Llave (identificación del estudiante):", anchor="w").grid(
             row=7, column=0, sticky="w"
         )
         self.combo_pk = ctk.CTkComboBox(marco, values=[""], width=360)
@@ -184,12 +187,12 @@ class DialogoDocumento(ctk.CTkToplevel):
     def _categoria_elegida(self) -> str:
         nueva = self.ent_categoria_nueva.get().strip()
         if nueva:
-            return nueva
-        return self.combo_categoria.get().strip() or "Extra"
+            return canonizar_grupo_encabezado(nueva)
+        return canonizar_grupo_encabezado(self.combo_categoria.get().strip() or "Extra")
 
     def _cargar_documento_existente(self, doc: dict) -> None:
         self.ent_titulo.insert(0, doc.get("titulo", ""))
-        grupo = doc.get("grupo_encabezado", "")
+        grupo = etiqueta_grupo_ficha(doc.get("grupo_encabezado", ""))
         cats = categorias_documento(self.cfg)
         if grupo and grupo not in cats:
             cats = [grupo] + cats
@@ -335,8 +338,8 @@ class DialogoDocumento(ctk.CTkToplevel):
             return
         if not pk:
             messagebox.showwarning(
-                "Clave primaria",
-                "Elija la columna de identificación (clave primaria).",
+                "Llave de identificación",
+                "Elija la columna de identificación. Es la llave con la que se une al consolidado.",
                 parent=self,
             )
             return
@@ -345,14 +348,16 @@ class DialogoDocumento(ctk.CTkToplevel):
         for item in self.filas_map:
             if not item["var"].get():
                 continue
-            salida = item["entrada"].get().strip() or item["origen"]
             origen = item["origen"]
+            if origen == pk:
+                continue
+            salida = item["entrada"].get().strip() or origen
             if salida and origen:
                 columnas.append({"salida": salida, "aliases": [origen]})
         if not columnas:
             messagebox.showwarning(
                 "Sin columnas",
-                "Marque al menos una columna para usar en el consolidado.",
+                "Marque al menos una columna de datos. La identificación solo sirve de llave.",
                 parent=self,
             )
             return

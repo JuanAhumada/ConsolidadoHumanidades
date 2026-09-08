@@ -230,7 +230,7 @@ def _formatear_academico(col: str, val) -> str:
     return _formatear_valor_ficha(val)
 
 
-def _seccion_academico(fila: dict) -> dict:
+def _seccion_academico(fila: dict, extras: list[str] | None = None) -> dict:
     etiquetas = (
         ("Activos", "Activo"),
         ("Periodo ingreso", "Periodo de Ingreso"),
@@ -244,6 +244,19 @@ def _seccion_academico(fila: dict) -> dict:
                 "etiqueta": etiqueta,
                 "valor": _formatear_academico(col, fila.get(col)),
                 "columna": col,
+            }
+        )
+    for extra in extras or []:
+        if extra in _CAMPOS_ACADEMICO_SET:
+            continue
+        valor = _formatear_valor_ficha(fila.get(extra))
+        if valor == "—":
+            continue
+        campos.append(
+            {
+                "etiqueta": etiqueta_export_columna(extra),
+                "valor": valor,
+                "columna": extra,
             }
         )
     return {
@@ -307,8 +320,17 @@ def _campo_edicion(fila: dict, col: str, cfg: dict) -> dict[str, Any]:
     return campo
 
 
-def _seccion_editable(fila: dict, cfg: dict, *, clave: str, titulo: str, columnas: list[str]) -> dict:
+def _seccion_editable(
+    fila: dict,
+    cfg: dict,
+    *,
+    clave: str,
+    titulo: str,
+    columnas: list[str],
+    extras: list[str] | None = None,
+) -> dict:
     campos = [_campo_edicion(fila, col, cfg) for col in columnas]
+    extras_vista = _campos_no_vacios(fila, extras or [], omitir=set(columnas))
     return {
         "clave": clave,
         "titulo": titulo,
@@ -316,6 +338,7 @@ def _seccion_editable(fila: dict, cfg: dict, *, clave: str, titulo: str, columna
         "editable": True,
         "grupo_edicion": "priorizado" if clave == "priorizado" else "ruta",
         "campos": campos,
+        "extras": extras_vista,
     }
 
 
@@ -397,7 +420,11 @@ def construir_vista_ficha(cfg: dict, fila: dict, *, num_materias: int) -> dict:
     grupo_materias = str(cfg.get("grupo_materias", "Materias")).strip().casefold()
     datos: list[dict[str, str]] = []
     otras: list[dict] = []
+    otras_idx: dict[str, int] = {}
     horario = None
+    extras_acad: list[str] = []
+    extras_prio: list[str] = []
+    extras_ruta: list[str] = []
     for nombre_grupo, columnas in construir_grupos_encabezado(cfg, num_materias):
         clave = nombre_grupo.strip().casefold()
         if clave == "datos":
@@ -407,7 +434,20 @@ def construir_vista_ficha(cfg: dict, fila: dict, *, num_materias: int) -> dict:
             continue
         if clave == "puntaje":
             continue
-        if clave in {"priorizados", "priorizado", "ruta de grado", "ruta"}:
+        if clave in {"academico", "académico"}:
+            extras_acad.extend(c for c in columnas if c not in extras_acad)
+            continue
+        if clave in {"priorizados", "priorizado"}:
+            extras_prio.extend(
+                c for c in columnas if c not in _COLS_PRIORIZADO and c not in extras_prio
+            )
+            continue
+        if clave in {"ruta de grado", "ruta"}:
+            extras_ruta.extend(
+                c
+                for c in columnas
+                if c not in COLUMNAS_RUTA_GRADO and c not in extras_ruta
+            )
             continue
         if clave == "becas":
             sec = _seccion_becas(fila, columnas)
@@ -423,17 +463,34 @@ def construir_vista_ficha(cfg: dict, fila: dict, *, num_materias: int) -> dict:
             horario = _seccion_horario(fila, columnas, num_materias)
             continue
         campos = _campos_no_vacios(fila, columnas)
-        if campos:
-            otras.append(
-                {"clave": clave, "titulo": nombre_grupo, "tipo": "campos", "campos": campos}
-            )
+        if not campos:
+            continue
+        if clave in otras_idx:
+            dest = otras[otras_idx[clave]]["campos"]
+            vistos = {c["columna"] for c in dest}
+            dest.extend(c for c in campos if c["columna"] not in vistos)
+            continue
+        otras_idx[clave] = len(otras)
+        otras.append(
+            {"clave": clave, "titulo": nombre_grupo, "tipo": "campos", "campos": campos}
+        )
     categorias = [
-        _seccion_academico(fila),
+        _seccion_academico(fila, extras_acad),
         _seccion_editable(
-            fila, cfg, clave="priorizado", titulo="Priorizado", columnas=_COLS_PRIORIZADO
+            fila,
+            cfg,
+            clave="priorizado",
+            titulo="Priorizado",
+            columnas=_COLS_PRIORIZADO,
+            extras=extras_prio,
         ),
         _seccion_editable(
-            fila, cfg, clave="ruta", titulo="Ruta de grado", columnas=list(COLUMNAS_RUTA_GRADO)
+            fila,
+            cfg,
+            clave="ruta",
+            titulo="Ruta de grado",
+            columnas=list(COLUMNAS_RUTA_GRADO),
+            extras=extras_ruta,
         ),
         *otras,
     ]

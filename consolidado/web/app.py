@@ -100,7 +100,7 @@ app = FastAPI(title="Consolidado de Humanidades", version=APP_VERSION)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 _RUTAS_PUBLICAS = {"/login", "/logout", "/api/apagar"}
-# Rutas solo para rol admin. Consulta: hasta Versiones (GET), más Metas y Colores.
+# Rutas solo para rol admin. Consulta: hasta Versiones (GET), más Metas e Información.
 _PREFIJOS_ADMIN = (
     "/config",
     "/usuarios",
@@ -290,7 +290,26 @@ async def pagina_metas(request: Request) -> HTMLResponse:
 
 @app.get("/colores", response_class=HTMLResponse)
 async def pagina_colores(request: Request) -> HTMLResponse:
-    return _render(request, "colores.html", nav="colores", leyenda=services.leyenda_colores())
+    return await pagina_informacion(request)
+
+
+@app.get("/informacion", response_class=HTMLResponse)
+async def pagina_informacion(request: Request) -> HTMLResponse:
+    try:
+        info = services.definicion_puntajes()
+    except Exception:
+        info = {"formula": "", "bloques": [], "niveles": [], "colores": [], "notas": ""}
+    try:
+        leyenda = services.leyenda_colores()
+    except Exception:
+        leyenda = {"excel": [], "programas": [], "niveles": []}
+    return _render(
+        request,
+        "informacion.html",
+        nav="informacion",
+        info=info,
+        leyenda=leyenda,
+    )
 
 
 @app.get("/archivos", response_class=HTMLResponse)
@@ -1398,16 +1417,6 @@ async def generar_version_fechada_legacy() -> RedirectResponse:
     return _redir(
         "/datos-antiguos",
         err="Las versiones antiguas se montan en Datos antiguos, sin tocar los archivos actuales.",
-    )
-
-
-@app.get("/informacion", response_class=HTMLResponse)
-async def pagina_informacion(request: Request) -> HTMLResponse:
-    return _render(
-        request,
-        "informacion.html",
-        nav="informacion",
-        info=services.definicion_puntajes(),
     )
 
 

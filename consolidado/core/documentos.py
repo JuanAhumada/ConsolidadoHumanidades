@@ -7,17 +7,17 @@ from typing import Any
 
 import polars as pl
 
-from consolidado.config.settings import (
-    CATEGORIAS_FUENTE_DEFAULT,
-    ORDEN_CATEGORIAS_FUENTE,
-    carpeta_excels,
-)
+from consolidado.config.settings import carpeta_excels
 from consolidado.core.archivos import _elegir_hoja_datos, _leer_hoja_datos
 from consolidado.core.columnas import _buscar_columna_por_aliases
 from consolidado.core.constants import _ALIASES_RUNTIME, aplicar_config
 from consolidado.core.excel_io import _leer_hoja_excel, _nombres_hojas_excel
 from consolidado.core.fusion import filtrar_filas_programas_permitidos
-from consolidado.core.normalizacion import combinar_valores, normalizar_encabezado, normalizar_id
+from consolidado.core.normalizacion import (
+    clave_cruce_identificacion,
+    combinar_valores,
+    normalizar_encabezado,
+)
 
 MUESTRAS_PREVIA = 20
 _PISTAS_IDENTIFICACION = (
@@ -63,22 +63,62 @@ def slug_documento_id(titulo: str, existentes: set[str] | None = None) -> str:
     return doc_id
 
 
+# Pestañas de la ficha (etiqueta UI → nombre en grupos_salida / Excel).
+CATEGORIAS_FICHA: tuple[tuple[str, str], ...] = (
+    ("Datos", "Datos"),
+    ("Académico", "Académico"),
+    ("Priorizado", "Priorizados"),
+    ("Ruta de grado", "Ruta de grado"),
+    ("Becas", "Becas"),
+    ("Alertas", "Alertas"),
+)
+_GRUPOS_NO_DESTINO = frozenset({"puntaje", "materias"})
+_CANON_GRUPO = {
+    "datos": "Datos",
+    "academico": "Académico",
+    "académico": "Académico",
+    "priorizado": "Priorizados",
+    "priorizados": "Priorizados",
+    "ruta": "Ruta de grado",
+    "ruta de grado": "Ruta de grado",
+    "becas": "Becas",
+    "alertas": "Alertas",
+}
+_ETIQUETA_GRUPO = {almacen: etiqueta for etiqueta, almacen in CATEGORIAS_FICHA}
+
+
+def canonizar_grupo_encabezado(nombre: str) -> str:
+    """Unifica alias (Priorizado/Priorizados, Académico…) al nombre del consolidado."""
+    texto = (nombre or "").strip() or "Extra"
+    return _CANON_GRUPO.get(texto.casefold(), texto)
+
+
+def etiqueta_grupo_ficha(nombre: str) -> str:
+    canon = canonizar_grupo_encabezado(nombre)
+    return _ETIQUETA_GRUPO.get(canon, canon)
+
+
 def categorias_documento(cfg: dict[str, Any] | None = None) -> list[str]:
+    """Categorías a las que se puede añadir un Excel extra (existentes + propias)."""
     cfg = cfg or {}
-    cats: list[str] = []
+    cats = [etiqueta for etiqueta, _ in CATEGORIAS_FICHA]
+    vistos = {c.casefold() for c in cats}
     for g in cfg.get("grupos_salida", []):
         nombre = str(g.get("nombre", "")).strip()
-        if nombre and nombre not in cats:
-            cats.append(nombre)
-    etiquetas = cfg.get("categorias_fuente", CATEGORIAS_FUENTE_DEFAULT)
-    for key in ORDEN_CATEGORIAS_FUENTE:
-        etiqueta = str(etiquetas.get(key, key.title())).strip()
-        if etiqueta and etiqueta not in cats:
+        if not nombre or nombre.casefold() in _GRUPOS_NO_DESTINO:
+            continue
+        etiqueta = etiqueta_grupo_ficha(nombre)
+        if etiqueta.casefold() not in vistos:
             cats.append(etiqueta)
+            vistos.add(etiqueta.casefold())
     for doc in cfg.get("documentos_adicionales", []):
         grupo = str(doc.get("grupo_encabezado") or doc.get("titulo") or "").strip()
-        if grupo and grupo not in cats:
-            cats.append(grupo)
+        if not grupo:
+            continue
+        etiqueta = etiqueta_grupo_ficha(grupo)
+        if etiqueta.casefold() not in vistos:
+            cats.append(etiqueta)
+            vistos.add(etiqueta.casefold())
     return cats or ["Extra"]
 
 
@@ -145,8 +185,15 @@ def vista_previa_excel(
 
 def columnas_config_documento(
     seleccion: list[dict[str, Any]],
+    *,
+    pk: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Normaliza {origen, salida} de las columnas marcadas para usar."""
+    """Normaliza {origen, salida} de las columnas marcadas para usar.
+
+    La columna de identificación (pk) es la llave foránea al consolidado:
+    no se copia como dato; solo sirve para el cruce.
+    """
+    pk_norm = (pk or "").strip()
     out: list[dict[str, Any]] = []
     vistos: set[str] = set()
     for item in seleccion:
@@ -155,6 +202,8 @@ def columnas_config_documento(
             aliases = item.get("aliases") or []
             if aliases:
                 origen = str(aliases[0]).strip()
+        if pk_norm and origen == pk_norm:
+            continue
         salida = str(item.get("salida") or origen).strip()
         if not origen or not salida:
             continue
@@ -163,6 +212,20 @@ def columnas_config_documento(
         vistos.add(salida)
         out.append({"salida": salida, "aliases": [origen]})
     return out
+
+
+def _columna_llave_documento(columnas: list[str], doc: dict) -> str | None:
+    """Columna del Excel extra que se cruza con Identificación del consolidado."""
+    aliases = [
+        str(a).strip()
+        for a in (doc.get("columna_identificacion_aliases") or [])
+        if str(a).strip()
+    ]
+    if aliases:
+        hallada = _buscar_columna_por_aliases(columnas, aliases)
+        if hallada:
+            return hallada
+    return _buscar_columna_por_aliases(columnas, aliases_identificacion())
 
 
 def procesar_documento_adicional(ruta: Path, doc: dict) -> pl.DataFrame:
@@ -176,23 +239,26 @@ def procesar_documento_adicional(ruta: Path, doc: dict) -> pl.DataFrame:
     if doc.get("filtrar_programas"):
         df = filtrar_filas_programas_permitidos(df)
 
-    id_aliases = doc.get("columna_identificacion_aliases") or _ALIASES_RUNTIME.get(
-        "identificacion", []
-    )
-    col_id = _buscar_columna_por_aliases(list(df.columns), id_aliases)
+    columnas = [str(c) for c in df.columns]
+    col_id = _columna_llave_documento(columnas, doc)
     if not col_id:
         raise ValueError(
-            f"{doc.get('titulo', ruta.name)}: no se encontró columna de identificación."
+            f"{doc.get('titulo', ruta.name)}: no se encontró la llave foránea "
+            "(debe coincidir con Identificación del consolidado)."
         )
 
-    columnas_doc = doc.get("columnas", [])
+    columnas_doc = [
+        c
+        for c in (doc.get("columnas") or [])
+        if c.get("salida") and (c.get("aliases") or [""])[0] != col_id
+    ]
     salidas = [c["salida"] for c in columnas_doc if c.get("salida")]
     if not salidas:
         return pl.DataFrame(schema={"_id_key": pl.Utf8})
 
     registros: list[dict] = []
     for row in df.iter_rows(named=True):
-        id_key = normalizar_id(row[col_id])
+        id_key = clave_cruce_identificacion(row[col_id])
         if not id_key:
             continue
         fila: dict = {"_id_key": id_key}
@@ -201,7 +267,7 @@ def procesar_documento_adicional(ruta: Path, doc: dict) -> pl.DataFrame:
             if not salida:
                 continue
             aliases = col_def.get("aliases", [])
-            src = _buscar_columna_por_aliases(list(df.columns), aliases)
+            src = _buscar_columna_por_aliases(columnas, aliases)
             fila[salida] = row[src] if src else None
         registros.append(fila)
 
@@ -225,13 +291,14 @@ def _unir_documentos_adicionales(
     base: Path,
     carpeta: Path | None = None,
 ) -> pl.DataFrame:
+    if "Identificación" not in consolidado.columns:
+        return consolidado
     carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
     resultado = consolidado.with_columns(
         pl.col("Identificación")
-        .map_elements(normalizar_id, return_dtype=pl.Utf8)
+        .map_elements(clave_cruce_identificacion, return_dtype=pl.Utf8)
         .alias("_id_key")
     )
-    columnas_extra: list[str] = []
     for doc in cfg.get("documentos_adicionales", []):
         nombre = doc.get("nombre_guardado")
         if not nombre:
@@ -240,16 +307,15 @@ def _unir_documentos_adicionales(
         if not ruta.is_file():
             continue
         extra = procesar_documento_adicional(ruta, doc)
-        if extra.height == 0:
+        data_cols = [c for c in extra.columns if c != "_id_key"]
+        if extra.height == 0 or not data_cols:
             continue
-        cols = [c for c in extra.columns if c != "_id_key"]
-        columnas_extra.extend(c for c in cols if c not in columnas_extra)
-        resultado = resultado.join(extra, on="_id_key", how="left")
-
-    resultado = resultado.drop("_id_key")
-    if columnas_extra:
-        todas = list(resultado.columns)
-        for c in columnas_extra:
-            if c not in todas:
-                resultado = resultado.with_columns(pl.lit(None).alias(c))
-    return resultado
+        extra = extra.select(["_id_key", *data_cols])
+        resultado = resultado.join(extra, on="_id_key", how="left", suffix="_docx")
+        for c in data_cols:
+            col_extra = f"{c}_docx"
+            if col_extra in resultado.columns:
+                resultado = resultado.with_columns(
+                    pl.coalesce(pl.col(c), pl.col(col_extra)).alias(c)
+                ).drop(col_extra)
+    return resultado.drop("_id_key")

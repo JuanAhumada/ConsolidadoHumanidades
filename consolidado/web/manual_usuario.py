@@ -84,20 +84,13 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
     },
     "informacion": {
         "titulo": "Información",
-        "resumen": "Cómo se definen los puntajes de prioridad.",
+        "resumen": "Puntajes de prioridad y qué significa cada color.",
         "pasos": [
             "La fórmula suma beca, priorizado, repitiendo, reintegro, propio, activación y ruta de grado.",
-            "Cada bloque indica cuántos puntos aporta cada condición.",
-            "El administrador puede guardar notas de la facultad (acuerdos o excepciones) en esta misma pantalla.",
-            "El color de fila del Excel no es el color de la carrera; ese se ve en Colores.",
-        ],
-    },
-    "colores": {
-        "titulo": "Colores",
-        "resumen": "Qué significa cada color.",
-        "pasos": [
+            "La tabla indica cuántos puntos aporta cada condición. El nivel numérico sale del total.",
             "En el Excel, el color de la fila es el componente de puntaje más alto (beca, priorizado, activación…).",
-            "En la web, el acento de la ficha y las listas es el color de la carrera.",
+            "En la web, el acento de la ficha y las listas es el color de la carrera, no el del Excel.",
+            "El administrador puede guardar notas de la facultad (acuerdos o excepciones) en esta misma pantalla.",
         ],
     },
     "versiones": {
@@ -143,7 +136,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "Arriba verá si ya está listo para generar, o cuántos archivos obligatorios faltan.",
             "Arriba puede cargar un ZIP de fuentes (paquete inicial) o varios Excel de una vez por el nombre del archivo.",
             "En cada fila elija el Excel de ese apartado y, al final, pulse «Cargar seleccionados» para subirlos todos juntos.",
-            "En Archivos adicionales pulse «Añadir Excel»: se sugiere un nombre, se muestra una previa de unas 20 filas y elige la clave primaria y las columnas.",
+            "En Archivos adicionales pulse «Añadir Excel». La llave foránea es la columna de ese Excel que coincide con Identificación del consolidado: así se busca al estudiante y se añaden los datos a su fila (no crea personas nuevas). Luego elija si van a una categoría existente de la ficha (Datos, Académico, Priorizado…) o escriba el nombre de una categoría nueva.",
             "«Editar encabezados» o «Editar datos» abre una base concreta: hojas internas, previa de filas y el campo de entrada (Excel) frente al de salida (consolidado).",
             "Permanencia, gestión de graduación y algunas alertas son opcionales.",
             "Cuando estén listos, use «Generar nuevo consolidado» en esta misma pantalla (fecha de versión y botón).",
@@ -164,7 +157,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "titulo": "Usuarios",
         "resumen": "Quién entra y con qué rol.",
         "pasos": [
-            "consulta: Inicio, ficha, seguimiento, proyección a grado, metas, gráficas, colores, información, versiones y parcializado.",
+            "consulta: Inicio, ficha, seguimiento, proyección a grado, metas, gráficas, información, versiones y parcializado.",
             "admin: además Data, generar, configuración, usuarios, datos antiguos e historial.",
             "Cambie la clave inicial admin / admin en cuanto instale la aplicación.",
         ],

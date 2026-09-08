@@ -298,7 +298,7 @@ Cada pestaña del menú tiene un **?** (`manual_usuario.py` + overlay `_ayuda.ht
 
 Middleware: si no hay sesión → login (API: 401). Rutas admin sin rol admin → inicio con error.
 
-**Rol `consulta`:** Inicio, Estudiante, Seguimiento, Metas, Gráficas, Colores, Versiones (listar y descargar Excel).
+**Rol `consulta`:** Inicio, Estudiante, Seguimiento, Metas, Gráficas, Información, Versiones (listar y descargar Excel).
 
 **Rol `admin`:** lo anterior más Data (`/archivos`, upload, `/generar`), Configuración, Usuarios, Datos antiguos, Historial, importar/generar versión.
 

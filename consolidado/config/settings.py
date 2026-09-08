@@ -619,14 +619,49 @@ def rutas_archivos_cargados(cfg: dict[str, Any], base: Path | None = None) -> li
     return rutas
 
 
+def columnas_propias_documentos(cfg: dict[str, Any]) -> set[str]:
+    """Salidas de Excel extra que no son columnas fijas del consolidado."""
+    canon: set[str] = set()
+    for g in cfg.get("grupos_salida", []):
+        canon.update(str(c) for c in (g.get("columnas") or []) if str(c).strip())
+    propias: set[str] = set()
+    for doc in cfg.get("documentos_adicionales", []):
+        for c in doc.get("columnas") or []:
+            salida = str(c.get("salida") or "").strip()
+            if salida and salida not in canon:
+                propias.add(salida)
+    return propias
+
+
 def columnas_grupos_fijos(cfg: dict[str, Any]) -> list[tuple[str, list[str]]]:
     grupos: list[tuple[str, list[str]]] = []
+    indice: dict[str, int] = {}
+    alias_clave = {
+        "priorizado": "priorizados",
+        "académico": "academico",
+        "ruta": "ruta de grado",
+    }
     for g in cfg.get("grupos_salida", []):
-        grupos.append((g["nombre"], list(g["columnas"])))
+        nombre = str(g.get("nombre") or "").strip()
+        if not nombre:
+            continue
+        grupos.append((nombre, list(g.get("columnas") or [])))
+        indice[nombre.casefold()] = len(grupos) - 1
     for doc in cfg.get("documentos_adicionales", []):
         cols = [c["salida"] for c in doc.get("columnas", []) if c.get("salida")]
-        if cols:
-            grupos.append((doc.get("grupo_encabezado", doc.get("titulo", "Extra")), cols))
+        if not cols:
+            continue
+        nombre = str(doc.get("grupo_encabezado") or doc.get("titulo") or "Extra").strip() or "Extra"
+        clave = alias_clave.get(nombre.casefold(), nombre.casefold())
+        idx = indice.get(clave)
+        if idx is None:
+            grupos.append((nombre, list(cols)))
+            indice[clave] = len(grupos) - 1
+            continue
+        dest = grupos[idx][1]
+        for col in cols:
+            if col not in dest:
+                dest.append(col)
     return grupos
 
 

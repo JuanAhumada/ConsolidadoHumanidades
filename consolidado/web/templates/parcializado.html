@@ -1,79 +1,115 @@
 {% extends "base.html" %}
 {% block title %}Parcializado{% endblock %}
+{% block body_class %}page-parcializado{% endblock %}
 {% block content %}
 <div class="topbar">
   <div>
+    <p class="hub-kicker">Exportar</p>
     <h2>Parcializado</h2>
     <p class="sub">Elija un corte del consolidado, las carreras y las columnas. Se descarga un Excel solo con eso.</p>
   </div>
 </div>
 
 {% if not versiones %}
-<div class="card">
-  <p class="muted">Aún no hay versiones. Cuando el administrador genere un consolidado, podrá recortarlo aquí.</p>
-</div>
+<article class="parc-empty">
+  <div class="parc-empty-ico" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 5.5h6.5v13H5z"/><path d="M13.5 5.5H19v6h-5.5z"/><path d="M13.5 13.5H19V18.5h-5.5z"/></svg>
+  </div>
+  <h3>Aún no hay versiones</h3>
+  <p>Cuando el administrador genere un consolidado, podrá recortarlo aquí por carrera y columnas.</p>
+</article>
 {% else %}
 <form method="post" action="/parcializado/descargar" id="form-parc">
-  <div class="card">
-    <h3>Versión</h3>
-    <div class="field">
-      <label for="parc-version">Corte del consolidado</label>
-      <select id="parc-version" name="version_id">
-        {% for v in versiones %}
-        <option value="{{ v.id }}" {% if datos and datos.version.id == v.id %}selected{% endif %}>{{ v.etiqueta }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <p class="muted" id="parc-meta">{% if datos %}{{ datos.filas }} estudiantes · {{ datos.columnas|length }} columnas{% endif %}</p>
+  <div class="grid grid-3 parc-stats">
+    <div class="stat"><div class="n" id="parc-stat-filas">{% if datos %}{{ datos.filas }}{% else %}—{% endif %}</div><div class="l">Estudiantes</div></div>
+    <div class="stat"><div class="n" id="parc-stat-cols">{% if datos %}{{ datos.basicas|length }}{% else %}—{% endif %}</div><div class="l">Columnas marcadas</div></div>
+    <div class="stat"><div class="n" id="parc-stat-carreras">Todas</div><div class="l">Carreras</div></div>
   </div>
 
-  <div class="card" id="parc-carreras-card">
-    <h3>Carreras</h3>
-    <p class="muted" style="margin-top:-.35rem;margin-bottom:.8rem;">Una, varias o todas. Si no marca ninguna, se incluyen todas.</p>
-    <label class="grafica-col parc-todas">
-      <input type="checkbox" name="todas_carreras" id="parc-todas" value="1" checked/>
-      <span>Todas las carreras</span>
-    </label>
-    <div class="grafica-cols" id="parc-carreras">
-      {% for p in (datos.programas if datos else []) %}
-      <label class="grafica-col">
-        <input type="checkbox" name="programa" value="{{ p.nombre }}"/>
-        <span>{{ p.nombre }} <span class="muted">({{ p.n }})</span></span>
-      </label>
-      {% endfor %}
-    </div>
-  </div>
+  <div class="parc-layout">
+    <div class="parc-side">
+      <section class="parc-panel">
+        <header class="parc-panel-head">
+          <span class="parc-step">1</span>
+          <div>
+            <h3>Corte</h3>
+            <p>Versión del consolidado a recortar</p>
+          </div>
+        </header>
+        <div class="field">
+          <label for="parc-version">Corte del consolidado</label>
+          <select id="parc-version" name="version_id">
+            {% for v in versiones %}
+            <option value="{{ v.id }}" {% if datos and datos.version.id == v.id %}selected{% endif %}>{{ v.etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <p class="parc-meta" id="parc-meta">{% if datos %}{{ datos.filas }} estudiantes · {{ datos.columnas|length }} columnas en el corte{% endif %}</p>
+      </section>
 
-  <div class="card" id="parc-cols-card">
-    <h3>Columnas</h3>
-    <p class="muted" style="margin-top:-.35rem;margin-bottom:.6rem;">De base van identificación, nombre y programa. Puede marcar las que le pidan.</p>
-    <div class="doc-cols-toolbar" style="margin-bottom:.7rem;">
-      <button class="btn sm secondary" type="button" id="parc-cols-todas">Todas</button>
-      <button class="btn sm secondary" type="button" id="parc-cols-basicas">Datos básicos</button>
-      <button class="btn sm secondary" type="button" id="parc-cols-ninguna">Ninguna</button>
-    </div>
-    <div id="parc-grupos">
-      {% if datos %}
-      {% for g in datos.grupos %}
-      <section class="parc-grupo">
-        <h4>{{ g.nombre }}</h4>
-        <div class="grafica-cols">
-          {% for c in g.columnas %}
-          <label class="grafica-col">
-            <input type="checkbox" name="columna" value="{{ c }}" {% if c in datos.basicas %}checked{% endif %}/>
-            <span>{{ c }}</span>
+      <section class="parc-panel" id="parc-carreras-card">
+        <header class="parc-panel-head">
+          <span class="parc-step">2</span>
+          <div>
+            <h3>Carreras</h3>
+            <p>Una, varias o todas. Si no marca ninguna, se incluyen todas.</p>
+          </div>
+        </header>
+        <label class="parc-chip parc-chip-todas">
+          <input type="checkbox" name="todas_carreras" id="parc-todas" value="1" checked/>
+          <span>Todas las carreras</span>
+        </label>
+        <div class="parc-chips" id="parc-carreras">
+          {% for p in (datos.programas if datos else []) %}
+          <label class="parc-chip">
+            <input type="checkbox" name="programa" value="{{ p.nombre }}"/>
+            <span class="parc-chip-name">{{ p.nombre }}</span>
+            <span class="parc-chip-n">{{ p.n }}</span>
           </label>
           {% endfor %}
         </div>
       </section>
-      {% endfor %}
-      {% endif %}
     </div>
+
+    <section class="parc-panel parc-panel-cols" id="parc-cols-card">
+      <header class="parc-panel-head">
+        <span class="parc-step">3</span>
+        <div>
+          <h3>Columnas</h3>
+          <p>De base van identificación, nombre y programa. Marque las que le pidan.</p>
+        </div>
+      </header>
+      <div class="parc-toolbar">
+        <button class="btn sm secondary" type="button" id="parc-cols-todas">Todas</button>
+        <button class="btn sm secondary" type="button" id="parc-cols-basicas">Datos básicos</button>
+        <button class="btn sm secondary" type="button" id="parc-cols-ninguna">Ninguna</button>
+      </div>
+      <div id="parc-grupos">
+        {% if datos %}
+        {% for g in datos.grupos %}
+        <section class="parc-grupo">
+          <h4><span>{{ g.nombre }}</span><span class="parc-grupo-n">{{ g.columnas|length }}</span></h4>
+          <div class="parc-cols">
+            {% for c in g.columnas %}
+            <label class="parc-col">
+              <input type="checkbox" name="columna" value="{{ c }}" {% if c in datos.basicas %}checked{% endif %}/>
+              <span>{{ c }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </section>
+        {% endfor %}
+        {% endif %}
+      </div>
+    </section>
   </div>
 
-  <div class="form-actions-row" style="margin-top:.2rem;">
+  <div class="parc-bar">
+    <div class="parc-bar-copy">
+      <p class="parc-bar-title">Listo para descargar</p>
+      <p class="muted" id="parc-resumen">{% if datos %}Se exportarán las columnas marcadas de esta versión.{% endif %}</p>
+    </div>
     <button class="btn" type="submit" id="parc-descargar" {% if not datos %}disabled{% endif %}>Descargar Excel</button>
-    <p class="muted" id="parc-resumen" style="margin:0;">{% if datos %}Se exportarán las columnas marcadas de esta versión.{% endif %}</p>
   </div>
 </form>
 {% endif %}
@@ -92,6 +128,9 @@
   const boxGrupos = document.getElementById("parc-grupos");
   const chkTodas = document.getElementById("parc-todas");
   const btnDesc = document.getElementById("parc-descargar");
+  const statFilas = document.getElementById("parc-stat-filas");
+  const statCols = document.getElementById("parc-stat-cols");
+  const statCarreras = document.getElementById("parc-stat-carreras");
   let basicas = [];
   let filasTotales = 0;
 
@@ -130,6 +169,9 @@
       const carreras = chkTodas.checked || !progs.length ? "todas las carreras" : (progs.length === 1 ? progs[0] : progs.length + " carreras");
       resumen.textContent = `${n} estudiantes · ${nCols} columnas · ${carreras}`;
       meta.textContent = `${n} estudiantes visibles · ${filasTotales} en el corte`;
+      if (statFilas) statFilas.textContent = String(n);
+      if (statCols) statCols.textContent = String(nCols);
+      if (statCarreras) statCarreras.textContent = chkTodas.checked || !progs.length ? "Todas" : String(progs.length);
     } catch (e) {
       resumen.textContent = e.message || String(e);
     }
@@ -141,8 +183,8 @@
     boxCarreras.innerHTML = "";
     (data.programas || []).forEach((p) => {
       const lab = document.createElement("label");
-      lab.className = "grafica-col";
-      lab.innerHTML = `<input type="checkbox" name="programa" value="${escapeHtml(p.nombre)}"/><span>${escapeHtml(p.nombre)} <span class="muted">(${p.n})</span></span>`;
+      lab.className = "parc-chip";
+      lab.innerHTML = `<input type="checkbox" name="programa" value="${escapeHtml(p.nombre)}"/><span class="parc-chip-name">${escapeHtml(p.nombre)}</span><span class="parc-chip-n">${p.n}</span>`;
       boxCarreras.appendChild(lab);
     });
     boxGrupos.innerHTML = "";
@@ -150,13 +192,19 @@
       const sec = document.createElement("section");
       sec.className = "parc-grupo";
       const h = document.createElement("h4");
-      h.textContent = g.nombre;
+      const titulo = document.createElement("span");
+      titulo.textContent = g.nombre;
+      const badge = document.createElement("span");
+      badge.className = "parc-grupo-n";
+      badge.textContent = String((g.columnas || []).length);
+      h.appendChild(titulo);
+      h.appendChild(badge);
       sec.appendChild(h);
       const grid = document.createElement("div");
-      grid.className = "grafica-cols";
+      grid.className = "parc-cols";
       (g.columnas || []).forEach((c) => {
         const lab = document.createElement("label");
-        lab.className = "grafica-col";
+        lab.className = "parc-col";
         const on = basicas.includes(c) ? " checked" : "";
         lab.innerHTML = `<input type="checkbox" name="columna" value="${escapeHtml(c)}"${on}/><span>${escapeHtml(c)}</span>`;
         grid.appendChild(lab);
