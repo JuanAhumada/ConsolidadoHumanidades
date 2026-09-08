@@ -23,7 +23,6 @@
     <table class="info-puntos">
       <thead>
         <tr>
-          <th>Componente</th>
           <th>Condición</th>
           <th>Puntos</th>
         </tr>
@@ -31,14 +30,16 @@
       <tbody>
         {% for b in inf.bloques or [] %}
         {% set items = b["items"] %}
+        <tr class="info-puntos-titulo">
+          <th colspan="2">{{ b.titulo }}</th>
+        </tr>
+        {% if b.nota %}
+        <tr class="info-puntos-desc">
+          <td colspan="2">{{ b.nota }}</td>
+        </tr>
+        {% endif %}
         {% for item in items %}
-        <tr{% if loop.first %} class="info-puntos-start"{% endif %}>
-          {% if loop.first %}
-          <th scope="rowgroup" rowspan="{{ items|length }}">
-            <span class="info-puntos-comp">{{ b.titulo }}</span>
-            {% if b.nota %}<span class="info-puntos-nota">{{ b.nota }}</span>{% endif %}
-          </th>
-          {% endif %}
+        <tr>
           <td>{{ item.etiqueta }}</td>
           <td class="info-puntos-val"><span>+{{ item.puntos }}</span></td>
         </tr>

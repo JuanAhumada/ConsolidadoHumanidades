@@ -182,7 +182,7 @@ BLOQUES_PUNTUACION_GUI: list[dict] = [
     },
     {
         "titulo": "Priorizado",
-        "nota": "Discapacidad +3; otros grupos +1 c/u; ajuste razonable +2; recomendación +1.",
+        "nota": None,
         "items": [
             {"etiqueta": "Discapacidad", "puntos": PESO_DISCAPACIDAD},
             {"etiqueta": "Otro grupo priorizado", "puntos": PESO_OTRO_GRUPO_PRIORIZADO},
