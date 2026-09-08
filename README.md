@@ -6,7 +6,7 @@ La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI
 
 **Usuarios (Windows, sin Python):** doble clic en `ConsolidadoHumanidades.exe`.
 
-- Si bajó [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Windows.zip) (va con Git LFS), extraiga: en la raíz están el `.exe` y **`Archivos iniciales.zip`** (cárguelo en Data). El «Download ZIP» del código no trae ese paquete real.
+- Si bajó [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Windows.zip), extraiga: en la raíz están el `.exe` y **`Archivos iniciales.zip`** (cárguelo en Data). Ese ZIP vive en **Git LFS** (véase más abajo).
 - Si bajó el ZIP del código, pulse el `ConsolidadoHumanidades.exe` de la **raíz del repo** (es un lanzador de 7 KB; localiza o descomprime el paquete). Usuario inicial: `admin` / `admin`.
 
 ## Requisitos
@@ -21,6 +21,28 @@ python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+## Git LFS
+
+GitHub bloquea archivos de más de **100 MB** en git normal. Este repo usa [Git LFS](https://git-lfs.com/) para el instalable Windows.
+
+| Qué | Cómo se versiona |
+|-----|------------------|
+| `release/ConsolidadoHumanidades-Windows.zip` | **Git LFS** (supera 100 MB) |
+| `ConsolidadoHumanidades.exe` (lanzador de la raíz) | git normal (~7 KB) |
+| `ArchivosPrueba2026-1.zip` | git normal (~19 MB) |
+| `dist/` (salida de PyInstaller) | **no se sube**; regenerar con `build_exe.bat` |
+
+Tras clonar (o la primera vez en este PC):
+
+```bat
+git lfs install
+git lfs pull
+```
+
+GitHub Desktop usa LFS si Git LFS está instalado. Sin `git lfs pull`, `release/ConsolidadoHumanidades-Windows.zip` queda como un puntero de texto, no como el paquete real.
+
+El **Download ZIP** del repositorio en GitHub **no** descarga los archivos LFS. Para el instalable use el enlace de `release/` de arriba o clone con LFS.
 
 ## Cómo ejecutar
 
@@ -41,7 +63,7 @@ Abre la web en el navegador. Usuario inicial: **admin** / **admin** (cámbielo e
 
 ## Roles
 
-- **consulta:** Inicio, Estudiante, Seguimiento, Metas, Gráficas, Colores, Versiones (listar/descargar).
+- **consulta:** Inicio, Estudiante, Seguimiento, Metas, Gráficas, Información, Versiones (listar/descargar).
 - **admin:** lo anterior más Datos antiguos, Historial, Data, Configuración, Usuarios y generar/importar.
 
 ## Flujo de datos
@@ -100,7 +122,7 @@ Al cargar, los defaults se fusionan con el JSON: columnas nuevas del código se 
 | `empaque/` | Lanzador Windows (sin consola) |
 | `consolidado/` | Código |
 
-Los `.xlsx` sueltos y la `.db` **no van al repositorio** (datos de estudiantes). El paquete de prueba `ArchivosPrueba2026-1.zip` (~19 MB) **sí se versiona** en git normal. El instalable `release/ConsolidadoHumanidades-Windows.zip` va con **Git LFS** (supera 100 MB). Tras clonar: `git lfs install` y `git lfs pull`. `dist/` no se versiona: regenerar con `build_exe.bat`.
+Los `.xlsx` sueltos y la `.db` **no van al repositorio** (datos de estudiantes). Qué sí se versiona (git vs LFS) está en **Git LFS**.
 
 ## Mapa del código
 

@@ -187,6 +187,12 @@
                     <div class="v">{{ campo.valor }}</div>
                   </div>
                   {% endfor %}
+                  {% for campo in cat.extras or [] %}
+                  <div class="campo">
+                    <div class="e">{{ campo.etiqueta }}</div>
+                    <div class="v">{{ campo.valor }}</div>
+                  </div>
+                  {% endfor %}
                 </div>
                 <div class="ficha-edit-acciones">
                   <button type="button" class="btn sm js-editar-estados">Editar estados</button>

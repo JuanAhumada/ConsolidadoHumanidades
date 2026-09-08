@@ -1,56 +1,95 @@
 {% extends "base.html" %}
 {% block title %}Información{% endblock %}
 {% block content %}
+{% set ley = leyenda if leyenda is defined and leyenda else {} %}
+{% set inf = info if info is defined and info else {} %}
 <div class="topbar">
   <div>
-    <h2>Información de puntajes</h2>
-    <p class="sub">Cómo se calcula el puntaje de prioridad de cada estudiante. La fórmula se aplica al generar el consolidado.</p>
+    <h2>Información</h2>
+    <p class="sub">Puntaje de prioridad y qué significa cada color. La fórmula se aplica al generar el consolidado.</p>
   </div>
 </div>
 
 <section class="leyenda-block">
   <h3>Fórmula</h3>
-  <p class="info-formula">{{ info.formula }}</p>
+  <p class="info-formula">{{ inf.formula }}</p>
   <p class="muted">El nivel numérico sale del total: 5 = activación de ruta · 4 = 10–19 · 3 = 7–9 · 2 = 4–6 · 1 = 1–3 · 0 = sin señal.</p>
 </section>
 
 <section class="leyenda-block">
   <h3>Cómo se suman los puntos</h3>
-  <div class="info-bloques">
-    {% for b in info.bloques %}
-    <article class="info-bloque">
-      <h4>{{ b.titulo }}</h4>
-      {% if b.nota %}<p class="muted">{{ b.nota }}</p>{% endif %}
-      <ul>
-        {% for item in b["items"] %}
-        <li>{{ item.etiqueta }} <strong>+{{ item.puntos }}</strong></li>
+  <p class="muted">Cada fila es una condición. El puntaje del estudiante es la suma de lo que cumpla.</p>
+  <div class="table-wrap info-puntos-wrap">
+    <table class="info-puntos">
+      <thead>
+        <tr>
+          <th>Condición</th>
+          <th>Puntos</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in inf.bloques or [] %}
+        {% set items = b["items"] %}
+        <tr class="info-puntos-titulo">
+          <th colspan="2">{{ b.titulo }}</th>
+        </tr>
+        {% if b.nota %}
+        <tr class="info-puntos-desc">
+          <td colspan="2">{{ b.nota }}</td>
+        </tr>
+        {% endif %}
+        {% for item in items %}
+        <tr>
+          <td>{{ item.etiqueta }}</td>
+          <td class="info-puntos-val"><span>+{{ item.puntos }}</span></td>
+        </tr>
         {% endfor %}
-      </ul>
-    </article>
-    {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 
 <section class="leyenda-block">
   <h3>Niveles de prioridad</h3>
   <ul class="leyenda-niveles">
-    {% for n in info.niveles %}
+    {% for n in inf.niveles or [] %}
     <li><span class="leyenda-nivel">{{ n.nivel }}</span> {{ n.nombre }} · {{ n.rango }}</li>
     {% endfor %}
   </ul>
 </section>
 
-<section class="leyenda-block">
-  <h3>Color de fila en el Excel</h3>
-  <p class="muted">El color sigue el componente con puntaje más alto (beca, priorizado, reintegro…). No es el color de la carrera.</p>
+<section class="leyenda-block" id="colores">
+  <h3>En el Excel consolidado</h3>
+  <p class="muted">Cada fila del listado se rellena con este color (el componente con puntaje más alto). El tono se oscurece un poco si ese puntaje es más alto. Si no hay ninguna señal, la fila queda blanca. No es el color de la carrera.</p>
   <ul class="leyenda-list">
-    {% for c in info.colores %}
-    <li class="leyenda-row leyenda-row-plain">
+    {% for c in ley.excel or [] %}
+    <li class="leyenda-row" style="--swatch: {{ c.hex }}; --swatch-ink: {{ c.ink }};">
       <span class="leyenda-row-name">{{ c.etiqueta }}</span>
       <span class="leyenda-row-note">{{ c.nota }}</span>
     </li>
     {% endfor %}
   </ul>
+  <div class="leyenda-extra">
+    <p><strong>Materias repetidas:</strong> en el horario del Excel, la materia va en <span class="leyenda-repite">negrita y subrayado</span>.</p>
+  </div>
+</section>
+
+<section class="leyenda-block">
+  <h3>Dentro de la aplicación</h3>
+  <p class="muted">Ficha, seguimiento y gráficas usan el color del programa. No reutilizan el semáforo del Excel, para no mezclar “qué carrera es” con “qué tan prioritario es”.</p>
+  <ul class="leyenda-list leyenda-list-app">
+    {% for p in ley.programas or [] %}
+    <li class="leyenda-row leyenda-row-app" style="--swatch: {{ p.hex }}; --swatch-soft: {{ p.soft }}; --swatch-ink: {{ p.ink }};">
+      <span class="leyenda-row-name">{{ p.corta }}</span>
+      <span class="leyenda-row-note">{% if p.clave == 'neutro' %}Si el estudiante no tiene carrera o no está en Humanidades.{% else %}Acento de ficha, listas y gráficas de este programa.{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  <div class="leyenda-extra">
+    <p><strong>Metas:</strong> <span class="meta-estado cumple">CUMPLE</span> en verde y <span class="meta-estado no-cumple">NO CUMPLE</span> en rojo, según el estado del Excel de Permanencia.</p>
+    <p><strong>Contactados</strong> en Seguimiento: el check no cambia el color de prioridad; solo marca que ya se habló con la persona.</p>
+  </div>
 </section>
 
 <section class="leyenda-block">
@@ -58,13 +97,13 @@
   <p class="muted">Texto libre para documentar acuerdos o excepciones. Solo el administrador puede guardarlo.</p>
   {% if es_admin %}
   <form method="post" action="/config/puntajes">
-    <textarea name="notas" rows="8" placeholder="Ejemplo: la beca de Call Center cuenta a la mitad; priorizado propio suma 3 puntos…">{{ info.notas }}</textarea>
+    <textarea name="notas" rows="8" placeholder="Ejemplo: la beca de Call Center cuenta a la mitad; priorizado propio suma 3 puntos…">{{ inf.notas }}</textarea>
     <div class="form-actions-row" style="margin-top:0.85rem;">
       <button class="btn" type="submit">Guardar información</button>
     </div>
   </form>
-  {% elif info.notas %}
-  <div class="info-notas">{{ info.notas }}</div>
+  {% elif inf.notas %}
+  <div class="info-notas">{{ inf.notas }}</div>
   {% else %}
   <p class="muted">Aún no hay notas guardadas.</p>
   {% endif %}

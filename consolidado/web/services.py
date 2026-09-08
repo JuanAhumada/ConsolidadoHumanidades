@@ -36,11 +36,14 @@ from consolidado.core.charts import (
 from consolidado.core.columnas import aliases_para_slot, construir_mapa_columnas, usando_aliases
 from consolidado.core.vista_previa import campos_editables_tipo
 from consolidado.core.documentos import (
+    CATEGORIAS_FICHA,
     categorias_documento,
     columnas_config_documento,
     slug_documento_id,
     sugerir_titulo_documento,
     vista_previa_excel,
+    canonizar_grupo_encabezado,
+    etiqueta_grupo_ficha,
 )
 from consolidado.core.prioridad import (
     BLOQUES_PUNTUACION_GUI,
@@ -96,37 +99,46 @@ def _tinta_sobre_hex(hex_color: str) -> str:
     h = str(hex_color or "").lstrip("#")
     if len(h) != 6:
         return "#0a1628"
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    try:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return "#0a1628"
     luma = 0.299 * r + 0.587 * g + 0.114 * b
     return "#0a1628" if luma >= 155 else "#ffffff"
 
 
 def leyenda_colores() -> dict[str, Any]:
-    cfg = cfg_actual()
-    aplicar_colores_prioridad(cfg)
-    excel = []
-    for item in colores_fila_para_gui():
-        hex_raw = str(item.get("color") or "").lstrip("#")
-        hex_css = f"#{hex_raw}" if hex_raw else "#BDC3C7"
-        excel.append({**item, "hex": hex_css, "ink": _tinta_sobre_hex(hex_css)})
-    programas = []
-    for item in colores_programas_fijos():
-        programas.append({**item, "ink": item.get("ink") or _tinta_sobre_hex(item.get("hex", ""))})
-    programas.append(
-        {
-            "clave": "neutro",
-            "hex": "#334155",
-            "soft": "#e2e8f0",
-            "ink": "#ffffff",
-            "corta": "Sin programa",
-            "nota": "Gris pizarra si el estudiante no tiene carrera o no está en Humanidades.",
+    vacio: dict[str, Any] = {"excel": [], "programas": [], "niveles": []}
+    try:
+        cfg = cfg_actual()
+        aplicar_colores_prioridad(cfg)
+        excel = []
+        for item in colores_fila_para_gui():
+            hex_raw = str(item.get("color") or "").lstrip("#")
+            hex_css = f"#{hex_raw}" if hex_raw else "#BDC3C7"
+            excel.append({**item, "hex": hex_css, "ink": _tinta_sobre_hex(hex_css)})
+        programas = []
+        for item in colores_programas_fijos():
+            programas.append(
+                {**item, "ink": item.get("ink") or _tinta_sobre_hex(item.get("hex", ""))}
+            )
+        programas.append(
+            {
+                "clave": "neutro",
+                "hex": "#334155",
+                "soft": "#e2e8f0",
+                "ink": "#ffffff",
+                "corta": "Sin programa",
+                "nota": "Gris pizarra si el estudiante no tiene carrera o no está en Humanidades.",
+            }
+        )
+        return {
+            "excel": excel,
+            "programas": programas,
+            "niveles": list(METADATA_NIVELES),
         }
-    )
-    return {
-        "excel": excel,
-        "programas": programas,
-        "niveles": list(METADATA_NIVELES),
-    }
+    except Exception:
+        return vacio
 
 
 def estado_archivos(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -155,6 +167,9 @@ def estado_archivos(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
                 **doc,
                 "cargado": ruta.is_file(),
                 "num_columnas": len(doc.get("columnas") or []),
+                "grupo_etiqueta": etiqueta_grupo_ficha(
+                    doc.get("grupo_encabezado") or doc.get("categoria") or ""
+                ),
             }
         )
 
@@ -614,6 +629,7 @@ def previsualizar_excel_bytes(
     data["nombre_archivo"] = Path(nombre).name
     data["titulo_sugerido"] = sugerir_titulo_documento(nombre)
     data["categorias"] = categorias_documento(cfg)
+    data["categorias_fijas"] = [etiqueta for etiqueta, _ in CATEGORIAS_FICHA]
     return data
 
 
@@ -639,10 +655,14 @@ def previsualizar_documento_guardado(
     data["nombre_archivo"] = nombre
     data["titulo_sugerido"] = doc.get("titulo") or sugerir_titulo_documento(nombre)
     data["categorias"] = categorias_documento(cfg)
+    data["categorias_fijas"] = [etiqueta for etiqueta, _ in CATEGORIAS_FICHA]
     data["documento"] = {
         "id": doc.get("id"),
         "titulo": doc.get("titulo"),
         "grupo_encabezado": doc.get("grupo_encabezado") or doc.get("categoria") or "",
+        "grupo_etiqueta": etiqueta_grupo_ficha(
+            doc.get("grupo_encabezado") or doc.get("categoria") or ""
+        ),
         "hoja": doc.get("hoja") or data.get("hoja"),
         "pk": (doc.get("columna_identificacion_aliases") or [data.get("pk_sugerida")])[0],
         "columnas_usadas": usados,
@@ -663,15 +683,15 @@ def guardar_documento_adicional(
 ) -> dict[str, Any]:
     cfg = cfg_actual()
     titulo = (titulo or "").strip()
-    grupo = (grupo or "").strip() or "Extra"
+    grupo = canonizar_grupo_encabezado((grupo or "").strip() or "Extra")
     pk = (pk or "").strip()
     if not titulo:
         raise ValueError("Indique un nombre para el documento.")
     if not pk:
-        raise ValueError("Elija la clave primaria (columna de identificación).")
-    cols = columnas_config_documento(columnas)
+        raise ValueError("Elija la columna de identificación (llave foránea al consolidado).")
+    cols = columnas_config_documento(columnas, pk=pk)
     if not cols:
-        raise ValueError("Marque al menos una columna para usar en el consolidado.")
+        raise ValueError("Marque al menos una columna de datos (la identificación solo sirve de llave).")
 
     docs = list(cfg.get("documentos_adicionales") or [])
     if doc_id:
@@ -851,7 +871,9 @@ def listar_fuentes_para_mapa() -> list[dict[str, Any]]:
                 "kind": "doc",
                 "id": doc.get("id"),
                 "titulo": doc.get("titulo") or doc.get("id"),
-                "grupo": doc.get("grupo_encabezado") or doc.get("categoria") or "Extra",
+                "grupo": etiqueta_grupo_ficha(
+                    doc.get("grupo_encabezado") or doc.get("categoria") or "Extra"
+                ),
                 "cargado": (carpeta / nombre).is_file() if nombre else False,
             }
         )

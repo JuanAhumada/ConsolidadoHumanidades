@@ -122,14 +122,14 @@
       <button class="btn secondary" type="button" id="btn-encabezados">Editar encabezados</button>
     </div>
   </div>
-  <p class="muted" style="margin-top:-.2rem;margin-bottom:.7rem;">Opcional: otras hojas que se cruzan por identificación. Al abrir el Excel verá una previa, un nombre sugerido, la clave primaria y las columnas a usar.</p>
+  <p class="muted" style="margin-top:-.2rem;margin-bottom:.7rem;">Opcional: otras hojas que se unen al consolidado por <strong>identificación</strong> (llave foránea). Al abrir el Excel elija esa columna, las demás a usar y si van a una categoría existente de la ficha o a una nueva.</p>
   {% if estado.documentos %}
     {% for doc in estado.documentos %}
     <div class="file-row">
       <div>
         <span class="dot {% if doc.cargado %}ok{% else %}opt{% endif %}"></span>
         <strong>{{ doc.titulo }}</strong>
-        <span class="muted">· {{ doc.grupo_encabezado or doc.categoria or 'Extra' }} · {{ doc.num_columnas }} cols</span>
+        <span class="muted">· {{ doc.grupo_etiqueta or doc.grupo_encabezado or doc.categoria or 'Extra' }} · {{ doc.num_columnas }} cols</span>
         <div class="muted" style="margin-left:1.1rem;font-size:.85rem;">{{ doc.nombre_guardado or 'Sin archivo' }}</div>
       </div>
       <div class="docs-row-btns">
@@ -158,19 +158,30 @@
         <input id="doc-titulo" type="text" name="titulo" required placeholder="Nombre sugerido del documento"/>
       </div>
       <div class="field">
-        <label for="doc-grupo">Grupo en el consolidado</label>
-        <input id="doc-grupo" type="text" name="grupo" list="doc-grupos" placeholder="Extra"/>
-        <datalist id="doc-grupos"></datalist>
-      </div>
-      <div class="field">
         <label for="doc-hoja">Hoja</label>
         <select id="doc-hoja" name="hoja"></select>
       </div>
       <div class="field">
-        <label for="doc-pk">Clave primaria</label>
+        <label for="doc-pk">Llave foránea (identificación)</label>
         <select id="doc-pk" name="pk" required></select>
+        <p class="muted" style="margin:.35rem 0 0;font-size:.78rem;">Columna de este Excel que coincide con <strong>Identificación</strong> del consolidado. Con esa clave se busca al estudiante y se añaden los datos a su fila; no se crean personas nuevas.</p>
       </div>
     </div>
+    <fieldset class="doc-destino">
+      <legend>Categoría en la ficha</legend>
+      <p class="muted" style="margin:0 0 .65rem;">Los datos se cruzan por identificación. Elija si van a una pestaña que ya existe o a una nueva.</p>
+      <label class="doc-destino-opt">
+        <input type="radio" name="destino_modo" id="doc-destino-existente" value="existente" checked/>
+        Añadir a una categoría existente
+      </label>
+      <select id="doc-grupo-existente" aria-label="Categoría existente"></select>
+      <label class="doc-destino-opt">
+        <input type="radio" name="destino_modo" id="doc-destino-nueva" value="nueva"/>
+        Crear una categoría nueva
+      </label>
+      <input id="doc-grupo-nueva" type="text" placeholder="Ej. Bienestar, Prácticas, Encuestas…"/>
+      <input type="hidden" name="grupo" id="doc-grupo" value=""/>
+    </fieldset>
     <p class="muted" id="doc-meta"></p>
     <div class="table-wrap doc-preview-wrap">
       <table class="doc-preview" id="doc-preview">
@@ -283,17 +294,48 @@
   }
 
   function fillGrupos(cats, selected) {
-    const list = document.getElementById("doc-grupos");
-    list.innerHTML = "";
+    const sel = document.getElementById("doc-grupo-existente");
+    const nueva = document.getElementById("doc-grupo-nueva");
+    const radioEx = document.getElementById("doc-destino-existente");
+    const radioNueva = document.getElementById("doc-destino-nueva");
+    sel.innerHTML = "";
     (cats || []).forEach((c) => {
       const opt = document.createElement("option");
       opt.value = c;
-      list.appendChild(opt);
+      opt.textContent = c;
+      sel.appendChild(opt);
     });
-    if (selected) document.getElementById("doc-grupo").value = selected;
-    else if (cats && cats.length && !document.getElementById("doc-grupo").value) {
-      document.getElementById("doc-grupo").value = cats[0];
+    const etiqueta = (selected || "").trim();
+    const esExistente = etiqueta && (cats || []).some((c) => c.toLowerCase() === etiqueta.toLowerCase());
+    if (esExistente) {
+      const match = (cats || []).find((c) => c.toLowerCase() === etiqueta.toLowerCase());
+      sel.value = match;
+      nueva.value = "";
+      radioEx.checked = true;
+    } else if (etiqueta) {
+      nueva.value = etiqueta;
+      radioNueva.checked = true;
+      if (cats && cats.length) sel.value = cats[0];
+    } else if (cats && cats.length) {
+      sel.value = cats[0];
+      nueva.value = "";
+      radioEx.checked = true;
     }
+    syncDestino();
+  }
+
+  function syncDestino(focusNueva) {
+    const esNueva = document.getElementById("doc-destino-nueva").checked;
+    document.getElementById("doc-grupo-existente").disabled = esNueva;
+    document.getElementById("doc-grupo-nueva").disabled = !esNueva;
+    if (esNueva && focusNueva) document.getElementById("doc-grupo-nueva").focus();
+  }
+
+  function grupoElegido() {
+    if (document.getElementById("doc-destino-nueva").checked) {
+      return document.getElementById("doc-grupo-nueva").value.trim();
+    }
+    return document.getElementById("doc-grupo-existente").value.trim() || "Extra";
   }
 
   function renderPreview(data) {
@@ -336,7 +378,11 @@
       const chk = document.createElement("input");
       chk.type = "checkbox";
       chk.dataset.origen = c;
-      chk.checked = marcada;
+      chk.checked = marcada && c !== pk;
+      if (c === pk) {
+        chk.disabled = true;
+        chk.title = "Esta columna es la llave (identificación); no se copia como dato.";
+      }
       const origen = document.createElement("span");
       origen.className = "doc-col-origen";
       origen.title = c;
@@ -357,10 +403,21 @@
     ignoreHoja = true;
     fillSelect(selHoja, data.hojas || [], data.hoja);
     fillSelect(selPk, data.columnas || [], (data.documento && data.documento.pk) || data.pk_sugerida);
-    fillGrupos(data.categorias, data.documento && data.documento.grupo_encabezado);
     if (!keepTitle) {
       document.getElementById("doc-titulo").value =
         (data.documento && data.documento.titulo) || data.titulo_sugerido || "";
+    }
+    const grupoGuardado =
+      (data.documento && (data.documento.grupo_etiqueta || data.documento.grupo_encabezado)) || "";
+    fillGrupos(
+      data.categorias,
+      grupoGuardado || (!isEdit ? document.getElementById("doc-titulo").value : "")
+    );
+    if (!grupoGuardado && !isEdit) {
+      document.getElementById("doc-destino-nueva").checked = true;
+      document.getElementById("doc-grupo-nueva").value =
+        document.getElementById("doc-titulo").value.trim();
+      syncDestino(false);
     }
     if (data.documento && data.documento.id) {
       document.getElementById("doc-id").value = data.documento.id;
@@ -432,8 +489,17 @@
     }
   });
 
+  document.getElementById("doc-destino-existente").addEventListener("change", () => syncDestino(false));
+  document.getElementById("doc-destino-nueva").addEventListener("change", () => syncDestino(true));
+  selPk.addEventListener("change", () => {
+    renderCols(currentCols, selPk.value, usedMap);
+  });
   document.getElementById("doc-cols-todas").addEventListener("click", () => {
-    colsBox.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.checked = true; });
+    const pk = selPk.value;
+    colsBox.querySelectorAll('input[type="checkbox"]').forEach((c) => {
+      if (c.dataset.origen === pk) return;
+      c.checked = true;
+    });
   });
   document.getElementById("doc-cols-ninguna").addEventListener("click", () => {
     colsBox.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.checked = false; });
@@ -473,12 +539,19 @@
     });
   });
 
-  form.addEventListener("submit", () => {
+  form.addEventListener("submit", (ev) => {
+    const grupo = grupoElegido();
+    if (!grupo) {
+      ev.preventDefault();
+      setStatus("Indique el nombre de la categoría nueva o elija una existente.", true);
+      return;
+    }
+    document.getElementById("doc-grupo").value = grupo;
     const cols = [];
     colsBox.querySelectorAll(".doc-col-row").forEach((row) => {
       const chk = row.querySelector('input[type="checkbox"]');
       const salida = row.querySelector(".doc-col-salida");
-      if (!chk || !chk.checked) return;
+      if (!chk || !chk.checked || chk.disabled) return;
       cols.push({ origen: chk.dataset.origen, salida: (salida && salida.value.trim()) || chk.dataset.origen });
     });
     document.getElementById("doc-columnas").value = JSON.stringify(cols);
