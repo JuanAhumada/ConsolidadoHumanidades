@@ -2,7 +2,7 @@
 Rutas FastAPI, sesión y control de acceso.
 
 Consultor: hasta /versiones, /parcializado y /proyeccion (GET). Admin: Data, Historial, Config, Usuarios,
-Datos antiguos y POST de generar/importar.
+Datos antiguos, POST de generar/importar y alta de estudiantes.
 Las plantillas reciben es_admin y el usuario de sesión vía _render.
 """
 
@@ -37,7 +37,7 @@ from consolidado.core.charts import (
 )
 from consolidado.core.constants import aplicar_config
 from consolidado.core.colores_programa import color_programa, estilo_color
-from consolidado.core.ficha_estudiante import obtener_ficha_estudiante
+from consolidado.core.ficha_estudiante import formulario_alta_estudiante, obtener_ficha_estudiante
 from consolidado.core.priorizados import (
     buscar_estudiantes_en_fuentes,
 )
@@ -56,10 +56,12 @@ from consolidado.storage.alertas_propias import (
 from consolidado.storage.contactados import estadisticas_atenciones, marcar_contactado
 from consolidado.storage.graduacion import marcar_gradua
 from consolidado.storage.ediciones import GRUPOS_EDITABLES, borrar_ediciones_grupo, clave_campo_edicion, guardar_ediciones
+from consolidado.storage.estudiantes_manuales import crear_estudiante_manual
 from consolidado.storage.notas import agregar_nota, quitar_nota
 from consolidado.storage.db import (
     buscar_estudiantes,
     listar_versiones,
+    periodo_desde_fecha,
     ultima_version,
 )
 from consolidado.storage.modificaciones import (
@@ -112,7 +114,7 @@ _PREFIJOS_ADMIN = (
     "/api/documento",
     "/api/fuente",
 )
-_RUTAS_ADMIN_EXTRA = {"/versiones/importar", "/versiones/generar"}
+_RUTAS_ADMIN_EXTRA = {"/versiones/importar", "/versiones/generar", "/estudiante/crear"}
 
 
 def _es_publico(path: str) -> bool:
@@ -584,6 +586,56 @@ def _tabs_ficha(request: Request, ficha: dict | None) -> tuple[str, str]:
     return cat, sec
 
 
+def _ident_para_alta(texto: str) -> str:
+    bruto = (texto or "").strip()
+    compacto = bruto.replace(".", "").replace("-", "").replace(" ", "")
+    return bruto if compacto.isdigit() else ""
+
+
+def _esquema_alta_estudiante(
+    valores: dict[str, Any] | None = None,
+    *,
+    ident_prefijo: str = "",
+) -> dict[str, Any]:
+    cfg = services.cfg_actual()
+    programas = [
+        str(p).strip()
+        for p in (cfg.get("programas_permitidos") or [])
+        if str(p).strip()
+    ]
+    ult = ultima_version(PROJECT_ROOT)
+    periodo = str((ult or {}).get("periodo") or "").strip() or periodo_desde_fecha()
+    vals = dict(valores or {})
+    pref = _ident_para_alta(ident_prefijo)
+    if pref and not vals.get("Identificación"):
+        vals["Identificación"] = pref
+    n_mat = int((ult or {}).get("num_materias") or 3) or 3
+    return {
+        "alta_form": formulario_alta_estudiante(
+            cfg,
+            valores=vals,
+            programas=programas,
+            periodo_actual=periodo,
+            num_materias=n_mat,
+        )
+    }
+
+
+def _valores_alta_form(form: Any, esquema: dict[str, Any]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    campos = list(esquema.get("identidad") or [])
+    for sec in esquema.get("secciones") or []:
+        campos.extend(sec.get("campos") or [])
+    for campo in campos:
+        clave = campo.get("name_key")
+        col = campo.get("columna")
+        if not clave or not col or clave not in form:
+            continue
+        val = form.get(clave)
+        out[col] = "" if val is None else str(val).strip()
+    return out
+
+
 @app.get("/estudiante", response_class=HTMLResponse)
 async def pagina_estudiante(request: Request, q: str = "") -> HTMLResponse:
     cfg = services.cfg_actual()
@@ -599,6 +651,16 @@ async def pagina_estudiante(request: Request, q: str = "") -> HTMLResponse:
         elif q.strip().isdigit() or len(q.strip()) >= 5:
             ficha = obtener_ficha_estudiante(cfg, PROJECT_ROOT, q.strip())
     ficha_cat, ficha_sec = _tabs_ficha(request, ficha)
+    extra: dict[str, Any] = {}
+    usuario = getattr(request.state, "usuario", None) or _usuario_sesion(request)
+    if not ficha and usuario and usuario.get("es_admin"):
+        extra = _esquema_alta_estudiante(ident_prefijo=q)
+        extra["alta"] = (request.query_params.get("alta") or "").strip() in {
+            "1",
+            "true",
+            "si",
+            "sí",
+        }
     return _render(
         request,
         "estudiante.html",
@@ -608,6 +670,7 @@ async def pagina_estudiante(request: Request, q: str = "") -> HTMLResponse:
         ficha=ficha,
         ficha_cat=ficha_cat,
         ficha_sec=ficha_sec,
+        **extra,
     )
 
 
@@ -616,6 +679,16 @@ async def ficha_estudiante(request: Request, identificacion: str) -> HTMLRespons
     cfg = services.cfg_actual()
     ficha = obtener_ficha_estudiante(cfg, PROJECT_ROOT, identificacion)
     if ficha is None:
+        extra: dict[str, Any] = {}
+        usuario = getattr(request.state, "usuario", None) or _usuario_sesion(request)
+        if usuario and usuario.get("es_admin"):
+            extra = _esquema_alta_estudiante(ident_prefijo=identificacion)
+            extra["alta"] = (request.query_params.get("alta") or "").strip() in {
+                "1",
+                "true",
+                "si",
+                "sí",
+            }
         return _render(
             request,
             "estudiante.html",
@@ -626,6 +699,7 @@ async def ficha_estudiante(request: Request, identificacion: str) -> HTMLRespons
             ficha_cat="academico",
             ficha_sec="notas",
             error="No se encontró el estudiante en el consolidado actual.",
+            **extra,
         )
     ficha_cat, ficha_sec = _tabs_ficha(request, ficha)
     return _render(
@@ -648,8 +722,12 @@ def _url_seguimiento(cat: str, vista: str, programas: list[str] | None = None) -
     return "/seguimiento?" + urlencode(pares)
 
 
-def _url_proyeccion(vista: str, programas: list[str] | None = None) -> str:
+def _url_proyeccion(
+    vista: str, programas: list[str] | None = None, orden: str = "cohorte"
+) -> str:
     pares: list[tuple[str, str]] = [("vista", vista)]
+    if orden == "pct":
+        pares.append(("orden", "pct"))
     for programa in programas or []:
         if programa:
             pares.append(("prog", programa))
@@ -719,10 +797,12 @@ async def pagina_seguimiento(
 async def pagina_proyeccion(
     request: Request,
     vista: str = "aun_no",
+    orden: str = "cohorte",
     prog: list[str] = Query(default=[]),
 ) -> HTMLResponse:
-    data = listar_proyeccion(vista=vista, programas=prog, base=PROJECT_ROOT)
+    data = listar_proyeccion(vista=vista, programas=prog, orden=orden, base=PROJECT_ROOT)
     vista_ok = data["vista"]
+    orden_ok = data["orden"]
     sel = list(data["programas_sel"])
     programas_ui = []
     for nombre in data["programas"]:
@@ -735,7 +815,7 @@ async def pagina_proyeccion(
                 "nombre": nombre,
                 "corta": color_programa(nombre).get("corta") or nombre,
                 "activo": nombre in sel,
-                "href": _url_proyeccion(vista_ok, nuevo),
+                "href": _url_proyeccion(vista_ok, nuevo, orden_ok),
             }
         )
     return _render(
@@ -748,14 +828,53 @@ async def pagina_proyeccion(
         n_si=data["n_si"],
         n_aun_no=data["n_aun_no"],
         vista=vista_ok,
+        orden=orden_ok,
         periodo=data["periodo"],
         meta=data["meta"],
         programas=programas_ui,
         programas_sel=sel,
         filtro_general=not sel,
-        href_carreras_general=_url_proyeccion(vista_ok, []),
-        href_aun_no=_url_proyeccion("aun_no", sel),
-        href_si=_url_proyeccion("si", sel),
+        href_carreras_general=_url_proyeccion(vista_ok, [], orden_ok),
+        href_aun_no=_url_proyeccion("aun_no", sel, orden_ok),
+        href_si=_url_proyeccion("si", sel, orden_ok),
+        href_orden_cohorte=_url_proyeccion(vista_ok, sel, "cohorte"),
+        href_orden_pct=_url_proyeccion(vista_ok, sel, "pct"),
+    )
+
+
+@app.post("/estudiante/crear", response_model=None)
+async def crear_estudiante_web(request: Request) -> RedirectResponse | HTMLResponse:
+    form = await request.form()
+    esquema = _esquema_alta_estudiante()["alta_form"]
+    valores = _valores_alta_form(form, esquema)
+    try:
+        creado = crear_estudiante_manual(valores=valores)
+    except ValueError as exc:
+        return _render(
+            request,
+            "estudiante.html",
+            nav="estudiante",
+            q="",
+            resultados=[],
+            ficha=None,
+            ficha_cat="academico",
+            ficha_sec="notas",
+            alta=True,
+            error=str(exc),
+            **_esquema_alta_estudiante(valores),
+        )
+    ident = creado["identificacion"]
+    registrar_modificacion(
+        accion="estudiante_manual",
+        resumen=f"Creó el estudiante {ident} ({creado.get('nombre') or valores.get('Nombre y apellidos') or ident})",
+        entidad="estudiante",
+        identificacion=ident,
+    )
+    if creado.get("en_version"):
+        return _redir(f"/estudiante/{ident}", msg="Estudiante creado.")
+    return _redir(
+        "/estudiante",
+        msg="Estudiante guardado. Genere un consolidado para ver la ficha.",
     )
 
 

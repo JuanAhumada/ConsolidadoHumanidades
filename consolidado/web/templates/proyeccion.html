@@ -12,9 +12,18 @@
       · Corte {{ periodo }}
     </p>
   </div>
-  <div class="segment">
-    <a class="btn sm {% if vista!='aun_no' %}secondary{% endif %}" href="{{ href_aun_no }}">Aún no ({{ n_aun_no }})</a>
-    <a class="btn sm {% if vista!='si' %}secondary{% endif %}" href="{{ href_si }}">Se gradúan ({{ n_si }})</a>
+  <div class="topbar-actions">
+    <div class="proy-ordenar">
+      <span class="proy-ordenar-lbl">Organizar</span>
+      <div class="segment" role="group" aria-label="Organizar listado">
+        <a class="btn sm {% if orden!='cohorte' %}secondary{% endif %}" href="{{ href_orden_cohorte }}">Cohorte</a>
+        <a class="btn sm {% if orden!='pct' %}secondary{% endif %}" href="{{ href_orden_pct }}">% aprobado</a>
+      </div>
+    </div>
+    <div class="segment">
+      <a class="btn sm {% if vista!='aun_no' %}secondary{% endif %}" href="{{ href_aun_no }}">Aún no ({{ n_aun_no }})</a>
+      <a class="btn sm {% if vista!='si' %}secondary{% endif %}" href="{{ href_si }}">Se gradúan ({{ n_si }})</a>
+    </div>
   </div>
 </div>
 

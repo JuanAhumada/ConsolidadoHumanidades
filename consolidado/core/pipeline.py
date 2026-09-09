@@ -59,6 +59,7 @@ from consolidado.core.permanencia import aplicar_permanencia
 from consolidado.storage.alertas_fuente import aplicar_alertas_descartadas
 from consolidado.storage.alertas_propias import cargar_alertas_propias
 from consolidado.storage.ediciones import COLUMNAS_EDITABLES, aplicar_ediciones_columnas, cargar_ediciones
+from consolidado.storage.estudiantes_manuales import aplicar_estudiantes_manuales
 from consolidado.storage.db import (
     guardar_version,
     nombre_excel_version,
@@ -253,6 +254,7 @@ def generar_dataframe_consolidado(
     }
     consolidado = aplicar_prioridad(consolidado, ids_propios)
     if carpeta_fuentes is None:
+        consolidado = aplicar_estudiantes_manuales(consolidado, base)
         consolidado = _aplicar_ediciones_ficha(consolidado, base)
     return consolidado, max_materias
 

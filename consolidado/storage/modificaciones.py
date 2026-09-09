@@ -34,6 +34,7 @@ ETIQUETAS_ACCION = {
     "quitar_alerta_propia": "Quitar alerta propia",
     "contactado": "Contactado",
     "gradua_semestre": "Gradúa este semestre",
+    "estudiante_manual": "Estudiante nuevo",
     "nota_seguimiento": "Nota de seguimiento",
     "priorizado_activo": "Estado priorizado",
     "priorizado_propio": "Priorizado propio",

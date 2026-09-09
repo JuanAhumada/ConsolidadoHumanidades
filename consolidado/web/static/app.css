@@ -1025,6 +1025,20 @@ tbody tr:hover { background: rgba(18, 140, 130, 0.04); }
   justify-content: flex-end;
 }
 
+.proy-ordenar {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.proy-ordenar-lbl {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .card-table {
   padding: 0.85rem;
 }
@@ -1585,6 +1599,66 @@ textarea {
 .ficha-topbar {
   align-items: center;
   margin-bottom: 0.7rem;
+}
+.consulta-barra-card {
+  margin-bottom: 1rem;
+}
+.consulta-barra {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 0.85rem 1.1rem;
+  flex-wrap: wrap;
+}
+.consulta-busca {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.7rem;
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+.consulta-busca .field {
+  flex: 1 1 14rem;
+  margin: 0;
+}
+.consulta-busca .btn {
+  flex: 0 0 auto;
+}
+.consulta-barra .js-btn-nuevo,
+.consulta-barra .js-btn-cerrar-alta {
+  margin-left: auto;
+}
+.consulta-inicio[data-alta="0"] .js-form-alta,
+.consulta-inicio[data-alta="0"] .js-btn-cerrar-alta {
+  display: none;
+}
+.consulta-inicio[data-alta="1"] .js-btn-buscar,
+.consulta-inicio[data-alta="1"] .js-btn-nuevo,
+.consulta-inicio[data-alta="1"] .js-consulta-resultados {
+  display: none;
+}
+.alta-estudiante {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.alta-identidad h3 {
+  margin: 0 0 0.35rem;
+}
+.alta-identidad .muted {
+  margin: 0 0 1rem;
+}
+.alta-pane {
+  min-height: 22rem;
+}
+.alta-pane .ficha-pane-body {
+  min-height: 16rem;
+}
+.alta-acciones {
+  margin-bottom: 0;
+}
+.page-alta .main {
+  overflow: auto;
 }
 .ficha-busca {
   display: flex;
@@ -3345,6 +3419,10 @@ html.nav-hidden body.page-graficas .main {
   .topbar-actions,
   .segment {
     justify-content: center;
+  }
+  .proy-ordenar {
+    justify-content: center;
+    flex-wrap: wrap;
   }
   .stat {
     text-align: center;

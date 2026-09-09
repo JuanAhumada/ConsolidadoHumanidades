@@ -21,6 +21,7 @@ from consolidado.config.settings import (
     etiqueta_export_columna,
 )
 from consolidado.core.constants import (
+    COL_ACTIVOS,
     COL_NUM_ALERTA_FINAL,
     COL_NUM_ALERTA_INICIAL,
     COL_PERIODO_ACTUAL,
@@ -501,6 +502,147 @@ def construir_vista_ficha(cfg: dict, fila: dict, *, num_materias: int) -> dict:
         "horario": horario,
         "puntajes": _puntajes_grafica(fila),
     }
+
+
+_CAMPOS_IDENTIDAD_ALTA = ("Identificación", "Nombre y apellidos", "Programa")
+_CAMPOS_ACADEMICO_ALTA = ("Activos", "Periodo ingreso", "Reintegros", "Repitiendo")
+_MAX_MATERIAS_ALTA = 8
+
+
+def _campo_alta(
+    fila: dict,
+    col: str,
+    cfg: dict,
+    *,
+    programas: list[str] | None = None,
+) -> dict[str, Any]:
+    campo = _campo_edicion(fila, col, cfg)
+    if col == "Fecha de nacimiento":
+        campo["input"] = "date"
+        campo["valor_raw"] = (campo.get("valor_raw") or "")[:10]
+    if col == "Programa":
+        campo["input"] = "select"
+        ops = [""] + [str(p).strip() for p in (programas or []) if str(p).strip()]
+        campo["opciones"] = _opciones_con_actual(ops, campo.get("valor_raw") or "")
+    if col == COL_ACTIVOS:
+        campo["input"] = "si_no"
+        campo["opciones"] = ["", "Sí", "No"]
+        if not campo.get("valor_raw"):
+            campo["valor_raw"] = "Sí"
+    if col in {"Identificación", "Nombre y apellidos"}:
+        campo["required"] = True
+    return campo
+
+
+def formulario_alta_estudiante(
+    cfg: dict,
+    *,
+    valores: dict[str, Any] | None = None,
+    programas: list[str] | None = None,
+    periodo_actual: str = "",
+    num_materias: int | None = None,
+) -> dict[str, Any]:
+    """Campos del consolidado agrupados como las pestañas de la ficha, para el alta a mano."""
+    cfg = cfg or {}
+    fila = {
+        str(k): v
+        for k, v in (valores or {}).items()
+        if str(k).strip() and v not in (None, "")
+    }
+    fila.setdefault(COL_ACTIVOS, "Sí")
+    if periodo_actual:
+        fila.setdefault(COL_PERIODO_ACTUAL, periodo_actual)
+    vistos: set[str] = set()
+
+    def tomar(columnas, omitir: set[str] | frozenset[str] | None = None) -> list[dict[str, Any]]:
+        omitir = omitir or set()
+        out: list[dict[str, Any]] = []
+        for col in columnas:
+            col = str(col or "").strip()
+            if not col or col in vistos or col in omitir:
+                continue
+            if col.startswith("Ptje "):
+                continue
+            vistos.add(col)
+            out.append(_campo_alta(fila, col, cfg, programas=programas))
+        return out
+
+    identidad = tomar(_CAMPOS_IDENTIDAD_ALTA)
+    datos_cols: list[str] = []
+    extras_acad: list[str] = []
+    extras_prio: list[str] = []
+    extras_ruta: list[str] = []
+    becas_cols: list[str] = []
+    alertas_cols: list[str] = []
+    horario_cols: list[str] = []
+    otras: list[tuple[str, str, list[str]]] = []
+    grupo_materias = str(cfg.get("grupo_materias", "Materias")).strip().casefold()
+    n_mat = min(max(int(num_materias or 3), 1), _MAX_MATERIAS_ALTA)
+    for nombre_grupo, columnas in construir_grupos_encabezado(cfg, n_mat):
+        clave = nombre_grupo.strip().casefold()
+        if clave == "puntaje":
+            continue
+        if clave == "datos":
+            datos_cols.extend(
+                c for c in columnas if c not in _CAMPOS_HERO | _CAMPOS_ACADEMICO_SET
+            )
+            continue
+        if clave in {"academico", "académico"}:
+            extras_acad.extend(c for c in columnas if c not in extras_acad)
+            continue
+        if clave in {"priorizados", "priorizado"}:
+            extras_prio.extend(
+                c for c in columnas if c not in _COLS_PRIORIZADO and c not in extras_prio
+            )
+            continue
+        if clave in {"ruta de grado", "ruta"}:
+            extras_ruta.extend(
+                c
+                for c in columnas
+                if c not in COLUMNAS_RUTA_GRADO and c not in extras_ruta
+            )
+            continue
+        if clave == "becas":
+            becas_cols.extend(columnas)
+            continue
+        if clave == "alertas":
+            alertas_cols.extend(columnas)
+            continue
+        if clave == grupo_materias or clave == "materias":
+            horario_cols.extend(c for c in columnas if c not in _CAMPOS_ACADEMICO_SET)
+            continue
+        otras.append((clave.replace(" ", "-"), nombre_grupo, list(columnas)))
+
+    secciones = [
+        {"clave": "datos", "titulo": "Datos", "campos": tomar(datos_cols)},
+        {
+            "clave": "academico",
+            "titulo": "Académico",
+            "campos": tomar(list(_CAMPOS_ACADEMICO_ALTA) + extras_acad),
+        },
+        {
+            "clave": "priorizado",
+            "titulo": "Priorizado",
+            "campos": tomar(list(_COLS_PRIORIZADO) + extras_prio),
+        },
+        {
+            "clave": "ruta",
+            "titulo": "Ruta de grado",
+            "campos": tomar(list(COLUMNAS_RUTA_GRADO) + extras_ruta),
+        },
+        {"clave": "becas", "titulo": "Becas", "campos": tomar(becas_cols)},
+        {"clave": "alertas", "titulo": "Alertas", "campos": tomar(alertas_cols)},
+    ]
+    fijos = {"datos", "academico", "priorizado", "ruta"}
+    for clave, titulo, cols in otras:
+        campos = tomar(cols)
+        if campos:
+            secciones.append({"clave": clave, "titulo": titulo, "campos": campos})
+    horario = tomar(horario_cols)
+    if horario:
+        secciones.append({"clave": "materias", "titulo": "Horario", "campos": horario})
+    secciones = [s for s in secciones if s["campos"] or s["clave"] in fijos]
+    return {"identidad": identidad, "secciones": secciones}
 
 
 def obtener_ficha_estudiante(

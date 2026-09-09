@@ -35,7 +35,7 @@ from consolidado.paths import PROJECT_ROOT
 
 DB_FILENAME = "consolidado.db"
 CARPETA_DATOS = "datos"
-SCHEMA_VERSION = 11  # última: ediciones de ficha (ruta de grado / priorizado)
+SCHEMA_VERSION = 12  # última: estudiantes creados a mano por el administrador
 
 # Columnas canónicas → campos indexables (identidad en `estudiantes_base`).
 _CAMPOS_INDEXABLES: dict[str, str] = {
@@ -424,6 +424,18 @@ def _crear_tablas_proyeccion(conn: sqlite3.Connection) -> None:
             actualizado_en TEXT NOT NULL,
             usuario TEXT,
             PRIMARY KEY (identificacion, columna)
+        );
+        CREATE TABLE IF NOT EXISTS estudiantes_manuales (
+            identificacion TEXT PRIMARY KEY,
+            nombre TEXT,
+            programa TEXT,
+            periodo_ingreso TEXT,
+            telefono TEXT,
+            correo_institucional TEXT,
+            correo_personal TEXT,
+            fila_json TEXT NOT NULL,
+            creado_en TEXT NOT NULL,
+            usuario TEXT
         );
         """
     )
