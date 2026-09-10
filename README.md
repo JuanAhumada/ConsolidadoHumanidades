@@ -83,7 +83,7 @@ La clave del estudiante es la **identificación** normalizada. En SQL la fila es
 
 ## Base SQLite (`datos/consolidado.db`)
 
-Al cambiar el esquema, suba `SCHEMA_VERSION` en `consolidado/storage/db.py` y añada la migración en `inicializar_db` (hoy va en **9**).
+Al cambiar el esquema, suba `SCHEMA_VERSION` en `consolidado/storage/db.py` y añada la migración en `inicializar_db` (hoy va en **12**).
 
 | Tabla | Rol |
 |-------|-----|
@@ -96,6 +96,7 @@ Al cambiar el esquema, suba `SCHEMA_VERSION` en `consolidado/storage/db.py` y a�
 | `alertas_propias` | Alerta propia (global) |
 | `priorizados_contactados` | Check de Seguimiento (global) |
 | `modificaciones` | Bitácora (Historial) |
+| `estudiantes_manuales` | Alta a mano (global; se reinyectan al generar) |
 | `usuarios` | Login y roles |
 
 `fila_json` es la fuente para reconstruir la ficha. Las columnas indexables son atajos de búsqueda.

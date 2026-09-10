@@ -116,6 +116,7 @@ def listar_proyeccion(
     *,
     vista: str = "aun_no",
     programas: list[str] | None = None,
+    orden: str = "cohorte",
     base: Path | None = None,
 ) -> dict[str, Any]:
     """Próximos a grado de la última versión, partidos por «Se gradúa este semestre»."""
@@ -133,6 +134,7 @@ def listar_proyeccion(
         "meta": None,
         "programas": [],
         "programas_sel": [],
+        "orden": "pct" if orden == "pct" else "cohorte",
     }
     ult = ultima_version(base)
     if ult is None:
@@ -155,11 +157,13 @@ def listar_proyeccion(
         marca = marcas.get(ident)
         se_gradua = None if marca is None else bool(marca["se_gradua"])
         pct = _pct_creditos_num(fila.get(_COL_PCT))
+        cohorte_clave = _clave_semestres(fila.get(_COL_COHORTE))
         item = {
             "identificacion": ident,
             "nombre": _texto(fila.get("Nombre y apellidos")) or ident,
             "programa": programa,
             "cohorte": _texto(fila.get(_COL_COHORTE)) or formatear_periodo_cod(fila.get(_COL_COHORTE)) or "—",
+            "cohorte_clave": cohorte_clave,
             "periodo_grado": _texto(fila.get(_COL_PERIODO_GRADO)) or "—",
             "pct_creditos": pct,
             "pct_txt": f"{pct:.0f} %" if pct else "—",
@@ -181,13 +185,18 @@ def listar_proyeccion(
     if programas_sel:
         universo = [f for f in universo if f["programa"] in programas_sel]
 
-    universo.sort(
-        key=lambda f: (
-            f["cohorte"] or "zzzz",
-            -float(f["pct_creditos"] or 0),
-            f["nombre"].casefold(),
-        )
-    )
+    orden_ok = "pct" if orden == "pct" else "cohorte"
+
+    def _clave_orden(f: dict[str, Any]) -> tuple:
+        vacio = f.get("cohorte_clave") is None
+        clave = int(f["cohorte_clave"] or 0)
+        pct = -float(f["pct_creditos"] or 0)
+        nombre = (f["nombre"] or "").casefold()
+        if orden_ok == "pct":
+            return (pct, vacio, clave, nombre)
+        return (vacio, clave, pct, nombre)
+
+    universo.sort(key=_clave_orden)
     n_si = sum(1 for f in universo if f["se_gradua"] is True)
     n_aun_no = len(universo) - n_si
     if vista == "si":
@@ -206,4 +215,5 @@ def listar_proyeccion(
         "meta": ult,
         "programas": programas_opciones,
         "programas_sel": programas_sel,
+        "orden": orden_ok,
     }

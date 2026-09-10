@@ -2,7 +2,7 @@
 
 Documento para quien mantiene o extiende la aplicación. Complementa el `README.md` (arranque rápido) con arquitectura, pipeline, reglas de negocio, persistencia e interfaz.
 
-**Versión del esquema SQL:** 9 (`SCHEMA_VERSION` en `consolidado/storage/db.py`).
+**Versión del esquema SQL:** 12 (`SCHEMA_VERSION` en `consolidado/storage/db.py`).
 **Interfaz principal:** web FastAPI en `http://127.0.0.1:8765/`.
 
 ---
@@ -11,7 +11,7 @@ Documento para quien mantiene o extiende la aplicación. Complementa el `README.
 
 La aplicación fusiona varios libros Excel de estudiantes (matriculados, becas, priorizados, alertas, repetidas, permanencia/ruta de grado y horarios) en un **consolidado por identificación**. Calcula un puntaje de prioridad, guarda un **corte versionado** en SQLite y sirve fichas, seguimiento, metas y gráficas.
 
-No hay un maestro único de estudiante: cada generación es un snapshot `(identificacion, version_id)`. Las marcas globales (priorizado propio, alerta propia, contactado, descartes de alerta) sí viven fuera de la versión.
+No hay un maestro único de estudiante: cada generación es un snapshot `(identificacion, version_id)`. Las marcas globales (priorizado propio, alerta propia, contactado, descartes de alerta, estudiantes creados a mano) sí viven fuera de la versión.
 
 ---
 
@@ -284,6 +284,7 @@ Clave: `(identificacion, version_id)`. `fila_json` reconstruye la ficha; las col
 | `alertas_descartadas` | Tipos de alerta fuente quitados a mano |
 | `usuarios` | Login |
 | `modificaciones` | Historial de acciones |
+| `estudiantes_manuales` | Alta a mano (admin); se reinyectan al generar si no vinieron en los Excel |
 | `schema_meta` | Versión de esquema |
 
 Claves de usuario: PBKDF2-HMAC-SHA256, 200 000 iteraciones, sal por usuario (`usuarios.hash_clave`). Nunca en texto plano. Si la tabla está vacía se crea `admin` / `admin`.
@@ -300,9 +301,9 @@ Middleware: si no hay sesión → login (API: 401). Rutas admin sin rol admin �
 
 **Rol `consulta`:** Inicio, Estudiante, Seguimiento, Metas, Gráficas, Información, Versiones (listar y descargar Excel).
 
-**Rol `admin`:** lo anterior más Data (`/archivos`, upload, `/generar`), Configuración, Usuarios, Datos antiguos, Historial, importar/generar versión.
+**Rol `admin`:** lo anterior más Data (`/archivos`, upload, `/generar`), Configuración, Usuarios, Datos antiguos, Historial, importar/generar versión y crear estudiantes a mano (`/estudiante/crear`).
 
-Prefijos solo admin: `/config`, `/usuarios`, `/archivos`, `/upload`, `/datos-antiguos`, `/modificaciones`, `/generar`, más `/versiones/importar` y `/versiones/generar`.
+Prefijos solo admin: `/config`, `/usuarios`, `/archivos`, `/upload`, `/datos-antiguos`, `/modificaciones`, `/generar`, más `/versiones/importar`, `/versiones/generar` y `/estudiante/crear`.
 
 Rutas útiles:
 
@@ -310,6 +311,8 @@ Rutas útiles:
 |------|---------|
 | `/` | Inicio (resumen + metas) |
 | `/estudiante/{id}` | Ficha |
+| `/estudiante/crear` | Admin: alta de estudiante |
+| `/proyeccion` | Próximos a grado (`orden=cohorte` o `pct`) |
 | `/seguimiento` | Listas por categoría |
 | `/versiones/ultima/excel` | Descargar último Excel |
 | `/versiones/generar` | Admin: nuevo corte |

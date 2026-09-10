@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Estudiante{% endblock %}
-{% block body_class %}{% if ficha %}page-ficha{% endif %}{% endblock %}
+{% block body_class %}{% if ficha %}page-ficha{% elif alta %}page-alta{% endif %}{% endblock %}
 {% block content %}
 {% set cat_sel = ficha_cat or 'academico' %}
 {% set sec_sel = ficha_sec or 'notas' %}
@@ -23,21 +23,25 @@
 </div>
 
 {% if not ficha %}
-<div class="card">
-  <form method="get" action="/estudiante" class="form-row" style="align-items:end;">
-    <div class="field">
-      <label for="q">Cédula o nombre</label>
-      <input id="q" type="search" name="q" value="{{ q or '' }}" placeholder="Ej. 521725 o Farfan"/>
+<div class="consulta-inicio" id="consulta-inicio" data-alta="{% if alta %}1{% else %}0{% endif %}">
+  <div class="card consulta-barra-card">
+    <div class="consulta-barra">
+      <form method="get" action="/estudiante" class="consulta-busca" id="form-buscar-est">
+        <div class="field">
+          <label for="q">Cédula o nombre</label>
+          <input id="q" type="search" name="q" value="{{ q or '' }}" placeholder="Ej. 521725 o Farfan"/>
+        </div>
+        <button class="btn js-btn-buscar" type="submit">Buscar</button>
+      </form>
+      {% if es_admin %}
+      <button type="button" class="btn js-btn-nuevo">Nuevo estudiante</button>
+      <button type="button" class="btn secondary js-btn-cerrar-alta">Volver a buscar</button>
+      {% endif %}
     </div>
-    <div class="field">
-      <button class="btn" type="submit">Buscar</button>
-    </div>
-  </form>
-</div>
-{% endif %}
+  </div>
 
-{% if resultados and not ficha %}
-<div class="card">
+{% if resultados %}
+<div class="card js-consulta-resultados">
   <h3>Resultados</h3>
   <div class="table-wrap">
     <table>
@@ -54,6 +58,75 @@
       </tbody>
     </table>
   </div>
+</div>
+{% endif %}
+
+{% if es_admin and alta_form %}
+{% macro campo_alta(campo) %}
+<div class="campo">
+  <label class="e" for="alta-{{ campo.name_key }}">{{ campo.etiqueta }}{% if campo.required %} *{% endif %}</label>
+  {% if campo.input in ('si_no', 'select') %}
+  <select id="alta-{{ campo.name_key }}" name="{{ campo.name_key }}" {% if campo.required %}required{% endif %}>
+    {% for op in campo.opciones %}
+    <option value="{{ op }}" {% if campo.valor_raw == op %}selected{% endif %}>{% if op %}{{ op }}{% else %}—{% endif %}</option>
+    {% endfor %}
+  </select>
+  {% elif campo.input == 'date' %}
+  <input id="alta-{{ campo.name_key }}" type="date" name="{{ campo.name_key }}" value="{{ campo.valor_raw }}" {% if campo.required %}required{% endif %}/>
+  {% elif campo.input == 'number' %}
+  <input id="alta-{{ campo.name_key }}" type="number" name="{{ campo.name_key }}" value="{{ campo.valor_raw }}" min="0" max="100" step="0.1" {% if campo.required %}required{% endif %}/>
+  {% else %}
+  <input id="alta-{{ campo.name_key }}" type="text" name="{{ campo.name_key }}" value="{{ campo.valor_raw }}" {% if campo.required %}required{% endif %}/>
+  {% endif %}
+</div>
+{% endmacro %}
+<form method="post" action="/estudiante/crear" class="alta-estudiante js-form-alta" id="form-alta-est">
+  <div class="card alta-identidad">
+    <h3>Nuevo estudiante</h3>
+    <p class="muted">Complete identificación y nombre. El resto de pestañas replica las de la ficha: deje en blanco lo que no tenga. Quedará activo y se reinyecta al generar el consolidado.</p>
+    <div class="ficha-cat-campos ficha-cat-edit">
+      {% for campo in alta_form.identidad %}
+      {{ campo_alta(campo) }}
+      {% endfor %}
+    </div>
+  </div>
+  {% if alta_form.secciones %}
+  <div class="ficha-pane alta-pane">
+    <div class="ficha-pane-tabs" role="tablist" data-tabs="alta">
+      {% for sec in alta_form.secciones %}
+      <button type="button" class="btn sm ficha-tab{% if not loop.first %} secondary{% endif %}" role="tab" data-tab="{{ sec.clave }}" aria-selected="{% if loop.first %}true{% else %}false{% endif %}">{{ sec.titulo }}</button>
+      {% endfor %}
+    </div>
+    <div class="ficha-pane-body" data-panels="alta">
+      {% for sec in alta_form.secciones %}
+      <div class="ficha-pane-panel" role="tabpanel" data-panel="{{ sec.clave }}" {% if not loop.first %}hidden{% endif %}>
+        <section class="ficha-cat">
+          {% if sec.campos %}
+          <div class="ficha-cat-campos ficha-cat-edit">
+            {% for campo in sec.campos %}
+            {{ campo_alta(campo) }}
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="muted">No hay campos en este apartado.</p>
+          {% endif %}
+        </section>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <div class="card alta-acciones">
+    <div class="form-actions-row">
+      <button class="btn" type="submit">Crear estudiante</button>
+    </div>
+  </div>
+</form>
+{% endif %}
+
+{% if q and not resultados %}
+<div class="card js-consulta-resultados"><p class="muted">Sin resultados para «{{ q }}».</p></div>
+{% endif %}
 </div>
 {% endif %}
 
@@ -366,8 +439,6 @@
     </section>
   </div>
 </div>
-{% elif q and not resultados %}
-<div class="card"><p class="muted">Sin resultados para «{{ q }}».</p></div>
 {% endif %}
 {% endblock %}
 
@@ -443,6 +514,61 @@
     activate(groupEl.getAttribute("data-tabs"), btn.getAttribute("data-tab"));
   });
   syncVolver();
+})();
+</script>
+{% endif %}
+{% if not ficha %}
+<script>
+(function () {
+  const root = document.getElementById("consulta-inicio");
+  if (!root) return;
+  const formBuscar = document.getElementById("form-buscar-est");
+  const formAlta = document.getElementById("form-alta-est");
+
+  function setAlta(on) {
+    root.setAttribute("data-alta", on ? "1" : "0");
+    try {
+      const u = new URL(location.href);
+      if (on) u.searchParams.set("alta", "1");
+      else u.searchParams.delete("alta");
+      history.replaceState(null, "", u.pathname + (u.search ? "?" + u.searchParams.toString() : ""));
+    } catch (e) {}
+    if (on) {
+      const idCampo = formAlta && formAlta.querySelector("input[required], select[required]");
+      if (idCampo) idCampo.focus();
+    }
+  }
+
+  root.addEventListener("click", function (ev) {
+    if (ev.target.closest(".js-btn-nuevo")) {
+      setAlta(true);
+      return;
+    }
+    if (ev.target.closest(".js-btn-cerrar-alta")) {
+      setAlta(false);
+      return;
+    }
+    const tab = ev.target.closest(".ficha-tab");
+    if (!tab || !formAlta || !formAlta.contains(tab)) return;
+    const group = tab.closest("[data-tabs]");
+    const panels = formAlta.querySelector("[data-panels='" + group.getAttribute("data-tabs") + "']");
+    if (!group || !panels) return;
+    const key = tab.getAttribute("data-tab");
+    group.querySelectorAll(".ficha-tab").forEach((btn) => {
+      const on = btn.getAttribute("data-tab") === key;
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+      btn.classList.toggle("secondary", !on);
+    });
+    panels.querySelectorAll("[data-panel]").forEach((p) => {
+      p.hidden = p.getAttribute("data-panel") !== key;
+    });
+  });
+
+  if (formBuscar) {
+    formBuscar.addEventListener("submit", function (ev) {
+      if (root.getAttribute("data-alta") === "1") ev.preventDefault();
+    });
+  }
 })();
 </script>
 {% endif %}
