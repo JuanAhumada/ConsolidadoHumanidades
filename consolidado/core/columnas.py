@@ -245,14 +245,20 @@ def renombrar_y_filtrar(
     m = construir_mapa_columnas(cols)
     nr = _mapa_norm_a_real(cols)
 
-    if "identificacion" not in m:
+    if "identificacion" not in m and "nombre_estudiante" not in m and not (
+        "nombres" in nr and "apellidos" in nr
+    ):
         raise ValueError(
-            "No se encontró columna de identificación. "
+            "No se encontró columna de identificación ni de nombre. "
             f"Columnas del archivo: {cols}. "
             "Revisa la hoja usada o amplía la detección en consolidado.core.archivos."
         )
 
-    exprs: list[pl.Expr] = [pl.col(m["identificacion"]).alias("Identificación")]
+    exprs: list[pl.Expr] = [
+        pl.col(m["identificacion"]).alias("Identificación")
+        if "identificacion" in m
+        else pl.lit(None).cast(pl.Utf8).alias("Identificación")
+    ]
     exprs.append(_expr_nombre_completo(df, m, nr))
     exprs.append(_expr_telefono_celular(df, m, nr))
     exprs.append(_expr_fecha_nacimiento(df, m, formato_fecha_nacimiento))
@@ -262,6 +268,7 @@ def renombrar_y_filtrar(
         ("correo_institucional", "Correo institucional"),
         ("correo_personal", "Correo personal"),
         ("periodo_ingreso", "Periodo ingreso"),
+        ("pensum", "Pensum"),
         ("reintegros", "Reintegros"),
         ("lugar_nacimiento", "Lugar de nacimiento"),
         ("lugar_residencia", "Lugar de residencia"),

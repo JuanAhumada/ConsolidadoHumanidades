@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Metas{% endblock %}
+{% block body_class %}page-metas{% endblock %}
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 {% endblock %}
@@ -7,56 +8,57 @@
 <div class="topbar">
   <div>
     <h2>Metas</h2>
-    <p class="sub">Graduación, permanencia e histórico del Excel de Permanencia. Al generar el consolidado se cruza con Gestión de graduación y se añade el cohorte en el que el estudiante debería graduarse.</p>
+    <p class="sub">Graduación, permanencia e histórico del Excel de Permanencia. El administrador puede ajustar las metas de graduación del semestre si hace falta; el archivo fuente no se modifica.</p>
   </div>
 </div>
 
 {% if metas and metas.disponible %}
-{% if metas.graficas %}
-<section class="metas-chart-card">
-  <label class="metas-chart-lbl" for="meta-grafica">Ver gráfica</label>
-  <select id="meta-grafica">
-    <option value="">Elija una meta</option>
-    {% for g in metas.graficas %}
-    <option value="{{ g.id }}">{{ g.etiqueta }}</option>
-    {% endfor %}
-  </select>
-  <p class="muted metas-chart-hint" id="meta-chart-hint">La gráfica aparece al seleccionar la meta. En histórico se muestran permanencia y graduación, cada una con meta y cumplimiento.</p>
-  <div class="metas-chart-wrap is-empty" id="meta-chart-wrap" hidden>
-    <canvas id="meta-chart"></canvas>
-  </div>
-  <div class="metas-charts-duo" id="meta-charts-duo" hidden>
-    <div class="metas-chart-wrap"><canvas id="meta-chart-a"></canvas></div>
-    <div class="metas-chart-wrap"><canvas id="meta-chart-b"></canvas></div>
-  </div>
-</section>
 <script type="application/json" id="metas-graficas-json">{{ metas.graficas | tojson }}</script>
-{% endif %}
-
 <section class="hub-metas">
-  {% for bloque_tipo in [
-    ("graduacion", "Metas de graduación", metas.graduacion),
-    ("permanencia", "Metas de permanencia", metas.permanencia)
-  ] %}
-  {% set clave, titulo, bloques = bloque_tipo %}
-  {% if bloques %}
-  <div class="metas-block" data-metas-tabs>
-    <h3>{{ titulo }}</h3>
-    <p class="muted metas-lead">Periodos que trae el archivo cargado. Las filas marcadas como proyección salen de bloques estimados del Excel.</p>
-    {% if bloques|length > 1 %}
+  {% if metas.graduacion %}
+  {% set graficas_grad = metas.graficas_graduacion or [] %}
+  <div class="metas-block{% if graficas_grad %} metas-vista{% endif %}" data-metas-tabs>
+    <header class="metas-block-head">
+      <div>
+        <h3>Metas de graduación</h3>
+        <p class="muted metas-lead">Una gráfica por carrera: graduaciones y meta de graduación en cada cohorte. El tramo de otro color (punteado) es proyección.</p>
+      </div>
+      {% if graficas_grad %}
+      <button type="button" class="btn sm secondary metas-toggle-datos" data-mostrar="datos" aria-pressed="false">Ver datos numéricos</button>
+      {% endif %}
+    </header>
+    {% if graficas_grad %}
+    <div class="metas-vista-grafica">
+      <div class="metas-charts-carreras">
+        {% for g in graficas_grad %}
+        <div class="metas-chart-wrap">
+          <canvas class="meta-chart-canvas" data-grafica="{{ g.id }}"></canvas>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <div class="metas-vista-datos"{% if graficas_grad %} hidden{% endif %}>
+    {% if metas.graduacion|length > 1 %}
     <div class="seg-switch metas-switch" role="tablist">
-      {% for b in bloques %}
-      <button type="button" class="{% if loop.first %}active{% endif %}" data-periodo="{{ clave }}-{{ b.periodo }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">
+      {% for b in metas.graduacion %}
+      <button type="button" class="{% if loop.first %}active{% endif %}" data-periodo="graduacion-{{ b.periodo }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">
         <span class="seg-switch-lbl">{{ b.periodo }}</span>
         {% if b.proyeccion %}<span class="seg-switch-n">Proyección</span>{% endif %}
       </button>
       {% endfor %}
     </div>
     {% endif %}
-    {% for b in bloques %}
-    <div class="table-wrap metas-tabla" data-periodo="{{ clave }}-{{ b.periodo }}" {% if not loop.first and bloques|length > 1 %}hidden{% endif %}>
-      {% if bloques|length == 1 %}
+    {% for b in metas.graduacion %}
+    <div class="metas-periodo" data-periodo="graduacion-{{ b.periodo }}" {% if not loop.first and metas.graduacion|length > 1 %}hidden{% endif %}>
+      {% if metas.graduacion|length == 1 %}
       <p class="metas-periodo-lbl">Periodo {{ b.periodo }}{% if b.proyeccion %} · proyección{% endif %}</p>
+      {% endif %}
+      <div class="table-wrap metas-tabla">
+      {% if es_admin %}
+      <form method="post" action="/metas/guardar" class="metas-edit-form">
+        <input type="hidden" name="periodo" value="{{ b.periodo }}"/>
+        <input type="hidden" name="n_filas" value="{{ b.filas|length }}"/>
       {% endif %}
       <table>
         <thead>
@@ -75,7 +77,104 @@
         </thead>
         <tbody>
           {% for f in b.filas %}
+          <tr{% if f.editada %} class="meta-editada"{% endif %}>
+            <td>{{ f.programa }}{% if es_admin %}<input type="hidden" name="programa_{{ loop.index0 }}" value="{{ f.programa }}"/>{% endif %}</td>
+            <td>{{ f.periodo_inicio or "—" }}</td>
+            <td>{{ f.poblacion or "—" }}</td>
+            <td>
+              {% if es_admin %}
+              <input class="metas-input" name="meta_num_{{ loop.index0 }}" value="{{ f.meta_num or '' }}" aria-label="Meta número {{ f.programa }}"/>
+              {% else %}{{ f.meta_num or "—" }}{% endif %}
+            </td>
+            <td>{{ f.alcanzado_num or "—" }}</td>
+            <td>{{ f.faltante_num or "—" }}</td>
+            <td>
+              {% if es_admin %}
+              <input class="metas-input" name="meta_pct_{{ loop.index0 }}" value="{{ f.meta_pct or '' }}" aria-label="Meta porcentaje {{ f.programa }}"/>
+              {% else %}{{ f.meta_pct or "—" }}{% endif %}
+            </td>
+            <td>{{ f.alcanzado_pct or "—" }}</td>
+            <td>{{ f.faltante_pct or "—" }}</td>
+            <td>
+              {% if f.estado %}
+              <span class="meta-estado {% if f.cumple == true %}cumple{% elif f.cumple == false %}no-cumple{% endif %}">{{ f.estado }}</span>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if es_admin %}
+        <div class="form-actions-row" style="margin-top:.7rem;">
+          <button class="btn sm" type="submit">Guardar metas de {{ b.periodo }}</button>
+        </div>
+      </form>
+      {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if metas.permanencia %}
+  {% set graficas_perm = metas.graficas_permanencia or [] %}
+  <div class="metas-block{% if graficas_perm %} metas-vista{% endif %}" data-metas-tabs>
+    <header class="metas-block-head">
+      <div>
+        <h3>Metas de permanencia</h3>
+        <p class="muted metas-lead">Una gráfica por carrera: permanencia y meta por cohorte. El tramo de otro color (punteado) es proyección.</p>
+      </div>
+      {% if graficas_perm %}
+      <button type="button" class="btn sm secondary metas-toggle-datos" data-mostrar="datos" aria-pressed="false">Ver datos numéricos</button>
+      {% endif %}
+    </header>
+    {% if graficas_perm %}
+    <div class="metas-vista-grafica">
+      <div class="metas-charts-carreras">
+        {% for g in graficas_perm %}
+        <div class="metas-chart-wrap">
+          <canvas class="meta-chart-canvas" data-grafica="{{ g.id }}"></canvas>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <div class="metas-vista-datos"{% if graficas_perm %} hidden{% endif %}>
+    {% if metas.permanencia|length > 1 %}
+    <div class="seg-switch metas-switch" role="tablist">
+      {% for b in metas.permanencia %}
+      <button type="button" class="{% if loop.first %}active{% endif %}" data-periodo="permanencia-{{ b.periodo }}" aria-pressed="{{ 'true' if loop.first else 'false' }}">
+        <span class="seg-switch-lbl">{{ b.periodo }}</span>
+        {% if b.proyeccion %}<span class="seg-switch-n">Proyección</span>{% endif %}
+      </button>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% for b in metas.permanencia %}
+    <div class="metas-periodo" data-periodo="permanencia-{{ b.periodo }}" {% if not loop.first and metas.permanencia|length > 1 %}hidden{% endif %}>
+      {% if metas.permanencia|length == 1 %}
+      <p class="metas-periodo-lbl">Periodo {{ b.periodo }}{% if b.proyeccion %} · proyección{% endif %}</p>
+      {% endif %}
+      <div class="table-wrap metas-tabla">
+      <table>
+        <thead>
           <tr>
+            <th>Programa</th>
+            <th>Periodo inicio</th>
+            <th>Población</th>
+            <th>Meta #</th>
+            <th># Alcanzado</th>
+            <th># Faltante</th>
+            <th>Meta %</th>
+            <th>% Alcanzado</th>
+            <th>% Faltante</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in b.filas %}
+          <tr{% if f.editada %} class="meta-editada"{% endif %}>
             <td>{{ f.programa }}</td>
             <td>{{ f.periodo_inicio or "—" }}</td>
             <td>{{ f.poblacion or "—" }}</td>
@@ -94,18 +193,38 @@
           {% endfor %}
         </tbody>
       </table>
+      </div>
     </div>
     {% endfor %}
+    </div>
   </div>
   {% endif %}
-  {% endfor %}
 
   {% if metas.historico %}
   {% for h in metas.historico %}
-  <div class="metas-block">
-    <h3>Histórico{% if h.programa %} · {{ h.programa }}{% endif %}</h3>
-    <p class="muted metas-lead">Hoja HISTÓRICO del Excel de Permanencia: meta frente a cumplimiento por periodo.</p>
-    <div class="table-wrap">
+  {% set hay_grafica = h.grafica %}
+  <div class="metas-block{% if hay_grafica %} metas-vista{% endif %}">
+    <header class="metas-block-head">
+      <div>
+        <h3>Histórico{% if h.programa %} · {{ h.programa }}{% endif %}</h3>
+        <p class="muted metas-lead">Hoja HISTÓRICO del Excel de Permanencia: meta frente a cumplimiento por periodo.</p>
+      </div>
+      {% if hay_grafica %}
+      <button type="button" class="btn sm secondary metas-toggle-datos" data-mostrar="datos" aria-pressed="false">Ver datos numéricos</button>
+      {% endif %}
+    </header>
+    {% if hay_grafica %}
+    <div class="metas-vista-grafica">
+      <div class="metas-charts-duo">
+        {% for panel in h.grafica.paneles %}
+        <div class="metas-chart-wrap">
+          <canvas class="meta-chart-canvas" data-grafica="{{ h.grafica.id }}" data-panel="{{ loop.index0 }}"></canvas>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <div class="metas-vista-datos table-wrap"{% if hay_grafica %} hidden{% endif %}>
       <table>
         <thead>
           <tr>
@@ -148,7 +267,7 @@
 <script>
 document.querySelectorAll("[data-metas-tabs]").forEach(function (block) {
   const buttons = block.querySelectorAll(".metas-switch [data-periodo]");
-  const panels = block.querySelectorAll(".metas-tabla[data-periodo]");
+  const panels = block.querySelectorAll(".metas-periodo[data-periodo]");
   if (!buttons.length) return;
   buttons.forEach(function (btn) {
     btn.addEventListener("click", function () {
@@ -161,61 +280,63 @@ document.querySelectorAll("[data-metas-tabs]").forEach(function (block) {
       panels.forEach(function (p) {
         p.hidden = p.getAttribute("data-periodo") !== periodo;
       });
+      window.dispatchEvent(new Event("resize"));
     });
   });
 });
 
 (function () {
-  const sel = document.getElementById("meta-grafica");
   const raw = document.getElementById("metas-graficas-json");
-  const wrap = document.getElementById("meta-chart-wrap");
-  const duo = document.getElementById("meta-charts-duo");
-  const hint = document.getElementById("meta-chart-hint");
-  const canvas = document.getElementById("meta-chart");
-  const canvasA = document.getElementById("meta-chart-a");
-  const canvasB = document.getElementById("meta-chart-b");
-  if (!sel || !raw || !canvas) return;
+  if (!raw || typeof Chart === "undefined") return;
   let graficas = [];
   try { graficas = JSON.parse(raw.textContent || "[]"); } catch (e) { graficas = []; }
   const porId = {};
   graficas.forEach((g) => { if (g && g.id) porId[g.id] = g; });
   const colores = ["#0c6b63", "#c47a12"];
+  const coloresProy = ["#6366f1", "#db2777"];
   const charts = [];
 
-  function destruir() {
-    while (charts.length) {
-      const c = charts.pop();
-      try { c.destroy(); } catch (e) {}
-    }
-  }
-
-  function ocultaTodo() {
-    destruir();
-    if (wrap) {
-      wrap.hidden = true;
-      wrap.classList.add("is-empty");
-    }
-    if (duo) duo.hidden = true;
-    if (hint) hint.hidden = false;
-  }
-
   function opcionesLinea(dato) {
+    const proy = (dato.proyeccion || []).map(Boolean);
+    const hayProy = proy.some(Boolean);
+    const datasets = (dato.datasets || []).map((ds, i) => {
+      const base = colores[i % colores.length];
+      const proyC = coloresProy[i % coloresProy.length];
+      const puntos = (ds.data || []).map((_, idx) => (proy[idx] ? proyC : base));
+      return {
+        label: ds.label,
+        data: ds.data,
+        backgroundColor: base + "33",
+        borderColor: base,
+        borderWidth: 2,
+        tension: 0.25,
+        fill: false,
+        spanGaps: true,
+        pointBackgroundColor: puntos,
+        pointBorderColor: puntos,
+        pointRadius: (ds.data || []).map((_, idx) => (proy[idx] ? 5 : 3)),
+        pointHoverRadius: (ds.data || []).map((_, idx) => (proy[idx] ? 7 : 4)),
+        segment: hayProy ? {
+          borderColor: (ctx) => (proy[ctx.p1DataIndex] ? proyC : base),
+          borderDash: (ctx) => (proy[ctx.p1DataIndex] ? [6, 4] : []),
+        } : undefined,
+      };
+    });
+    if (hayProy) {
+      datasets.push({
+        label: "Proyección",
+        data: [],
+        borderColor: coloresProy[0],
+        backgroundColor: coloresProy[0],
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 5,
+        pointBackgroundColor: coloresProy[0],
+      });
+    }
     return {
       type: "line",
-      data: {
-        labels: dato.labels || [],
-        datasets: (dato.datasets || []).map((ds, i) => ({
-          label: ds.label,
-          data: ds.data,
-          backgroundColor: colores[i % colores.length] + "33",
-          borderColor: colores[i % colores.length],
-          borderWidth: 2,
-          tension: 0.25,
-          fill: false,
-          pointRadius: 3,
-          spanGaps: true,
-        })),
-      },
+      data: { labels: dato.labels || [], datasets },
       options: {
         responsive: true,
         maintainAspectRatio: false,
@@ -224,6 +345,9 @@ document.querySelectorAll("[data-metas-tabs]").forEach(function (block) {
           title: { display: true, text: dato.titulo || "" },
         },
         scales: {
+          x: {
+            title: { display: Boolean(dato.xlabel), text: dato.xlabel || "" },
+          },
           y: {
             beginAtZero: true,
             title: { display: Boolean(dato.ylabel), text: dato.ylabel || "" },
@@ -233,62 +357,38 @@ document.querySelectorAll("[data-metas-tabs]").forEach(function (block) {
     };
   }
 
-  function pintar(id) {
-    const dato = porId[id];
-    if (!dato) {
-      ocultaTodo();
-      return;
-    }
-    if (hint) hint.hidden = true;
-    destruir();
-    const paneles = dato.tipo === "historico" ? (dato.paneles || []) : null;
-    if (paneles && paneles.length) {
-      if (wrap) {
-        wrap.hidden = true;
-        wrap.classList.add("is-empty");
-      }
-      if (duo) duo.hidden = false;
-      const wraps = duo ? duo.querySelectorAll(".metas-chart-wrap") : [];
-      const lienzos = [canvasA, canvasB];
-      paneles.slice(0, 2).forEach((panel, i) => {
-        if (wraps[i]) wraps[i].hidden = false;
-        if (!lienzos[i]) return;
-        charts.push(new Chart(lienzos[i], opcionesLinea(panel)));
-      });
-      for (let i = paneles.length; i < wraps.length; i++) wraps[i].hidden = true;
-      return;
-    }
-    if (duo) duo.hidden = true;
-    wrap.hidden = false;
-    wrap.classList.remove("is-empty");
-    charts.push(new Chart(canvas, {
-      type: dato.tipo || "bar",
-      data: {
-        labels: dato.labels || [],
-        datasets: (dato.datasets || []).map((ds, i) => ({
-          label: ds.label,
-          data: ds.data,
-          backgroundColor: colores[i % colores.length] + (dato.tipo === "line" ? "33" : "cc"),
-          borderColor: colores[i % colores.length],
-          borderWidth: 2,
-          tension: 0.25,
-          fill: dato.tipo === "line",
-        })),
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: true },
-          title: { display: true, text: dato.titulo || dato.etiqueta || "" },
-        },
-        scales: dato.tipo === "pie" ? {} : {
-          y: { beginAtZero: true, title: { display: Boolean(dato.ylabel), text: dato.ylabel || "" } },
-        },
-      },
-    }));
+  document.querySelectorAll(".meta-chart-canvas").forEach((canvas) => {
+    const dato = porId[canvas.getAttribute("data-grafica") || ""];
+    if (!dato) return;
+    const panelIdx = canvas.getAttribute("data-panel");
+    const fuente = panelIdx != null && dato.paneles
+      ? dato.paneles[Number(panelIdx)]
+      : dato;
+    if (!fuente) return;
+    charts.push(new Chart(canvas, opcionesLinea(fuente)));
+  });
+
+  function resizeCharts() {
+    requestAnimationFrame(() => {
+      charts.forEach((c) => { try { c.resize(); } catch (e) {} });
+    });
   }
-  sel.addEventListener("change", function () { pintar(sel.value); });
+
+  document.querySelectorAll(".metas-vista").forEach((block) => {
+    const btn = block.querySelector(".metas-toggle-datos");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const aDatos = !block.classList.contains("is-datos");
+      block.classList.toggle("is-datos", aDatos);
+      block.querySelectorAll(".metas-vista-grafica").forEach((el) => { el.hidden = aDatos; });
+      block.querySelectorAll(".metas-vista-datos").forEach((el) => { el.hidden = !aDatos; });
+      btn.textContent = aDatos ? "Ver gráfica" : "Ver datos numéricos";
+      btn.setAttribute("aria-pressed", aDatos ? "true" : "false");
+      if (!aDatos) resizeCharts();
+    });
+  });
+
+  window.addEventListener("resize", resizeCharts);
 })();
 </script>
 {% endblock %}

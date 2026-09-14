@@ -27,9 +27,11 @@ from consolidado.config.settings import (
 from consolidado.core.constants import aplicar_config
 from consolidado.core.colores_programa import colores_programas_fijos
 from consolidado.core.permanencia import cargar_metas
+from consolidado.storage.metas import aplicar_overrides_metas
 from consolidado.core.pipeline import ejecutar_consolidado, generar_dataframe_consolidado
 from consolidado.core.charts import (
     columna_excluida_grafica,
+    columnas_graficables,
     es_columna_materia_grafica,
     programas_disponibles,
 )
@@ -87,10 +89,12 @@ def metas_ruta_grado() -> dict[str, Any]:
         "permanencia": [],
         "historico": [],
         "graficas": [],
+        "graficas_graduacion": [],
+        "graficas_permanencia": [],
     }
     try:
         cfg = cfg_actual()
-        return cargar_metas(cfg, PROJECT_ROOT)
+        return aplicar_overrides_metas(cargar_metas(cfg, PROJECT_ROOT), PROJECT_ROOT)
     except Exception:
         return vacio
 
@@ -843,9 +847,40 @@ def guardar_notas_puntajes(notas: str) -> None:
     )
 
 
-def programas_ultima_version() -> list[str]:
-    df, _ = df_ultima_version()
+def df_version(version_id: int | None = None):
+    """DataFrame de un corte; si no hay id, la última versión."""
+    if version_id is None:
+        return df_ultima_version()
+    meta = obtener_version(int(version_id), PROJECT_ROOT)
+    if meta is None:
+        raise ValueError(f"No existe la versión #{version_id}.")
+    return cargar_dataframe_version(int(version_id), PROJECT_ROOT), meta
+
+
+def programas_de_version(version_id: int | None = None) -> list[str]:
+    df, _ = df_version(version_id)
     return programas_disponibles(df)
+
+
+def datos_graficas(version_id: int | None = None) -> dict[str, Any]:
+    versiones = listar_versiones_parcializado()
+    if not versiones:
+        raise ValueError("Aún no hay un consolidado. Genere una versión primero.")
+    if version_id is None:
+        version_id = int(versiones[0]["id"])
+    df, meta = df_version(version_id)
+    cfg = cfg_actual()
+    permitidas = cfg.get("columnas_graficas")
+    if not isinstance(permitidas, list):
+        permitidas = None
+    columnas = columnas_graficables(df, permitidas=permitidas) if df is not None else []
+    return {
+        "version": {**meta, "etiqueta": _etiqueta_version(meta)} if meta else None,
+        "columnas": columnas,
+        "programas": programas_disponibles(df) if df is not None else [],
+        "filas": df.height if df is not None else 0,
+        "versiones": versiones,
+    }
 
 
 def listar_fuentes_para_mapa() -> list[dict[str, Any]]:
@@ -1006,6 +1041,7 @@ def datos_parcializado(version_id: int | None = None) -> dict[str, Any]:
         COLUMNAS_BASICAS,
         conteos_por_programa,
         grupos_columnas_version,
+        opciones_filtros,
     )
 
     columnas = [str(c) for c in df.columns]
@@ -1016,15 +1052,20 @@ def datos_parcializado(version_id: int | None = None) -> dict[str, Any]:
         "basicas": basicas,
         "grupos": grupos_columnas_version(df, cfg),
         "programas": conteos_por_programa(df),
+        "filtros": opciones_filtros(df),
         "filas": df.height,
     }
 
 
-def conteo_parcializado(version_id: int, programas: list[str] | None = None) -> int:
-    from consolidado.core.charts import filtrar_df_por_carreras
+def conteo_parcializado(
+    version_id: int,
+    programas: list[str] | None = None,
+    filtros: dict[str, list[str]] | None = None,
+) -> int:
+    from consolidado.core.parcializado import aplicar_filtros_parcializado
 
     df = cargar_dataframe_version(version_id, PROJECT_ROOT)
-    return filtrar_df_por_carreras(df, programas).height
+    return aplicar_filtros_parcializado(df, programas=programas, filtros=filtros).height
 
 
 def excel_parcializado(
@@ -1032,8 +1073,10 @@ def excel_parcializado(
     *,
     columnas: list[str],
     programas: list[str] | None,
+    filtros: dict[str, list[str]] | None = None,
 ) -> tuple[bytes, str]:
     from consolidado.core.parcializado import excel_parcializado_bytes, nombre_excel_parcializado
+    from consolidado.storage.notas import listar_todas_notas
 
     meta = obtener_version(version_id, PROJECT_ROOT)
     if meta is None:
@@ -1045,13 +1088,15 @@ def excel_parcializado(
         columnas=columnas,
         programas=elegidas or None,
         meta=meta,
+        filtros=filtros,
+        notas=listar_todas_notas(PROJECT_ROOT),
     )
     nombre = nombre_excel_parcializado(
         periodo=meta.get("periodo"),
         fecha_version=meta.get("fecha_version"),
         programas=elegidas or None,
     )
-    n_filas = conteo_parcializado(version_id, elegidas or None)
+    n_filas = conteo_parcializado(version_id, elegidas or None, filtros)
     registrar_modificacion(
         accion="parcializado",
         resumen=(

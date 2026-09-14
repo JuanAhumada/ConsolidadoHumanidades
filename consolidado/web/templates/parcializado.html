@@ -6,7 +6,7 @@
   <div>
     <p class="hub-kicker">Exportar</p>
     <h2>Parcializado</h2>
-    <p class="sub">Elija un corte del consolidado, las carreras y las columnas. Se descarga un Excel solo con eso.</p>
+    <p class="sub">Elija un corte del consolidado, filtre (carrera, beca, nivel, cohorte, pensum) y las columnas. El Excel incluye una hoja de becas (una por fila) y las anotaciones de esos estudiantes.</p>
   </div>
 </div>
 
@@ -51,23 +51,40 @@
         <header class="parc-panel-head">
           <span class="parc-step">2</span>
           <div>
-            <h3>Carreras</h3>
-            <p>Una, varias o todas. Si no marca ninguna, se incluyen todas.</p>
+            <h3>Filtros</h3>
+            <p>Lista desplegable con botones de selección. Si no marca ninguno, se incluye todo.</p>
           </div>
         </header>
         <label class="parc-chip parc-chip-todas">
           <input type="checkbox" name="todas_carreras" id="parc-todas" value="1" checked/>
           <span>Todas las carreras</span>
         </label>
-        <div class="parc-chips" id="parc-carreras">
-          {% for p in (datos.programas if datos else []) %}
-          <label class="parc-chip">
-            <input type="checkbox" name="programa" value="{{ p.nombre }}"/>
-            <span class="parc-chip-name">{{ p.nombre }}</span>
-            <span class="parc-chip-n">{{ p.n }}</span>
-          </label>
-          {% endfor %}
-        </div>
+        <details class="parc-filtro" open>
+          <summary>Carreras <span class="parc-filtro-n" id="parc-n-carreras">Todas</span></summary>
+          <div class="parc-chips" id="parc-carreras">
+            {% for p in (datos.programas if datos else []) %}
+            <label class="parc-chip">
+              <input type="checkbox" name="programa" value="{{ p.nombre }}"/>
+              <span class="parc-chip-name">{{ p.nombre }}</span>
+              <span class="parc-chip-n">{{ p.n }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </details>
+        {% for clave, titulo in [("beca", "Tipo de beca"), ("nivel", "Nivel de prioridad"), ("cohorte", "Cohorte de graduación"), ("pensum", "Pensum")] %}
+        <details class="parc-filtro">
+          <summary>{{ titulo }} <span class="parc-filtro-n" data-filtro-n="{{ clave }}">Todos</span></summary>
+          <div class="parc-chips" data-filtro="{{ clave }}">
+            {% for p in ((datos.filtros[clave] if datos and datos.filtros) or []) %}
+            <label class="parc-chip">
+              <input type="checkbox" name="{{ clave }}" value="{{ p.nombre }}"/>
+              <span class="parc-chip-name">{{ p.nombre }}</span>
+              <span class="parc-chip-n">{{ p.n }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </details>
+        {% endfor %}
       </section>
     </div>
 
@@ -142,11 +159,44 @@
       .replace(/"/g, "&quot;");
   }
 
+  const FILTROS = ["beca", "nivel", "cohorte", "pensum"];
+
   function checksCols() {
     return boxGrupos.querySelectorAll('input[name="columna"]');
   }
   function checksProg() {
     return boxCarreras.querySelectorAll('input[name="programa"]');
+  }
+  function boxFiltro(clave) {
+    return form.querySelector('[data-filtro="' + clave + '"]');
+  }
+  function checksFiltro(clave) {
+    const box = boxFiltro(clave);
+    return box ? box.querySelectorAll('input[name="' + clave + '"]') : [];
+  }
+  function valoresFiltro(clave) {
+    return Array.from(checksFiltro(clave)).filter((c) => c.checked).map((c) => c.value);
+  }
+  function pintarChips(box, name, items) {
+    if (!box) return;
+    box.innerHTML = "";
+    (items || []).forEach((p) => {
+      const lab = document.createElement("label");
+      lab.className = "parc-chip";
+      lab.innerHTML = `<input type="checkbox" name="${name}" value="${escapeHtml(p.nombre)}"/><span class="parc-chip-name">${escapeHtml(p.nombre)}</span><span class="parc-chip-n">${p.n}</span>`;
+      box.appendChild(lab);
+    });
+  }
+  function actualizarEtiquetasFiltro() {
+    const nCarr = document.getElementById("parc-n-carreras");
+    const progs = programasElegidos();
+    if (nCarr) nCarr.textContent = chkTodas.checked || !progs.length ? "Todas" : String(progs.length);
+    FILTROS.forEach((clave) => {
+      const el = form.querySelector('[data-filtro-n="' + clave + '"]');
+      if (!el) return;
+      const n = valoresFiltro(clave).length;
+      el.textContent = n ? String(n) : "Todos";
+    });
   }
 
   function programasElegidos() {
@@ -157,8 +207,12 @@
   async function actualizarConteo() {
     const id = sel.value;
     if (!id) return;
-    const progs = programasElegidos();
-    const qs = progs.map((p) => "programa=" + encodeURIComponent(p)).join("&");
+    const params = new URLSearchParams();
+    programasElegidos().forEach((p) => params.append("programa", p));
+    FILTROS.forEach((clave) => {
+      valoresFiltro(clave).forEach((v) => params.append(clave, v));
+    });
+    const qs = params.toString();
     const url = `/api/parcializado/${encodeURIComponent(id)}/conteo${qs ? "?" + qs : ""}`;
     try {
       const res = await fetch(url);
@@ -166,12 +220,14 @@
       if (!res.ok) throw new Error(data.detail || "No se pudo contar.");
       const nCols = Array.from(checksCols()).filter((c) => c.checked).length;
       const n = data.filas;
+      const progs = programasElegidos();
       const carreras = chkTodas.checked || !progs.length ? "todas las carreras" : (progs.length === 1 ? progs[0] : progs.length + " carreras");
       resumen.textContent = `${n} estudiantes · ${nCols} columnas · ${carreras}`;
       meta.textContent = `${n} estudiantes visibles · ${filasTotales} en el corte`;
       if (statFilas) statFilas.textContent = String(n);
       if (statCols) statCols.textContent = String(nCols);
       if (statCarreras) statCarreras.textContent = chkTodas.checked || !progs.length ? "Todas" : String(progs.length);
+      actualizarEtiquetasFiltro();
     } catch (e) {
       resumen.textContent = e.message || String(e);
     }
@@ -180,13 +236,9 @@
   function pintar(data) {
     filasTotales = data.filas || 0;
     basicas = data.basicas || [];
-    boxCarreras.innerHTML = "";
-    (data.programas || []).forEach((p) => {
-      const lab = document.createElement("label");
-      lab.className = "parc-chip";
-      lab.innerHTML = `<input type="checkbox" name="programa" value="${escapeHtml(p.nombre)}"/><span class="parc-chip-name">${escapeHtml(p.nombre)}</span><span class="parc-chip-n">${p.n}</span>`;
-      boxCarreras.appendChild(lab);
-    });
+    pintarChips(boxCarreras, "programa", data.programas || []);
+    const filtros = data.filtros || {};
+    FILTROS.forEach((clave) => pintarChips(boxFiltro(clave), clave, filtros[clave] || []));
     boxGrupos.innerHTML = "";
     (data.grupos || []).forEach((g) => {
       const sec = document.createElement("section");
@@ -244,6 +296,10 @@
       chkTodas.checked = true;
     }
     actualizarConteo();
+  });
+  FILTROS.forEach((clave) => {
+    const box = boxFiltro(clave);
+    if (box) box.addEventListener("change", actualizarConteo);
   });
   boxGrupos.addEventListener("change", actualizarConteo);
 

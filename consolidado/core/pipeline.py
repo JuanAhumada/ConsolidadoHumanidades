@@ -42,7 +42,7 @@ from consolidado.core.constants import (
 from consolidado.core.documentos import _unir_documentos_adicionales
 from consolidado.core.excel_io import abrir_archivo_en_sistema
 from consolidado.core.export import guardar_excel_consolidado
-from consolidado.core.fusion import fusionar_por_id
+from consolidado.core.fusion import asegurar_identificacion_unica, fusionar_por_id
 from consolidado.core.priorizado_enriquecido import (
     _cargar_priorizado_enriquecido_cfg,
     aplicar_priorizado_enriquecido,
@@ -55,7 +55,7 @@ from consolidado.core.priorizados import (
 )
 from consolidado.core.repetidas import _cargar_materias_repetidas_cfg, _cargar_repitiendo_cfg, aplicar_repitiendo
 from consolidado.core.normalizacion import normalizar_id
-from consolidado.core.permanencia import aplicar_permanencia
+from consolidado.core.permanencia import aplicar_permanencia, completar_cohorte_por_ingreso
 from consolidado.storage.alertas_fuente import aplicar_alertas_descartadas
 from consolidado.storage.alertas_propias import cargar_alertas_propias
 from consolidado.storage.ediciones import COLUMNAS_EDITABLES, aplicar_ediciones_columnas, cargar_ediciones
@@ -227,6 +227,7 @@ def generar_dataframe_consolidado(
     )
     consolidado = _unir_documentos_adicionales(consolidado, cfg, base, carpeta=carpeta)
     consolidado = aplicar_permanencia(consolidado, cfg, base, carpeta=carpeta)
+    consolidado = completar_cohorte_por_ingreso(consolidado)
     consolidado = _limpiar_becas_programa_no_permitido(consolidado)
     consolidado = aplicar_priorizado_enriquecido(
         consolidado, _cargar_priorizado_enriquecido_cfg(cfg, base, carpeta=carpeta)
@@ -244,6 +245,7 @@ def generar_dataframe_consolidado(
         cargar_priorizados_internos_psi(cfg, base, carpeta=carpeta),
     )
     consolidado = aplicar_priorizados_propios(consolidado, propios)
+    consolidado = asegurar_identificacion_unica(consolidado)
     consolidado = aplicar_repitiendo(
         consolidado, _cargar_repitiendo_cfg(cfg, base, carpeta=carpeta)
     )

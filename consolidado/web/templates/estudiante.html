@@ -6,6 +6,7 @@
 {% set sec_sel = ficha_sec or 'notas' %}
 {% set ficha_path = ('/estudiante/' ~ ficha.identificacion) if ficha else '/estudiante' %}
 {% set ficha_volver = ficha_path ~ '?cat=' ~ cat_sel ~ '&sec=' ~ sec_sel %}
+{% if ficha and ficha.notas_todas %}{% set ficha_volver = ficha_volver ~ '&notas=todas' %}{% endif %}
 <div class="topbar{% if ficha %} ficha-topbar{% endif %}">
   <div>
     <h2>Consulta individual</h2>
@@ -326,20 +327,29 @@
 
     <section class="ficha-pane" aria-label="Notas, proyección y horario">
       <div class="ficha-pane-tabs" role="tablist" data-tabs="sec">
-        <button type="button" class="btn sm ficha-tab{% if sec_sel != 'notas' %} secondary{% endif %}" role="tab" data-tab="notas" aria-selected="{% if sec_sel == 'notas' %}true{% else %}false{% endif %}">Notas{% if ficha.notas %} <span class="ficha-tab-n">{{ ficha.notas|length }}</span>{% endif %}</button>
+        <button type="button" class="btn sm ficha-tab{% if sec_sel != 'notas' %} secondary{% endif %}" role="tab" data-tab="notas" aria-selected="{% if sec_sel == 'notas' %}true{% else %}false{% endif %}">Notas{% if ficha.notas_n %} <span class="ficha-tab-n">{{ ficha.notas_n }}</span>{% endif %}</button>
         <button type="button" class="btn sm ficha-tab{% if sec_sel != 'nueva' %} secondary{% endif %}" role="tab" data-tab="nueva" aria-selected="{% if sec_sel == 'nueva' %}true{% else %}false{% endif %}">Nueva nota</button>
         <button type="button" class="btn sm ficha-tab{% if sec_sel != 'grado' %} secondary{% endif %}" role="tab" data-tab="grado" aria-selected="{% if sec_sel == 'grado' %}true{% else %}false{% endif %}">Proyección</button>
         <button type="button" class="btn sm ficha-tab{% if sec_sel != 'horario' %} secondary{% endif %}" role="tab" data-tab="horario" aria-selected="{% if sec_sel == 'horario' %}true{% else %}false{% endif %}">Horario</button>
       </div>
       <div class="ficha-pane-body" data-panels="sec">
         <div class="ficha-pane-panel ficha-notas" role="tabpanel" data-panel="notas" {% if sec_sel != 'notas' %}hidden{% endif %}>
-          <p class="muted">Observaciones de seguimiento: lo que dijo el estudiante u otra anotación.</p>
+          <p class="muted">Las notas de diciembre a mayo cuentan para el primer semestre (diciembre entra al año siguiente). De junio a noviembre, para el segundo.</p>
+          <p class="ficha-notas-filtro">
+            Semestre de notas: <strong>{{ ficha.periodo_notas }}</strong>
+            {% if ficha.notas_todas %}
+            <a class="btn sm" href="{{ ficha_path }}?cat={{ cat_sel }}&amp;sec=notas">Solo este semestre</a>
+            {% else %}
+            <a class="btn sm secondary" href="{{ ficha_path }}?cat={{ cat_sel }}&amp;sec=notas&amp;notas=todas">Ver todas</a>
+            {% endif %}
+            <a class="btn sm secondary" href="/notas/excel">Exportar Excel</a>
+          </p>
           {% if ficha.notas %}
           <ul class="ficha-notas-lista">
             {% for n in ficha.notas %}
             <li>
               <p>{{ n.nota }}</p>
-              <p class="muted">{{ n.usuario or '—' }} · {{ n.creado_en }}</p>
+              <p class="muted">{{ n.usuario or '—' }} · {{ n.creado_en }}{% if n.periodo %} · {{ n.periodo }}{% endif %}</p>
               <form method="post" action="/notas/quitar" onsubmit="return confirm('¿Quitar esta nota?');">
                 <input type="hidden" name="nota_id" value="{{ n.id }}"/>
                 <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_volver }}"/>
@@ -349,7 +359,7 @@
             {% endfor %}
           </ul>
           {% else %}
-          <p class="muted">Aún no hay notas. Use la pestaña «Nueva nota» para añadir una.</p>
+          <p class="muted">{% if ficha.notas_n %}No hay notas de este semestre. Pulse «Ver todas» para el historial.{% else %}Aún no hay notas. Use la pestaña «Nueva nota» para añadir una.{% endif %}</p>
           {% endif %}
         </div>
 
@@ -371,7 +381,7 @@
           <p class="muted">{% if ficha.proximo_grado %}Aparece en Proyección a Grado por ruta de grado o permanencia.{% else %}Puede registrarlo aunque no figure aún en la proyección.{% endif %}</p>
           <dl class="ficha-grado-resumen">
             <div><dt>Periodo de grado</dt><dd>{{ ficha.periodo_grado or '—' }}</dd></div>
-            <div><dt>Cohorte</dt><dd>{{ ficha.cohorte_graduacion or '—' }}</dd></div>
+            <div><dt>Cohorte de graduación</dt><dd>{{ ficha.cohorte_graduacion or '—' }}</dd></div>
             <div><dt>Estado de graduación</dt><dd>{{ ficha.estado_graduacion or '—' }}</dd></div>
           </dl>
           <h4 class="ficha-grado-preg">¿Se gradúa este semestre?</h4>
@@ -402,13 +412,24 @@
               {% endif %}
             </header>
             {% if ficha.horario.dias %}
+            <div class="ficha-horario-dias" role="tablist" aria-label="Día de la semana">
+              <button type="button" class="btn sm ficha-dia-tab" data-dia="todos" aria-selected="true">Todos</button>
+              {% for dia in ficha.horario.dias %}
+              <button type="button" class="btn sm secondary ficha-dia-tab" data-dia="{{ dia }}" aria-selected="false">{{ dia }}</button>
+              {% endfor %}
+            </div>
+            <div class="ficha-semana-scroll">
             <div class="ficha-semana" data-n="{{ ficha.horario.dias|length }}">
               {% for dia in ficha.horario.dias %}
-              <div class="ficha-dia">
+              <div class="ficha-dia{% if dia == 'Virtual' %} ficha-dia-virtual{% endif %}" data-dia="{{ dia }}">
                 <h4>{{ dia }}</h4>
                 {% for m in ficha.horario.por_dia[dia] %}
                 <article class="ficha-clase">
+                  {% if m.fin %}
                   <p class="ficha-clase-hora">{{ m.inicio }} – {{ m.fin }}</p>
+                  {% else %}
+                  <p class="ficha-clase-hora">{{ m.horario or m.inicio or 'Virtual' }}</p>
+                  {% endif %}
                   <p class="ficha-clase-nom">{{ m.nombre }}</p>
                   {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
                   {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
@@ -417,17 +438,6 @@
               </div>
               {% endfor %}
             </div>
-            {% endif %}
-            {% if ficha.horario.sin_dia %}
-            <div class="ficha-semana ficha-semana-extra" data-n="{{ [ficha.horario.sin_dia|length, 3]|min }}">
-              {% for m in ficha.horario.sin_dia %}
-              <article class="ficha-clase">
-                <p class="ficha-clase-hora">{{ m.horario }}</p>
-                <p class="ficha-clase-nom">{{ m.nombre }}</p>
-                {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
-                {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
-              </article>
-              {% endfor %}
             </div>
             {% endif %}
           </section>
@@ -455,6 +465,9 @@
     const u = new URL(location.href);
     u.searchParams.set("cat", nextCat);
     u.searchParams.set("sec", nextSec);
+    {% if ficha and ficha.notas_todas %}
+    u.searchParams.set("notas", "todas");
+    {% endif %}
     return u.pathname + "?" + u.searchParams.toString();
   }
   function syncVolver(afterSec) {
@@ -513,6 +526,25 @@
     if (!groupEl) return;
     activate(groupEl.getAttribute("data-tabs"), btn.getAttribute("data-tab"));
   });
+
+  const semana = root.querySelector(".ficha-semana");
+  const diaTabs = root.querySelectorAll(".ficha-dia-tab");
+  function mostrarDia(clave) {
+    diaTabs.forEach((btn) => {
+      const on = btn.getAttribute("data-dia") === clave;
+      btn.classList.toggle("secondary", !on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    if (!semana) return;
+    semana.classList.toggle("is-un-dia", clave !== "todos");
+    semana.querySelectorAll(".ficha-dia").forEach((col) => {
+      col.hidden = clave !== "todos" && col.getAttribute("data-dia") !== clave;
+    });
+  }
+  diaTabs.forEach((btn) => {
+    btn.addEventListener("click", () => mostrarDia(btn.getAttribute("data-dia")));
+  });
+
   syncVolver();
 })();
 </script>

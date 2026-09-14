@@ -16,7 +16,7 @@
     <div class="proy-ordenar">
       <span class="proy-ordenar-lbl">Organizar</span>
       <div class="segment" role="group" aria-label="Organizar listado">
-        <a class="btn sm {% if orden!='cohorte' %}secondary{% endif %}" href="{{ href_orden_cohorte }}">Cohorte</a>
+        <a class="btn sm {% if orden!='cohorte' %}secondary{% endif %}" href="{{ href_orden_cohorte }}">Cohorte de graduación</a>
         <a class="btn sm {% if orden!='pct' %}secondary{% endif %}" href="{{ href_orden_pct }}">% aprobado</a>
       </div>
     </div>
@@ -42,7 +42,7 @@
     <h3><a href="/estudiante/{{ f.identificacion }}">{{ f.nombre }}</a></h3>
     <p class="seg-card-score"><strong>{{ f.pct_txt }}</strong> créditos</p>
     <p class="proy-card-meta">
-      Cohorte {{ f.cohorte }}
+      Cohorte de graduación {{ f.cohorte }}
       {% if f.periodo_grado and f.periodo_grado != '—' %} · Grado {{ f.periodo_grado }}{% endif %}
     </p>
     {% if f.motivos %}

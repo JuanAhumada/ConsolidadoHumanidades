@@ -1,0 +1,26 @@
+Consolidado de Humanidades — instalación en Linux
+=================================================
+
+1. Instale Python 3.11 o superior si aún no lo tiene
+   (python3.11, python3.12 o python3.13; en Debian/Ubuntu: python3 y python3-venv).
+
+2. Extraiga este ZIP a una carpeta permanente (por ejemplo Documentos).
+   No separe Instalar.sh de la carpeta «app».
+
+3. Primera vez: en una terminal, desde esta carpeta:
+
+     chmod +x Instalar.sh Abrir.sh
+     ./Instalar.sh
+
+   O, si el administrador de archivos lo permite, doble clic en Instalar.sh.
+
+4. Después use ./Abrir.sh. Se abre el navegador en http://127.0.0.1:8765/
+   Usuario inicial: admin / admin
+
+5. En Data puede cargar «Archivos iniciales.zip» para probar con los Excel de ejemplo.
+
+Para apagar la aplicación, cierre la pestaña del navegador y confirme.
+Para volver a instalar, ejecute otra vez Instalar.sh (no borra sus datos en app/datos).
+
+No se puede generar un binario nativo de Linux desde Windows. Este ZIP instala
+un entorno local con el Python del sistema.

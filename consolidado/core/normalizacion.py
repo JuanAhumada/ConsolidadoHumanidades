@@ -195,6 +195,52 @@ def normalizar_id(val) -> str:
     return s
 
 
+PREFIJO_CLAVE_NOMBRE = "n:"
+
+
+def periodo_academico_nota(fecha: date | datetime | None = None) -> str:
+    """Dic–mayo → YYYY-1 (diciembre cuenta el año siguiente); jun–nov → YYYY-2."""
+    if fecha is None:
+        fecha = date.today()
+    if isinstance(fecha, datetime):
+        fecha = fecha.date()
+    anio, mes = fecha.year, fecha.month
+    if mes == 12:
+        return f"{anio + 1}-1"
+    if mes <= 5:
+        return f"{anio}-1"
+    return f"{anio}-2"
+
+
+def periodo_academico_de_texto(creado_en: str | None) -> str | None:
+    """Periodo de una anotación a partir de su fecha ISO."""
+    texto = str(creado_en or "").strip()
+    if not texto:
+        return None
+    try:
+        dt = datetime.fromisoformat(texto.replace("Z", ""))
+        return periodo_academico_nota(dt)
+    except ValueError:
+        pass
+    if len(texto) >= 10:
+        try:
+            return periodo_academico_nota(date.fromisoformat(texto[:10]))
+        except ValueError:
+            return None
+    return None
+
+
+def clave_fusion_estudiante(identificacion=None, nombre=None) -> str:
+    """Llave de cruce: identificación si existe; si no, nombre único con prefijo n:."""
+    nid = clave_cruce_identificacion(identificacion)
+    if nid:
+        return nid
+    nkey = _clave_nombre_unico(nombre)
+    if nkey:
+        return f"{PREFIJO_CLAVE_NOMBRE}{nkey}"
+    return ""
+
+
 def clave_cruce_identificacion(val) -> str:
     """Misma clave que Identificación al cruzar Excel adicionales.
 

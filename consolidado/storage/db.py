@@ -35,7 +35,7 @@ from consolidado.paths import PROJECT_ROOT
 
 DB_FILENAME = "consolidado.db"
 CARPETA_DATOS = "datos"
-SCHEMA_VERSION = 12  # última: estudiantes creados a mano por el administrador
+SCHEMA_VERSION = 13  # última: metas de graduación editables
 
 # Columnas canónicas → campos indexables (identidad en `estudiantes_base`).
 _CAMPOS_INDEXABLES: dict[str, str] = {
@@ -436,6 +436,15 @@ def _crear_tablas_proyeccion(conn: sqlite3.Connection) -> None:
             fila_json TEXT NOT NULL,
             creado_en TEXT NOT NULL,
             usuario TEXT
+        );
+        CREATE TABLE IF NOT EXISTS metas_grado_override (
+            periodo TEXT NOT NULL,
+            programa TEXT NOT NULL,
+            meta_num TEXT,
+            meta_pct TEXT,
+            actualizado_en TEXT NOT NULL,
+            usuario TEXT,
+            PRIMARY KEY (periodo, programa)
         );
         """
     )

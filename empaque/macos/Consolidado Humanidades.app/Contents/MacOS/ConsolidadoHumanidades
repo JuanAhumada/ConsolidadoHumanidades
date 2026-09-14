@@ -1,0 +1,14 @@
+#!/bin/bash
+HERE="$(cd "$(dirname "$0")/../../.." && pwd)"
+APP="$HERE/app"
+VENV_PY="$APP/.venv/bin/python"
+
+if [ ! -x "$VENV_PY" ]; then
+  osascript -e 'display dialog "Primero abra Instalar (en la misma carpeta que esta aplicación).\n\nSi macOS bloquea el archivo: clic derecho → Abrir." buttons {"Entendido"} default button 1 with icon caution' >/dev/null
+  exit 1
+fi
+
+export CONSOLIDADO_LOCAL=1
+export PYTHONUNBUFFERED=1
+cd "$APP" || exit 1
+exec "$VENV_PY" main.py

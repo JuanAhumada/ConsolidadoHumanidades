@@ -17,10 +17,33 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
 
 TIPOS_GRAFICA = (
+    "line",
     "bar",
     "pie",
-    "line",
+    "scatter",
 )
+
+_TIPO_POWERBI = {
+    "scatter": "Gráfico de dispersión",
+    "bar": "Columnas agrupadas",
+    "pie": "Gráfico circular",
+    "line": "Gráfico de líneas",
+}
+
+_ALIAS_TIPO = {
+    "bar_horizontal": "bar",
+    "barras": "bar",
+    "doughnut": "pie",
+    "dona": "pie",
+    "pastel": "pie",
+    "torta": "pie",
+    "linea": "line",
+    "línea": "line",
+    "puntos": "line",
+    "punto": "line",
+    "dispersion": "scatter",
+    "dispersión": "scatter",
+}
 
 PALETA_GRAFICA = (
     "#0c6b63",
@@ -61,23 +84,6 @@ def paleta_categorias(n: int) -> list[str]:
     while len(out) < n:
         out.append(base[len(out) % len(base)])
     return out[:n]
-
-_TIPO_POWERBI = {
-    "bar": "Columnas agrupadas",
-    "pie": "Gráfico circular",
-    "line": "Gráfico de líneas",
-}
-
-_ALIAS_TIPO = {
-    "bar_horizontal": "bar",
-    "barras": "bar",
-    "doughnut": "pie",
-    "dona": "pie",
-    "pastel": "pie",
-    "torta": "pie",
-    "linea": "line",
-    "línea": "line",
-}
 
 
 COLUMNAS_GRAFICA_UNICAS = frozenset(
@@ -207,14 +213,14 @@ def preparar_datos_grafica(
     df: pl.DataFrame,
     *,
     columna: str,
-    tipo: str = "bar",
+    tipo: str = "line",
     top: int = 25,
     programa: str | None = None,
 ) -> dict[str, Any]:
     """
     Devuelve labels/valores listos para Chart.js.
     """
-    tipo = _ALIAS_TIPO.get((tipo or "bar").strip().lower(), (tipo or "bar").strip().lower())
+    tipo = _ALIAS_TIPO.get((tipo or "line").strip().lower(), (tipo or "line").strip().lower())
     if tipo not in TIPOS_GRAFICA:
         raise ValueError(f"Tipo no soportado: {tipo}. Use: {', '.join(TIPOS_GRAFICA)}")
     carrera = (programa or "").strip()
@@ -238,10 +244,16 @@ def preparar_datos_grafica(
         raise ValueError(f"La columna «{columna}» no tiene datos para graficar.")
 
     cont = Counter(valores)
-    mas = cont.most_common(max(1, min(top, 50)))
-    labels = [k for k, _ in mas]
-    data = [n for _, n in mas]
+    items = [(k, n) for k, n in cont.items() if n > 0]
+    items.sort(key=lambda par: (par[1], str(par[0]).casefold()))
+    tope = max(1, min(top, 50))
+    if len(items) > tope:
+        items = sorted(items, key=lambda par: (-par[1], str(par[0]).casefold()))[:tope]
+        items.sort(key=lambda par: (par[1], str(par[0]).casefold()))
+    labels = [k for k, _ in items]
+    data = [n for _, n in items]
     es_programa = columna.strip().casefold() in {"programa"}
+    max_valor = max(data) if data else 0
 
     return {
         "columna": columna,
@@ -250,6 +262,7 @@ def preparar_datos_grafica(
         "horizontal": False,
         "labels": labels,
         "values": data,
+        "max_valor": max_valor,
         "colores": colores_para_etiquetas(labels) if es_programa else paleta_categorias(len(labels)),
         "total_filas": len(valores),
         "categorias": len(labels),
@@ -291,7 +304,7 @@ def excel_powerbi_desde_graficas(series: list[dict[str, Any]]) -> bytes:
     usados: set[str] = {"indice"}
     for i, item in enumerate(series, start=1):
         columna = str(item.get("columna") or f"Grafica {i}")
-        tipo = str(item.get("tipo") or "bar")
+        tipo = str(item.get("tipo") or "line")
         labels = list(item.get("labels") or [])
         values = list(item.get("values") or [])
         hoja_nombre = _nombre_hoja_excel(i, columna, usados)

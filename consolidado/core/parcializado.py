@@ -29,6 +29,18 @@ COLUMNAS_BASICAS = (
     "Programa",
 )
 
+COL_TIPO_BECA = "Tipo de beca o crédito"
+COL_NIVEL_PRIORIDAD = "Nivel prioridad"
+COL_COHORTE_GRAD = "Cohorte de graduación"
+COL_PENSUM = "Pensum"
+
+FILTROS_EXTRA = (
+    ("beca", COL_TIPO_BECA, "Tipo de beca"),
+    ("nivel", COL_NIVEL_PRIORIDAD, "Nivel de prioridad"),
+    ("cohorte", COL_COHORTE_GRAD, "Cohorte de graduación"),
+    ("pensum", COL_PENSUM, "Pensum"),
+)
+
 _RE_NOMBRE_ARCHIVO = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -70,11 +82,68 @@ def conteos_por_programa(df: pl.DataFrame) -> list[dict[str, Any]]:
     ]
 
 
+def conteos_categoria(df: pl.DataFrame, columna: str) -> list[dict[str, Any]]:
+    from collections import Counter
+
+    if columna not in df.columns:
+        return []
+    cont: Counter[str] = Counter()
+    for val in df.get_column(columna).to_list():
+        if val is None:
+            continue
+        for parte in _partir_categorias(str(val)):
+            if parte:
+                cont[parte] += 1
+    return [
+        {"nombre": nombre, "n": n}
+        for nombre, n in sorted(cont.items(), key=lambda p: (-p[1], p[0].casefold()))
+    ]
+
+
+def opciones_filtros(df: pl.DataFrame) -> dict[str, list[dict[str, Any]]]:
+    return {
+        clave: conteos_categoria(df, col)
+        for clave, col, _titulo in FILTROS_EXTRA
+    }
+
+
+def _filtrar_columna_partes(
+    df: pl.DataFrame,
+    columna: str,
+    valores: list[str] | None,
+) -> pl.DataFrame:
+    elegidos = [str(v).strip() for v in (valores or []) if str(v).strip()]
+    if not elegidos or columna not in df.columns:
+        return df
+    claves = set(elegidos)
+
+    def _coincide(val: Any) -> bool:
+        if val is None:
+            return False
+        return any(parte in claves for parte in _partir_categorias(str(val)))
+
+    return df.filter(pl.col(columna).map_elements(_coincide, return_dtype=pl.Boolean))
+
+
+def aplicar_filtros_parcializado(
+    df: pl.DataFrame,
+    *,
+    programas: list[str] | None = None,
+    filtros: dict[str, list[str]] | None = None,
+) -> pl.DataFrame:
+    recorte = filtrar_df_por_carreras(df, programas)
+    filtros = filtros or {}
+    for clave, col, _titulo in FILTROS_EXTRA:
+        recorte = _filtrar_columna_partes(recorte, col, filtros.get(clave))
+    return recorte
+
+
 def recortar_dataframe(
     df: pl.DataFrame,
     *,
     columnas: list[str],
     programas: list[str] | None,
+    filtros: dict[str, list[str]] | None = None,
 ) -> pl.DataFrame:
     cols = [str(c).strip() for c in columnas if str(c).strip()]
     if not cols:
@@ -82,8 +151,31 @@ def recortar_dataframe(
     faltan = [c for c in cols if c not in df.columns]
     if faltan:
         raise ValueError(f"Esas columnas no están en esta versión: {', '.join(faltan[:8])}.")
-    recorte = filtrar_df_por_carreras(df, programas)
+    recorte = aplicar_filtros_parcializado(df, programas=programas, filtros=filtros)
     return recorte.select(cols)
+
+
+def filas_becas_separadas(df: pl.DataFrame) -> list[dict[str, Any]]:
+    if COL_TIPO_BECA not in df.columns:
+        return []
+    out: list[dict[str, Any]] = []
+    for row in df.iter_rows(named=True):
+        ident = row.get("Identificación")
+        nombre = row.get("Nombre y apellidos")
+        programa = row.get("Programa")
+        partes = _partir_categorias(str(row.get(COL_TIPO_BECA) or ""))
+        if not partes:
+            continue
+        for beca in partes:
+            out.append(
+                {
+                    "Identificación": ident,
+                    "Nombre y apellidos": nombre,
+                    "Programa": programa,
+                    "Beca": beca,
+                }
+            )
+    return out
 
 
 def _valor_excel(val: Any) -> Any:
@@ -125,34 +217,31 @@ def nombre_excel_parcializado(
     return "_".join(partes) + ".xlsx"
 
 
-def excel_parcializado_bytes(
-    df: pl.DataFrame,
-    *,
+def _escribir_hoja(
+    wb: Workbook,
+    titulo: str,
     columnas: list[str],
-    programas: list[str] | None,
-    meta: dict[str, Any] | None = None,
-) -> bytes:
-    recorte = recortar_dataframe(df, columnas=columnas, programas=programas)
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Parcializado"
-
-    cabecera = Font(bold=True, color="FFFFFF")
-    fondo = PatternFill("solid", fgColor="0C6B63")
-    cols = list(recorte.columns)
-    ws.append(cols)
+    filas: list[list[Any]],
+    *,
+    tabla_nombre: str,
+    cabecera: Font,
+    fondo: PatternFill,
+    activa: bool = False,
+):
+    ws = wb.active if activa else wb.create_sheet(titulo)
+    if activa:
+        ws.title = titulo
+    ws.append(columnas)
     for cell in ws[1]:
         cell.font = cabecera
         cell.fill = fondo
         cell.alignment = Alignment(wrap_text=True, vertical="center")
-
-    for fila in recorte.iter_rows(named=True):
-        ws.append([_valor_excel(fila.get(c)) for c in cols])
-
-    ultima = max(recorte.height + 1, 1)
-    ult_col = get_column_letter(max(len(cols), 1))
-    if recorte.height > 0 and cols:
-        tabla = Table(displayName="Parcializado", ref=f"A1:{ult_col}{ultima}")
+    for fila in filas:
+        ws.append(fila)
+    ultima = max(len(filas) + 1, 1)
+    ult_col = get_column_letter(max(len(columnas), 1))
+    if filas and columnas:
+        tabla = Table(displayName=tabla_nombre, ref=f"A1:{ult_col}{ultima}")
         tabla.tableStyleInfo = TableStyleInfo(
             name="TableStyleMedium2",
             showFirstColumn=False,
@@ -165,9 +254,103 @@ def excel_parcializado_bytes(
         ws.auto_filter.ref = f"A1:{ult_col}{ultima}"
     ws.freeze_panes = "A2"
     ws.row_dimensions[1].height = 22
-    for i, nombre in enumerate(cols, start=1):
-        ancho = min(max(len(nombre) + 2, 12), 42)
+    for i, nombre in enumerate(columnas, start=1):
+        ancho = min(max(len(str(nombre)) + 2, 12), 42)
         ws.column_dimensions[get_column_letter(i)].width = ancho
+    return ws
+
+
+def excel_parcializado_bytes(
+    df: pl.DataFrame,
+    *,
+    columnas: list[str],
+    programas: list[str] | None,
+    meta: dict[str, Any] | None = None,
+    filtros: dict[str, list[str]] | None = None,
+    notas: list[dict[str, Any]] | None = None,
+) -> bytes:
+    filtrado = aplicar_filtros_parcializado(df, programas=programas, filtros=filtros)
+    recorte = recortar_dataframe(
+        df, columnas=columnas, programas=programas, filtros=filtros
+    )
+    wb = Workbook()
+    cabecera = Font(bold=True, color="FFFFFF")
+    fondo = PatternFill("solid", fgColor="0C6B63")
+    cols = list(recorte.columns)
+    _escribir_hoja(
+        wb,
+        "Parcializado",
+        cols,
+        [[_valor_excel(fila.get(c)) for c in cols] for fila in recorte.iter_rows(named=True)],
+        tabla_nombre="Parcializado",
+        cabecera=cabecera,
+        fondo=fondo,
+        activa=True,
+    )
+
+    becas = filas_becas_separadas(filtrado)
+    if becas:
+        cols_b = ["Identificación", "Nombre y apellidos", "Programa", "Beca"]
+        _escribir_hoja(
+            wb,
+            "Becas",
+            cols_b,
+            [[_valor_excel(f.get(c)) for c in cols_b] for f in becas],
+            tabla_nombre="Becas",
+            cabecera=cabecera,
+            fondo=fondo,
+        )
+
+    if notas is not None:
+        ids = set()
+        if "Identificación" in filtrado.columns:
+            for v in filtrado.get_column("Identificación").to_list():
+                if v is None:
+                    continue
+                texto = str(v).strip()
+                if texto:
+                    ids.add(texto)
+        cols_n = [
+            "Identificación",
+            "Nombre y apellidos",
+            "Programa",
+            "Fecha",
+            "Periodo",
+            "Usuario",
+            "Nota",
+        ]
+        por_est: dict[str, dict[str, Any]] = {}
+        if "Identificación" in filtrado.columns:
+            for row in filtrado.iter_rows(named=True):
+                ident = str(row.get("Identificación") or "").strip()
+                if ident and ident not in por_est:
+                    por_est[ident] = row
+        filas_n = []
+        for n in notas:
+            ident = str(n.get("identificacion") or "").strip()
+            if ids and ident not in ids:
+                continue
+            extra = por_est.get(ident, {})
+            filas_n.append(
+                [
+                    ident,
+                    extra.get("Nombre y apellidos") or "",
+                    extra.get("Programa") or "",
+                    n.get("creado_en") or "",
+                    n.get("periodo") or "",
+                    n.get("usuario") or "",
+                    n.get("nota") or "",
+                ]
+            )
+        _escribir_hoja(
+            wb,
+            "Anotaciones",
+            cols_n,
+            filas_n,
+            tabla_nombre="Anotaciones",
+            cabecera=cabecera,
+            fondo=fondo,
+        )
 
     info = wb.create_sheet("Origen")
     info.append(["Campo", "Valor"])
@@ -175,6 +358,7 @@ def excel_parcializado_bytes(
         cell.font = cabecera
         cell.fill = fondo
     meta = meta or {}
+    filtros = filtros or {}
     elegidas = [p for p in (programas or []) if str(p).strip()]
     filas_origen = [
         ("Versión", meta.get("id")),
@@ -183,7 +367,11 @@ def excel_parcializado_bytes(
         ("Carreras", ", ".join(elegidas) if elegidas else "Todas"),
         ("Columnas", recorte.width),
         ("Filas", recorte.height),
+        ("Filas de becas", len(becas)),
     ]
+    for clave, _col, titulo in FILTROS_EXTRA:
+        vals = [v for v in (filtros.get(clave) or []) if str(v).strip()]
+        filas_origen.append((titulo, ", ".join(vals) if vals else "Todos"))
     for campo, valor in filas_origen:
         info.append([campo, valor if valor is not None else "—"])
     info.column_dimensions["A"].width = 22

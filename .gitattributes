@@ -3,6 +3,9 @@
 *.bat text eol=crlf
 *.json text eol=lf
 *.md text eol=lf
+*.sh text eol=lf
+*.command text eol=lf
+*.plist text eol=lf
 
 # Lanzador pequeño (no LFS): debe viajar como binario en el ZIP del código
 /ConsolidadoHumanidades.exe binary

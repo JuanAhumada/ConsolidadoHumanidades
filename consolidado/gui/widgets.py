@@ -20,7 +20,6 @@ from consolidado.gui.theme import (
     COLOR_TEXTO,
     COLOR_TEXTO_MUTED,
     FONT_GUIA,
-    FONT_MARCA,
     FONT_NAV,
     FONT_PEQUENA,
     FONT_SUBTITULO,
@@ -467,14 +466,16 @@ class Sidebar(ctk.CTkFrame):
         marca.pack(fill="x", padx=18, pady=(22, 18))
         ctk.CTkLabel(
             marca,
-            text="Humanidades",
-            font=FONT_MARCA,
+            text="Facultad de Humanidades y Ciencias Sociales",
+            font=("Bahnschrift", 13, "bold"),
             text_color="#f8fafc",
             anchor="w",
+            wraplength=196,
+            justify="left",
         ).pack(anchor="w")
         ctk.CTkLabel(
             marca,
-            text="Consolidado académico",
+            text="Bienestar Académico",
             font=FONT_PEQUENA,
             text_color="#94a3b8",
             anchor="w",

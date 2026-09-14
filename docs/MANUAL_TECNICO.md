@@ -2,7 +2,7 @@
 
 Documento para quien mantiene o extiende la aplicación. Complementa el `README.md` (arranque rápido) con arquitectura, pipeline, reglas de negocio, persistencia e interfaz.
 
-**Versión del esquema SQL:** 12 (`SCHEMA_VERSION` en `consolidado/storage/db.py`).
+**Versión del esquema SQL:** 13 (`SCHEMA_VERSION` en `consolidado/storage/db.py`).
 **Interfaz principal:** web FastAPI en `http://127.0.0.1:8765/`.
 
 ---
@@ -28,6 +28,7 @@ No hay un maestro único de estudiante: cada generación es un snapshot `(identi
 | BD | SQLite `datos/consolidado.db` |
 | GUI legado | CustomTkinter (`python main.py --gui`) |
 | Empaque Windows | PyInstaller (`build_exe.bat` → `dist/ConsolidadoHumanidades/`) |
+| Empaque Mac / Linux | ZIP con código + instalador (`python empaque/macos/armar_paquete.py`) |
 
 Dependencias: `requirements.txt`. El `.exe` no requiere Python en el equipo destino; hay que copiar la carpeta completa (`_internal` incluida). `dist/` no se versiona. El ZIP de `release/` va con Git LFS.
 
@@ -341,17 +342,18 @@ Al cargar, `_fusionar_con_default` **añade** claves y columnas nuevas del códi
 
 ---
 
-## 13. Ejecutable Windows
+## 13. Ejecutable Windows y paquetes Mac / Linux
 
 ```
 build_exe.bat
+python empaque/macos/armar_paquete.py
 ```
 
 El `.exe` de PyInstaller va **sin consola** (`console=False`). Los avisos de fallo son tarjetas (Tk en Python, formulario en el lanzador). El log queda en `datos/servidor.log`.
 
-**Usuarios:** doble clic en `ConsolidadoHumanidades.exe`. Manual de cada pantalla: **?** en el menú (`consolidado/web/manual_usuario.py`).
+**Windows:** doble clic en `ConsolidadoHumanidades.exe`. **Mac:** extraer `release/ConsolidadoHumanidades-macOS.zip`, abrir `Instalar.command` (Python 3.11+) y luego la aplicación. **Linux:** extraer `release/ConsolidadoHumanidades-Linux.zip` y `./Instalar.sh`. Los ZIP de Mac y Linux se pueden armar en Windows; un binario nativo exige esa plataforma. Manual de cada pantalla: **?** en el menú (`consolidado/web/manual_usuario.py`).
 
-El lanzador está en `empaque/`. Si el paquete de `dist/` no es válido, extrae `release/ConsolidadoHumanidades-Windows.zip` a `%LOCALAPPDATA%\ConsolidadoHumanidades\app`.
+El lanzador Windows está en `empaque/`. Si el paquete de `dist/` no es válido, extrae `release/ConsolidadoHumanidades-Windows.zip` a `%LOCALAPPDATA%\ConsolidadoHumanidades\app`.
 
 No publique a git desde `build_exe.bat`.
 
@@ -362,6 +364,7 @@ No publique a git desde `build_exe.bat`.
 - Los `.xlsx` de `datos/entrada/` y la `.db` **no** se versionan (datos personales).
 - `ArchivosPrueba2026-1.zip` (Excels de prueba, ~19 MB) **sí** se versiona en git normal (< 100 MB).
 - `release/ConsolidadoHumanidades-Windows.zip` va con Git LFS (el paquete PyInstaller supera 100 MB). `dist/` no se sube: se regenera con `build_exe.bat`.
+- `release/ConsolidadoHumanidades-macOS.zip` y `release/ConsolidadoHumanidades-Linux.zip` son instaladores locales (código + scripts; no incluyen el runtime de Python).
 - Identificación es la clave de cruce; un mismo nombre con dos IDs son dos personas; dos IDs con el mismo nombre pueden colapsar en `deduplicar_por_nombre`.
 - `bd2` y permanencia **no crean** filas: solo completan IDs que ya salieron de matriculados/becas.
 - Un estudiante de `bd12` que no esté en priorizados, alertas o permanencia quedará con esos campos vacíos (el cruce es por documento, no por programa).

@@ -15,11 +15,12 @@ from openpyxl import load_workbook
 
 from consolidado.config.settings import COLUMNAS_RUTA_GRADO, carpeta_excels
 from consolidado.core.constants import COL_ACTIVOS
+from consolidado.core.fusion import unir_extra_por_id_o_nombre
 from consolidado.core.normalizacion import (
     _es_nulo,
+    clave_fusion_estudiante,
     formatear_periodo_cod,
     normalizar_encabezado,
-    normalizar_id,
     programa_es_permitido,
 )
 
@@ -77,7 +78,8 @@ _RE_HOJA_COHORTE = re.compile(
     r"cohorte\s+(\d{4})\s*[-–]\s*([12])(?:\s*\(\s*(\d{4})\s*[-–]\s*([12])\s*\))?",
     re.IGNORECASE,
 )
-_SEMESTRES_CARRERA = 12
+# Carreras de 4 años: 8 semestres desde el periodo de ingreso.
+SEMESTRES_CARRERA = 8
 
 _ALIAS_META = {
     "programa": ("programas", "programa"),
@@ -161,7 +163,7 @@ def _cohorte_esperada(nombre_hoja: str) -> str | None:
     paren = f"{m.group(3)}-{m.group(4)}" if m.group(3) else None
     if paren and not _periodo_es_anterior(paren, ingreso):
         return formatear_periodo_cod(paren) or paren
-    return _sumar_semestres(ingreso, _SEMESTRES_CARRERA) or paren
+    return _sumar_semestres(ingreso, SEMESTRES_CARRERA) or paren
 
 
 def _ruta_slot(cfg: dict, base: Path, carpeta: Path | None, *ids: str) -> Path | None:
@@ -246,10 +248,19 @@ def _mapa_columnas_estudiante(
     idx_doc = _indice_por_aliases(
         headers_norm, ("documento", "identificacion", "num identificacion"), usados
     )
-    if idx_doc is None:
+    idx_nom = _indice_por_aliases(
+        headers_norm,
+        ("nombre y apellidos", "nombres y apellidos", "nombre completo", "nombre estudiante", "estudiante"),
+        usados,
+    )
+    if idx_doc is None and idx_nom is None:
         return {}
-    usados.add(idx_doc)
-    mapa["documento"] = idx_doc
+    if idx_doc is not None:
+        usados.add(idx_doc)
+        mapa["documento"] = idx_doc
+    if idx_nom is not None:
+        usados.add(idx_nom)
+        mapa["nombre"] = idx_nom
     for clave, aliases in _ALIAS_CAMPOS.items():
         idxs = _indices_por_aliases(headers_norm, aliases, usados)
         if idxs:
@@ -271,9 +282,11 @@ def _mapa_columnas_estudiante(
 
 def _es_encabezado_estudiantes(vals: list[Any]) -> bool:
     norms = [_norm(v) for v in vals if not _es_vacio(v)]
-    if "documento" not in norms and "identificacion" not in norms:
+    tiene_id = "documento" in norms or "identificacion" in norms
+    tiene_nombre = any("nombre" in n for n in norms)
+    if not tiene_id and not tiene_nombre:
         return False
-    return any("nombre" in n or n == "programa" for n in norms)
+    return tiene_nombre or any(n == "programa" for n in norms)
 
 
 def _numero_pct(val: Any) -> str | None:
@@ -356,13 +369,16 @@ def _filas_estudiante_hoja(
             continue
         if not mapa:
             continue
-        idx_doc = mapa["documento"]
-        if idx_doc >= len(vals):
-            continue
-        key = normalizar_id(vals[idx_doc])
+        idx_doc = mapa.get("documento")
+        idx_nom = mapa.get("nombre")
+        id_val = vals[idx_doc] if idx_doc is not None and idx_doc < len(vals) else None
+        nom_val = vals[idx_nom] if idx_nom is not None and idx_nom < len(vals) else None
+        key = clave_fusion_estudiante(id_val, nom_val)
         if not key:
             continue
         fila: dict[str, str | None] = {}
+        if nom_val is not None and not _es_vacio(nom_val):
+            fila["_nombre"] = _texto(nom_val)
         if "pct_creditos" in mapa:
             fila[_SALIDA["pct_creditos"]] = _valor_de_indices(
                 vals, mapa["pct_creditos"], _numero_pct
@@ -406,6 +422,8 @@ def _filas_estudiante_hoja(
 def _schema_ruta() -> dict[str, type]:
     return {
         "_id_key": pl.Utf8,
+        "Identificación": pl.Utf8,
+        "Nombre y apellidos": pl.Utf8,
         **{c: pl.Utf8 for c in COLUMNAS_RUTA_GRADO},
         "_graduado": pl.Boolean,
     }
@@ -418,6 +436,8 @@ def _df_desde_por_id(por_id: dict[str, dict[str, str | None]]) -> pl.DataFrame:
     filas = []
     for key, data in por_id.items():
         fila: dict[str, Any] = {"_id_key": key}
+        fila["Identificación"] = None if str(key).startswith("n:") else key
+        fila["Nombre y apellidos"] = data.get("_nombre")
         for col in COLUMNAS_RUTA_GRADO:
             val = data.get(col)
             fila[col] = str(val) if val is not None else None
@@ -472,6 +492,37 @@ def leer_estudiantes_graduacion(ruta: Path) -> pl.DataFrame:
     return _df_desde_por_id(por_id)
 
 
+def cohorte_desde_ingreso(periodo_ingreso: str | None) -> str | None:
+    """Cohorte de graduación esperada: ingreso + 4 años (8 semestres)."""
+    periodo = formatear_periodo_cod(periodo_ingreso) or _texto(periodo_ingreso)
+    if not periodo:
+        return None
+    return _sumar_semestres(periodo, SEMESTRES_CARRERA)
+
+
+def completar_cohorte_por_ingreso(df: pl.DataFrame) -> pl.DataFrame:
+    """Rellena Cohorte de graduación vacío con ingreso + 8 semestres."""
+    col = _SALIDA["cohorte_graduacion"]
+    if df.height == 0 or "Periodo ingreso" not in df.columns:
+        return df
+    if col not in df.columns:
+        df = df.with_columns(pl.lit(None).cast(pl.Utf8).alias(col))
+
+    return df.with_columns(
+        pl.when(
+            pl.col(col).is_not_null()
+            & (pl.col(col).cast(pl.Utf8).str.strip_chars() != "")
+        )
+        .then(pl.col(col).cast(pl.Utf8))
+        .otherwise(
+            pl.col("Periodo ingreso").map_elements(
+                cohorte_desde_ingreso, return_dtype=pl.Utf8
+            )
+        )
+        .alias(col)
+    )
+
+
 def aplicar_permanencia(
     consolidado: pl.DataFrame,
     cfg: dict,
@@ -491,14 +542,7 @@ def aplicar_permanencia(
             + [pl.lit(True).alias(COL_ACTIVOS)]
         )
 
-    resultado = consolidado.with_columns(
-        pl.col("Identificación")
-        .map_elements(normalizar_id, return_dtype=pl.Utf8)
-        .alias("_id_key")
-    )
-    cols_join = [c for c in extra.columns if c != "_id_key"]
-    extra = extra.select(["_id_key"] + cols_join)
-    resultado = resultado.join(extra, on="_id_key", how="left").drop("_id_key")
+    resultado = unir_extra_por_id_o_nombre(consolidado, extra)
     for col in COLUMNAS_RUTA_GRADO:
         if col not in resultado.columns:
             resultado = resultado.with_columns(pl.lit(None).alias(col))
@@ -508,7 +552,7 @@ def aplicar_permanencia(
         ).drop("_graduado")
     else:
         resultado = resultado.with_columns(pl.lit(True).alias(COL_ACTIVOS))
-    return resultado
+    return completar_cohorte_por_ingreso(resultado)
 
 
 def _leer_fuente_ruta(leer, ruta: Path | None) -> pl.DataFrame:
@@ -832,12 +876,96 @@ def _grafica_bloque_meta(tipo: str, bloque: dict[str, Any]) -> dict[str, Any] | 
     return {
         "id": f"{tipo}:{periodo}",
         "etiqueta": titulo,
-        "tipo": "bar",
+        "tipo": "line",
         "titulo": titulo,
         "labels": labels,
         "datasets": datasets,
         "ylabel": ylabel,
     }
+
+
+_SERIES_POR_CARRERA = {
+    "graduacion": {
+        "prefijo_id": "graduacion:carrera",
+        "alcanzado": "Graduaciones",
+        "meta": "Meta de graduación",
+    },
+    "permanencia": {
+        "prefijo_id": "permanencia:carrera",
+        "alcanzado": "Permanencia",
+        "meta": "Meta de permanencia",
+    },
+}
+
+
+def _graficas_metas_por_carrera(
+    tipo: str, bloques: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Una gráfica por carrera: valor y meta a lo largo de los cohortes."""
+    serie = _SERIES_POR_CARRERA.get(tipo)
+    if not serie or not bloques:
+        return []
+    periodos: list[str] = []
+    vistos_periodo: set[str] = set()
+    es_proyeccion: dict[str, bool] = {}
+    orden_prog: list[str] = []
+    vistos_prog: set[str] = set()
+    por_prog: dict[str, dict[str, dict[str, Any]]] = {}
+    for bloque in bloques:
+        periodo = str(bloque.get("periodo") or "").strip()
+        if not periodo:
+            continue
+        if periodo not in vistos_periodo:
+            vistos_periodo.add(periodo)
+            periodos.append(periodo)
+        if bloque.get("proyeccion"):
+            es_proyeccion[periodo] = True
+        for fila in bloque.get("filas") or []:
+            programa = str(fila.get("programa") or "").strip()
+            if not programa:
+                continue
+            if programa not in vistos_prog:
+                vistos_prog.add(programa)
+                orden_prog.append(programa)
+            por_prog.setdefault(programa, {})[periodo] = fila
+
+    def _ord_periodo(periodo: str) -> tuple[int, str]:
+        clave = _clave_periodo(periodo)
+        return (clave if clave is not None else 10**9, periodo)
+
+    periodos.sort(key=_ord_periodo)
+    marcas = [bool(es_proyeccion.get(p)) for p in periodos]
+    graficas: list[dict[str, Any]] = []
+    for programa in orden_prog:
+        filas = por_prog.get(programa) or {}
+        metas = [_pct_de_texto((filas.get(p) or {}).get("meta_num")) for p in periodos]
+        valores = [_pct_de_texto((filas.get(p) or {}).get("alcanzado_num")) for p in periodos]
+        if not any(v is not None for v in metas + valores):
+            metas = [_pct_de_texto((filas.get(p) or {}).get("meta_pct")) for p in periodos]
+            valores = [_pct_de_texto((filas.get(p) or {}).get("alcanzado_pct")) for p in periodos]
+            ylabel = "%"
+        else:
+            ylabel = "Estudiantes"
+        if not any(v is not None for v in metas + valores):
+            continue
+        graficas.append(
+            {
+                "id": f"{serie['prefijo_id']}:{programa}",
+                "etiqueta": programa,
+                "tipo": "line",
+                "titulo": programa,
+                "labels": periodos,
+                "datasets": [
+                    {"label": serie["alcanzado"], "data": valores},
+                    {"label": serie["meta"], "data": metas},
+                ],
+                "ylabel": ylabel,
+                "xlabel": "Cohorte",
+                "programa": programa,
+                "proyeccion": marcas,
+            }
+        )
+    return graficas
 
 
 def _grafica_historico(bloque: dict[str, Any], clave: str) -> dict[str, Any] | None:
@@ -884,21 +1012,37 @@ def _graficas_desde_metas(
     historico: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
+    out.extend(_graficas_metas_por_carrera("graduacion", graduacion))
+    out.extend(_graficas_metas_por_carrera("permanencia", permanencia))
     for b in graduacion:
-        g = _grafica_bloque_meta("graduacion", b)
-        if g:
-            g["etiqueta"] = f"Graduación · {b.get('periodo')}"
-            out.append(g)
+        b["grafica"] = None
     for b in permanencia:
-        g = _grafica_bloque_meta("permanencia", b)
-        if g:
-            g["etiqueta"] = f"Permanencia · {b.get('periodo')}"
-            out.append(g)
+        b["grafica"] = None
     for b in historico:
         g = _grafica_historico_par(b)
         if g:
             out.append(g)
+        b["grafica"] = g
     return out
+
+
+def asignar_graficas_metas(metas: dict[str, Any]) -> dict[str, Any]:
+    """Rellena graficas, graficas_graduacion y graficas_permanencia."""
+    if not metas:
+        return metas
+    graficas = _graficas_desde_metas(
+        metas.get("graduacion") or [],
+        metas.get("permanencia") or [],
+        metas.get("historico") or [],
+    )
+    metas["graficas"] = graficas
+    metas["graficas_graduacion"] = [
+        g for g in graficas if str(g.get("id") or "").startswith("graduacion:carrera:")
+    ]
+    metas["graficas_permanencia"] = [
+        g for g in graficas if str(g.get("id") or "").startswith("permanencia:carrera:")
+    ]
+    return metas
 
 
 def _hoja_es_proyeccion_graduacion(nombre: str) -> bool:
@@ -913,6 +1057,8 @@ def leer_metas(ruta: Path) -> dict[str, Any]:
         "permanencia": [],
         "historico": [],
         "graficas": [],
+        "graficas_graduacion": [],
+        "graficas_permanencia": [],
     }
     if not ruta or not ruta.is_file():
         return vacio
@@ -932,14 +1078,17 @@ def leer_metas(ruta: Path) -> dict[str, Any]:
     finally:
         wb.close()
 
-    graficas = _graficas_desde_metas(graduacion, permanencia, historico)
-    return {
-        "disponible": bool(graduacion or permanencia or historico),
-        "graduacion": graduacion,
-        "permanencia": permanencia,
-        "historico": historico,
-        "graficas": graficas,
-    }
+    return asignar_graficas_metas(
+        {
+            "disponible": bool(graduacion or permanencia or historico),
+            "graduacion": graduacion,
+            "permanencia": permanencia,
+            "historico": historico,
+            "graficas": [],
+            "graficas_graduacion": [],
+            "graficas_permanencia": [],
+        }
+    )
 
 
 def cargar_metas(
@@ -955,5 +1104,7 @@ def cargar_metas(
             "permanencia": [],
             "historico": [],
             "graficas": [],
+            "graficas_graduacion": [],
+            "graficas_permanencia": [],
         }
     return leer_metas(ruta)

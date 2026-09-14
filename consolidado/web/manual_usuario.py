@@ -27,6 +27,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "Si es administrador, a la derecha de Buscar está «Nuevo estudiante». Abre un formulario con las mismas pestañas de la ficha (Datos, Académico, Priorizado…) para rellenar a mano todos los campos del consolidado. Al abrirlo se oculta Buscar; «Volver a buscar» restaura la consulta.",
             "Los datos del estudiante (incluido correo y celular) quedan siempre visibles. Debajo hay dos grupos de pestañas, a media pantalla cada uno.",
             "Izquierda: académico, priorizado, ruta de grado, becas y alertas. Derecha: notas, nueva nota, proyección a grado y horario.",
+            "Las notas del semestre siguen la fecha: diciembre a mayo = primer semestre (diciembre cuenta el año siguiente); junio a noviembre = segundo. En Horario use Todos o un día; las materias sin día van al apartado Virtual. La semana también se desplaza en horizontal si no cabe.",
             "En Priorizado y Ruta de grado pulse «Editar estados» para cambiar los campos. Guardar deja el cambio; Restablecer vuelve a la fuente.",
             "En Proyección responda si se gradúa este semestre; queda en Proyección a Grado.",
             "El color de acento depende del programa (ver pestaña Colores).",
@@ -41,7 +42,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "Cada tarjeta muestra nombre, puntaje y el botón para marcar que se atendió. El nombre abre la ficha completa.",
             "Al marcar se guarda la fecha y la pestaña (beca, priorizado, etc.). En Estadísticas verá cuántos se atendieron al día y el promedio.",
             "Alertas lista a quienes tienen alerta de las bases o una alerta propia.",
-            "Notas guarda observaciones de lo que dijo el estudiante. También puede añadirlas desde la ficha.",
+            "Notas guarda observaciones de lo que dijo el estudiante. También puede añadirlas desde la ficha. «Exportar anotaciones» baja un Excel por estudiante, con fecha y periodo.",
         ],
     },
     "seguimiento-estadisticas": {
@@ -69,17 +70,18 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "titulo": "Metas",
         "resumen": "Graduación, permanencia e histórico del Excel de Permanencia.",
         "pasos": [
-            "Las tablas salen del libro de Permanencia (hojas de metas e HISTÓRICO). No se guardan en SQL.",
-            "Elija una meta en «Ver gráfica». Si elige histórico, salen dos líneas por gráfica: permanencia (meta y cumplimiento) y graduación (meta y cumplimiento).",
+            "Las gráficas de graduación y permanencia son una por carrera: valor real y meta por cohorte. El tramo violeta punteado es proyección.",
+            "A un costado, «Ver datos numéricos» muestra las tablas. El administrador puede cambiar Meta # y Meta % de graduación ahí, sin tocar el Excel.",
             "El consolidado cruza Gestión de graduación con Permanencia y añade el cohorte en el que el estudiante debería graduarse.",
             "Si no hay datos, pida al administrador que cargue esos Excel en Data (son opcionales).",
         ],
     },
     "graficas": {
         "titulo": "Gráficas",
-        "resumen": "Tablero sobre la última versión del consolidado.",
+        "resumen": "Tablero sobre cualquier versión del consolidado.",
         "pasos": [
-            "Elija el tipo de gráfica, la variable (programa, nivel, etc.) y, si quiere, filtre por carrera.",
+            "Elija de qué consolidado (versión) sale cada gráfica. Cada espacio puede usar un corte distinto.",
+            "Por defecto la gráfica es de línea, de menor a mayor, y no muestra categorías en cero. El eje se ajusta al máximo de quienes aplican.",
             "Cada espacio de gráfica puede tener su propia carrera. «Todas» usa la facultad completa.",
             "En Configuración marque las columnas que el tablero puede usar. Por defecto no salen identificación, nombres, celulares, correos ni materias.",
         ],
@@ -109,9 +111,9 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "resumen": "Un Excel con solo las columnas y carreras que le pidan.",
         "pasos": [
             "Elija cualquier versión del consolidado (no solo la última).",
-            "Marque una carrera, varias o «Todas las carreras».",
+            "Marque una carrera, varias o «Todas las carreras». También puede filtrar por tipo de beca, nivel, cohorte y pensum en las listas desplegables.",
             "Marque las columnas. «Datos básicos» deja identificación, nombre y programa.",
-            "Descargue el Excel: una hoja con los datos y otra con el origen (versión, fecha y filtro).",
+            "Descargue el Excel: hoja principal, hoja Becas (una beca por fila), hoja Anotaciones y origen.",
         ],
     },
     "datos-antiguos": {

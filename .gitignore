@@ -24,6 +24,8 @@ release/*
 !release/.gitkeep
 !release/README.md
 !release/ConsolidadoHumanidades-Windows.zip
+!release/ConsolidadoHumanidades-macOS.zip
+!release/ConsolidadoHumanidades-Linux.zip
 
 # Paquete de Excels de prueba (raíz). GitHub admite hasta 100 MB por archivo.
 !ArchivosPrueba2026-1.zip
