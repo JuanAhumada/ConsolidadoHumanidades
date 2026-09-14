@@ -8,10 +8,18 @@
 <div class="graficas-workspace">
   <aside class="charts-tools">
     <h2>Gráficas</h2>
-    <p class="muted charts-tools-lead">Seleccione un espacio y aplique columna, carrera y tipo. Puede tener hasta 4.</p>
+    <p class="muted charts-tools-lead">Seleccione un espacio y aplique consolidado, columna, carrera y tipo. Puede tener hasta 4.</p>
 
     <p class="charts-slot-label">Editando <strong id="slot-label">gráfica 1</strong></p>
 
+    <div class="field">
+      <label for="version">Consolidado</label>
+      <select id="version" {% if not versiones %}disabled{% endif %}>
+        {% for v in versiones or [] %}
+        <option value="{{ v.id }}" {% if meta and meta.id == v.id %}selected{% endif %}>{{ v.etiqueta }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="field">
       <label for="columna">Columna</label>
       <select id="columna" {% if not columnas %}disabled{% endif %}>
@@ -32,9 +40,10 @@
     <div class="field">
       <label for="tipo">Tipo</label>
       <select id="tipo" {% if not columnas %}disabled{% endif %}>
+        <option value="line" selected>Línea</option>
         <option value="bar">Barras</option>
         <option value="pie">Torta</option>
-        <option value="line">Línea</option>
+        <option value="scatter">Puntos</option>
       </select>
     </div>
     <div class="field">
@@ -63,7 +72,7 @@
     {% if not columnas %}
     <p class="muted">No hay datos. Genere un consolidado primero.</p>
     {% elif meta %}
-    <p class="muted charts-tools-meta">Versión {{ meta.periodo }} · {{ meta.fecha_version }} · {{ meta.num_estudiantes }} estudiantes</p>
+    <p class="muted charts-tools-meta" id="chart-version-meta">Versión {{ meta.periodo }} · {{ meta.fecha_version }} · {{ meta.num_estudiantes }} estudiantes</p>
     {% endif %}
   </aside>
 
@@ -103,14 +112,23 @@ const defaultCol = (() => {
   const sel = document.getElementById('columna');
   return sel && sel.options.length ? sel.value : '';
 })();
+const defaultVersion = (() => {
+  const sel = document.getElementById('version');
+  return sel && sel.options.length ? sel.value : '';
+})();
 
-const slots = Array.from({ length: MAX_SLOTS }, (_, i) => ({
+function emptyConfig() {
+  return { version_id: defaultVersion, columna: defaultCol, tipo: 'line', top: '20', programa: '' };
+}
+
+const slots = Array.from({ length: MAX_SLOTS }, () => ({
   chart: null,
-  config: { columna: defaultCol, tipo: 'bar', top: '20', programa: '' },
+  config: emptyConfig(),
   ready: false,
 }));
 let visible = 1;
 let selected = 0;
+const versionCache = {};
 
 const board = document.getElementById('charts-board');
 const metaEl = document.getElementById('chart-meta');
@@ -126,6 +144,7 @@ function el(id) { return document.getElementById(id); }
 
 function readControls() {
   return {
+    version_id: el('version') ? el('version').value : defaultVersion,
     columna: el('columna').value,
     tipo: el('tipo').value,
     top: el('top').value,
@@ -133,12 +152,82 @@ function readControls() {
   };
 }
 
-function writeControls(cfg) {
-  if (!cfg.columna) return;
-  el('columna').value = cfg.columna;
-  el('tipo').value = cfg.tipo;
-  el('top').value = cfg.top;
-  if (el('programa')) el('programa').value = cfg.programa || '';
+function fillSelect(sel, items, current, placeholder) {
+  if (!sel) return;
+  const prev = current == null ? sel.value : String(current);
+  sel.innerHTML = '';
+  if (placeholder != null) {
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = placeholder;
+    sel.appendChild(o);
+  }
+  (items || []).forEach((item) => {
+    const o = document.createElement('option');
+    o.value = item;
+    o.textContent = item;
+    sel.appendChild(o);
+  });
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+
+function etiquetaVersion(id) {
+  const sel = el('version');
+  if (!sel) return '';
+  const opt = [...sel.options].find((o) => o.value === String(id || ''));
+  return opt ? opt.textContent : '';
+}
+
+function pintarMetaVersion(data) {
+  const nodo = document.getElementById('chart-version-meta');
+  if (!nodo) return;
+  const v = data && data.version;
+  if (!v) {
+    nodo.textContent = '';
+    return;
+  }
+  const partes = [];
+  if (v.periodo) partes.push(`Versión ${v.periodo}`);
+  if (v.fecha_version) partes.push(v.fecha_version);
+  if (v.num_estudiantes != null) partes.push(`${v.num_estudiantes} estudiantes`);
+  nodo.textContent = partes.join(' · ');
+}
+
+async function cargarVersion(id) {
+  const key = String(id || '');
+  if (!key) return { columnas: [], programas: [], version: null };
+  if (versionCache[key]) return versionCache[key];
+  const res = await fetch(`/api/graficas/${encodeURIComponent(key)}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = data.detail;
+    const msg = typeof detail === 'string'
+      ? detail
+      : 'No se pudo cargar ese consolidado.';
+    throw new Error(msg);
+  }
+  versionCache[key] = data;
+  return data;
+}
+
+async function aplicarOpcionesDeVersion(id, cfg) {
+  const data = await cargarVersion(id);
+  fillSelect(el('columna'), data.columnas || [], cfg && cfg.columna);
+  fillSelect(el('programa'), data.programas || [], cfg && cfg.programa, 'Todas');
+  pintarMetaVersion(data);
+  return data;
+}
+
+async function writeControls(cfg) {
+  if (el('version') && cfg.version_id) el('version').value = String(cfg.version_id);
+  const vid = el('version') ? el('version').value : cfg.version_id;
+  try {
+    await aplicarOpcionesDeVersion(vid, cfg);
+  } catch (e) {
+    if (metaEl) metaEl.textContent = e.message || String(e);
+  }
+  if (el('tipo')) el('tipo').value = cfg.tipo || 'line';
+  if (el('top')) el('top').value = cfg.top || '20';
 }
 
 function slotEls() {
@@ -173,27 +262,27 @@ function refreshBoard() {
   resizeAll();
 }
 
-function selectSlot(i) {
+async function selectSlot(i) {
   if (i < 0 || i >= visible) return;
   selected = i;
-  writeControls(slots[i].config);
+  await writeControls(slots[i].config);
   metaEl.textContent = slots[i].ready
     ? (slots[i].metaText || '')
-    : 'Espacio vacío. Elija columna y tipo, luego aplique.';
+    : 'Espacio vacío. Elija consolidado, columna y tipo, luego aplique.';
   refreshBoard();
 }
 
-function addSlot() {
+async function addSlot() {
   if (visible >= MAX_SLOTS) return;
   visible += 1;
   selected = visible - 1;
   slots[selected].config = readControls();
-  writeControls(slots[selected].config);
+  await writeControls(slots[selected].config);
   refreshBoard();
   aplicar(selected, false);
 }
 
-function removeSelected() {
+async function removeSelected() {
   if (visible <= 1) return;
   const kept = slots
     .filter((_, i) => i !== selected && i < visible)
@@ -215,11 +304,11 @@ function removeSelected() {
     slots[i].metaText = s.metaText;
   });
   for (let i = kept.length; i < MAX_SLOTS; i++) {
-    slots[i].config = { columna: defaultCol, tipo: 'bar', top: '20', programa: '' };
+    slots[i].config = emptyConfig();
   }
   visible = kept.length;
   selected = Math.min(selected, visible - 1);
-  writeControls(slots[selected].config);
+  await writeControls(slots[selected].config);
   refreshBoard();
   kept.forEach((s, i) => {
     if (s.ready) aplicar(i, false);
@@ -238,6 +327,7 @@ async function aplicar(index, persistControls = true) {
       tipo: cfg.tipo,
       top: cfg.top,
     });
+    if (cfg.version_id) qs.set('version_id', String(cfg.version_id));
     if (cfg.programa) qs.set('programa', cfg.programa);
     const res = await fetch(`/api/grafica?${qs.toString()}`);
     const data = await res.json();
@@ -253,18 +343,24 @@ async function aplicar(index, persistControls = true) {
     const palette = (data.colores && data.colores.length)
       ? data.colores
       : data.labels.map((_, k) => colores[k % colores.length]);
+    const esPuntos = data.chart_type === 'scatter';
     const esLinea = data.chart_type === 'line';
+    const tipoChart = esPuntos ? 'line' : data.chart_type;
+    const maxY = Number(data.max_valor) || Math.max(0, ...(data.values || [0]));
     slots[i].chart = new Chart(ctx, {
-      type: data.chart_type,
+      type: tipoChart,
       data: {
         labels: data.labels,
         datasets: [{
           label: data.columna,
           data: data.values,
-          backgroundColor: esLinea ? palette[0] + '33' : palette,
-          borderColor: esLinea ? palette[0] : palette,
-          borderWidth: esLinea ? 2 : 1,
+          backgroundColor: (esLinea || esPuntos) ? palette[0] + '33' : palette,
+          borderColor: (esLinea || esPuntos) ? palette[0] : palette,
+          borderWidth: esLinea ? 2 : (esPuntos ? 2 : 1),
           tension: 0.25,
+          showLine: esLinea,
+          pointRadius: esPuntos ? 6 : (esLinea ? 3 : 0),
+          pointHoverRadius: esPuntos ? 8 : 4,
         }]
       },
       options: {
@@ -273,15 +369,23 @@ async function aplicar(index, persistControls = true) {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: data.chart_type === 'pie' },
-          title: { display: true, text: data.programa ? `${data.columna} · ${data.programa}` : `${data.columna}` }
+          title: {
+            display: true,
+            text: [data.columna, data.programa, etiquetaVersion(cfg.version_id)].filter(Boolean).join(' · ')
+          }
+        },
+        scales: data.chart_type === 'pie' ? {} : {
+          y: { beginAtZero: true, suggestedMax: maxY || undefined, ticks: { precision: 0 } }
         }
       }
     });
     slots[i].ready = true;
     slots[i].data = data;
-    slots[i].metaText = data.programa
-      ? `${data.categorias} categorías · ${data.columna} · ${data.programa}`
-      : `${data.categorias} categorías · ${data.columna}`;
+    const verTxt = etiquetaVersion(cfg.version_id);
+    const piezas = [`${data.categorias} categorías`, data.columna];
+    if (data.programa) piezas.push(data.programa);
+    if (verTxt) piezas.push(verTxt);
+    slots[i].metaText = piezas.join(' · ');
     if (i === selected) metaEl.textContent = slots[i].metaText;
     refreshBoard();
   } catch (e) {
@@ -317,6 +421,7 @@ async function excelPowerBI() {
     .slice(0, visible)
     .filter((s) => s.ready)
     .map((s) => ({
+      version_id: s.config.version_id || defaultVersion,
       columna: s.config.columna,
       tipo: s.config.tipo,
       top: Number(s.config.top),
@@ -372,6 +477,17 @@ el('btn-powerbi').addEventListener('click', excelPowerBI);
 btnAgregar.addEventListener('click', addSlot);
 addTile.addEventListener('click', addSlot);
 btnQuitar.addEventListener('click', removeSelected);
+if (el('version')) {
+  el('version').addEventListener('change', async () => {
+    const vid = el('version').value;
+    slots[selected].config.version_id = vid;
+    try {
+      await aplicarOpcionesDeVersion(vid, slots[selected].config);
+    } catch (e) {
+      metaEl.textContent = e.message || String(e);
+    }
+  });
+}
 window.addEventListener('resize', resizeAll);
 
 refreshBoard();

@@ -29,11 +29,13 @@ from consolidado.core.fusion import (
     filtrar_filas_programas_permitidos,
 )
 from consolidado.core.normalizacion import (
+    PREFIJO_CLAVE_NOMBRE,
     _es_nulo,
     _es_valor_true,
     _mapa_norm_a_real,
     _orden_fecha_por_tipo_libro,
     _str_celda,
+    clave_fusion_estudiante,
     combinar_valores,
     formatear_periodo_cod,
     normalizar_encabezado,
@@ -184,6 +186,12 @@ def _formatear_aparicion_horario(row: dict, c: dict[str, str | None]) -> tuple[s
 def _mapear_columnas_horario(df: pl.DataFrame) -> dict[str, str | None]:
     return {
         "num_identificacion": _columna_horario(df, "NUM_IDENTIFICACION"),
+        "nombre": (
+            _columna_horario(df, "NOMBRE Y APELLIDOS")
+            or _columna_horario(df, "NOMBRE ESTUDIANTE")
+            or _columna_horario(df, "NOMBRE COMPLETO")
+            or _columna_horario(df, "NOMBRE")
+        ),
         "genero": _columna_horario(df, "GENERO"),
         "cod_periodo": _columna_horario(df, "COD_PERIODO"),
         "cod_pensum": _columna_horario(df, "COD_PENSUM"),
@@ -200,18 +208,21 @@ def _mapear_columnas_horario(df: pl.DataFrame) -> dict[str, str | None]:
     }
 
 def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
-    """Por NUM_IDENTIFICACION: Materia/Horario/Profesor 1..n (una materia por fila de clase)."""
+    """Por identificación o nombre único: Materia/Horario/Profesor 1..n."""
     c = _mapear_columnas_horario(df_horario)
-    if not c.get("num_identificacion"):
+    if not c.get("num_identificacion") and not c.get("nombre"):
         raise ValueError(
-            "La hoja HORARIO no tiene columna NUM_IDENTIFICACION. "
+            "La hoja HORARIO no tiene columna NUM_IDENTIFICACION ni de nombre. "
             f"Columnas: {list(df_horario.columns)}"
         )
 
     por_id: dict[str, list[dict]] = {}
     periodos: dict[str, list[str]] = {}
+    nombres_por_id: dict[str, str] = {}
     for row in df_horario.iter_rows(named=True):
-        id_key = normalizar_id(row[c["num_identificacion"]])
+        id_val = row[c["num_identificacion"]] if c.get("num_identificacion") else None
+        nom_val = row[c["nombre"]] if c.get("nombre") else None
+        id_key = clave_fusion_estudiante(id_val, nom_val)
         if not id_key:
             continue
         materia, horario, profesor = _formatear_aparicion_horario(row, c)
@@ -224,6 +235,8 @@ def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
                 "profesor": profesor,
             }
         )
+        if nom_val and id_key not in nombres_por_id:
+            nombres_por_id[id_key] = _str_celda(nom_val)
         periodo = None
         if c.get("cod_periodo"):
             periodo = formatear_periodo_cod(row[c["cod_periodo"]])
@@ -238,9 +251,11 @@ def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
     filas: list[dict] = []
     for id_key in sorted(por_id.keys()):
         items = por_id[id_key]
+        ident = None if id_key.startswith(PREFIJO_CLAVE_NOMBRE) else id_key
         fila: dict = {
             "_id_key": id_key,
-            "Identificación": id_key,
+            "Identificación": ident,
+            COL_NOMBRE: nombres_por_id.get(id_key),
         }
         periodo_est = periodo_mas_reciente(periodos.get(id_key, []))
         if periodo_est:
@@ -291,9 +306,9 @@ def procesar_tabla_priorizados(
         return pl.DataFrame(schema={"_id_key": pl.Utf8, **{c: pl.Utf8 for c in COLUMNAS_PRIORIZADO}})
 
     m = construir_mapa_columnas(list(df.columns))
-    if "identificacion" not in m:
+    if "identificacion" not in m and "nombre_estudiante" not in m:
         raise ValueError(
-            "Grupos priorizados: falta columna de identificación. "
+            "Grupos priorizados: falta columna de identificación o de nombre. "
             f"Columnas: {list(df.columns)}"
         )
 
@@ -307,15 +322,21 @@ def procesar_tabla_priorizados(
 
     col_tipo = nr.get(normalizar_encabezado("TIPO DE DISCAPACIDAD"))
     col_detalle = nr.get(normalizar_encabezado("DETALLE GRUPO PRIORIZADO"))
+    col_nombre = m.get("nombre_estudiante")
 
     registros: list[dict] = []
     for row in df.iter_rows(named=True):
-        id_key = normalizar_id(row[m["identificacion"]])
+        id_val = row[m["identificacion"]] if "identificacion" in m else None
+        nom_val = row[col_nombre] if col_nombre else None
+        id_key = clave_fusion_estudiante(id_val, nom_val)
         if not id_key:
             continue
+        ident = None if id_key.startswith(PREFIJO_CLAVE_NOMBRE) else id_key
         registros.append(
             {
                 "_id_key": id_key,
+                "Identificación": ident,
+                COL_NOMBRE: _str_celda(nom_val) or None,
                 "Priorizado": True,
                 "Motivo Prio.": _motivos_fila_priorizado(row, cols_motivo) or None,
                 "Detalle GPrio.": _detalle_fila_priorizado(row, col_tipo, col_detalle) or None,
@@ -330,6 +351,10 @@ def procesar_tabla_priorizados(
     for key in tmp["_id_key"].unique().sort().to_list():
         grp = tmp.filter(pl.col("_id_key") == key)
         fila: dict = {"_id_key": key, "Priorizado": True}
+        idents = [v for v in grp["Identificación"].to_list() if v]
+        nombres = [v for v in grp[COL_NOMBRE].to_list() if v]
+        fila["Identificación"] = idents[0] if idents else None
+        fila[COL_NOMBRE] = nombres[0] if nombres else None
         fila["Motivo Prio."] = combinar_valores(grp["Motivo Prio."].to_list(), separador=", ") or None
         fila["Detalle GPrio."] = combinar_valores(grp["Detalle GPrio."].to_list(), separador=", ") or None
         filas.append(fila)

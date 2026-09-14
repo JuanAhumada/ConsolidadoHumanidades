@@ -24,6 +24,7 @@ from consolidado.core.constants import (
     columnas_materia_horario,
 )
 from consolidado.core.normalizacion import (
+    PREFIJO_CLAVE_NOMBRE,
     _combinar_telefonos,
     _cuenta_tildes,
     _es_nulo,
@@ -34,6 +35,8 @@ from consolidado.core.normalizacion import (
     _clave_nombre_unico,
     _primero_no_vacio,
     _telefono_presente,
+    clave_cruce_identificacion,
+    clave_fusion_estudiante,
     combinar_valores,
     combinar_funcionario_beca,
     normalizar_encabezado,
@@ -98,6 +101,120 @@ def filtrar_filas_consolidado(df: pl.DataFrame) -> pl.DataFrame:
     df = filtrar_filas_programa_excluido(df)
     df = filtrar_filas_con_telefono(df)
     return df
+
+
+def _id_normalizado(val) -> str:
+    return clave_cruce_identificacion(val) or normalizar_id(val) or ""
+
+
+def mapa_nombre_unico_a_id(*dfs: pl.DataFrame) -> dict[str, str]:
+    """Nombres que aparecen con exactamente una identificación no vacía."""
+    por_nombre: dict[str, set[str]] = {}
+    for df in dfs:
+        if df is None or df.height == 0 or COL_NOMBRE not in df.columns:
+            continue
+        tiene_id = "Identificación" in df.columns
+        for row in df.iter_rows(named=True):
+            nkey = _clave_nombre_unico(row.get(COL_NOMBRE))
+            if not nkey:
+                continue
+            nid = _id_normalizado(row.get("Identificación")) if tiene_id else ""
+            if nid:
+                por_nombre.setdefault(nkey, set()).add(nid)
+    return {k: next(iter(v)) for k, v in por_nombre.items() if len(v) == 1}
+
+
+def completar_identificacion_por_nombre(
+    df: pl.DataFrame,
+    mapa: dict[str, str] | None = None,
+) -> pl.DataFrame:
+    """Rellena Identificación vacía cuando el nombre es único y ya tiene ID en otra fila."""
+    if df.height == 0 or COL_NOMBRE not in df.columns:
+        return df
+    if "Identificación" not in df.columns:
+        df = df.with_columns(pl.lit(None).cast(pl.Utf8).alias("Identificación"))
+    if mapa is None:
+        mapa = mapa_nombre_unico_a_id(df)
+    if not mapa:
+        return df
+    ids = df["Identificación"].to_list()
+    nombres = df[COL_NOMBRE].to_list()
+    nuevos: list = []
+    for ident, nom in zip(ids, nombres):
+        if _id_normalizado(ident):
+            nuevos.append(ident)
+            continue
+        hallado = mapa.get(_clave_nombre_unico(nom) or "")
+        nuevos.append(hallado if hallado else ident)
+    return df.with_columns(pl.Series("Identificación", nuevos))
+
+
+def asignar_clave_fusion(df: pl.DataFrame) -> pl.DataFrame:
+    """_id_key = identificación; si falta, n: + nombre normalizado."""
+    if df.height == 0:
+        if "_id_key" in df.columns:
+            return df
+        return df.with_columns(pl.lit("").cast(pl.Utf8).alias("_id_key"))
+    ids = df["Identificación"].to_list() if "Identificación" in df.columns else [None] * df.height
+    nombres = df[COL_NOMBRE].to_list() if COL_NOMBRE in df.columns else [None] * df.height
+    keys = [clave_fusion_estudiante(i, n) for i, n in zip(ids, nombres)]
+    return df.with_columns(pl.Series("_id_key", keys))
+
+
+def asegurar_identificacion_unica(df: pl.DataFrame) -> pl.DataFrame:
+    """Si no hay cédula, usa la llave de nombre (n:…) para no perder la fila en SQL."""
+    if df.height == 0 or "Identificación" not in df.columns:
+        return df
+    df = asignar_clave_fusion(df)
+    df = df.with_columns(
+        pl.when(
+            pl.col("Identificación").is_null()
+            | (pl.col("Identificación").cast(pl.Utf8).str.strip_chars() == "")
+        )
+        .then(pl.col("_id_key"))
+        .otherwise(pl.col("Identificación"))
+        .alias("Identificación")
+    )
+    return df.drop("_id_key") if "_id_key" in df.columns else df
+
+
+def unir_extra_por_id_o_nombre(
+    principal: pl.DataFrame,
+    extra: pl.DataFrame,
+) -> pl.DataFrame:
+    """Left join de extra al consolidado por identificación o, si es única, por nombre."""
+    data_cols = [
+        c
+        for c in extra.columns
+        if c not in {"_id_key", "_nombre_key", COL_NOMBRE, "Identificación"}
+    ]
+    if extra.height == 0 or not data_cols:
+        return principal
+    mapa = mapa_nombre_unico_a_id(principal, extra)
+    p = completar_identificacion_por_nombre(principal, mapa)
+    extra_work = extra
+    if COL_NOMBRE in extra.columns or "Identificación" in extra.columns:
+        extra_work = completar_identificacion_por_nombre(extra, mapa)
+    p = asignar_clave_fusion(p)
+    if "_id_key" not in extra_work.columns or COL_NOMBRE in extra_work.columns:
+        extra_work = asignar_clave_fusion(extra_work)
+    extra_work = extra_work.filter(pl.col("_id_key") != "")
+    if extra_work.height == 0:
+        return p.drop("_id_key") if "_id_key" in p.columns else p
+    overlap = [c for c in data_cols if c in p.columns]
+    joined = p.join(
+        extra_work.select(["_id_key", *data_cols]),
+        on="_id_key",
+        how="left",
+        suffix="_extra",
+    )
+    for c in overlap:
+        col_extra = f"{c}_extra"
+        if col_extra in joined.columns:
+            joined = joined.with_columns(
+                pl.coalesce(pl.col(c), pl.col(col_extra)).alias(c)
+            ).drop(col_extra)
+    return joined.drop("_id_key") if "_id_key" in joined.columns else joined
 
 def _combinar_programa(valores: list) -> str | None:
     """Unifica programa: variantes con/sin tilde quedan en un solo valor."""
@@ -202,9 +319,13 @@ def _fusionar_bloques_por_id(
     filas: list[dict] = []
     for key in todo["_id_key"].unique().sort().to_list():
         grp = todo.filter(pl.col("_id_key") == key)
-        fila: dict = {"Identificación": _primero_no_vacio(grp["Identificación"].to_list())}
+        fila: dict = {
+            "_id_key": key,
+            "Identificación": _primero_no_vacio(grp["Identificación"].to_list()),
+        }
         if _es_nulo(fila["Identificación"]) or str(fila["Identificación"]).strip() == "":
-            fila["Identificación"] = key
+            if key and not str(key).startswith(PREFIJO_CLAVE_NOMBRE):
+                fila["Identificación"] = key
         for col in columnas[1:]:
             if omitir_priorizado and col in COLUMNAS_PRIORIZADO:
                 continue
@@ -246,15 +367,19 @@ def fusionar_por_id(
     cols_listado = columnas_listado or SALIDA_COLUMNAS_LISTADO
     cols_materias = columnas_materias or columnas_materia_horario(1)
 
-    bloques: list[pl.DataFrame] = []
+    alineados: list[pl.DataFrame] = []
     for i, df in enumerate(partes):
         tipo = tipos_partes[i] if tipos_partes and i < len(tipos_partes) else ""
-        d = alinear_dataframe_salida(df, cols_listado).with_columns(
-            pl.col("Identificación")
-            .map_elements(normalizar_id, return_dtype=pl.Utf8)
-            .alias("_id_key"),
-            pl.lit(tipo).alias("_fuente_tipo"),
+        alineados.append(
+            alinear_dataframe_salida(df, cols_listado).with_columns(
+                pl.lit(tipo).alias("_fuente_tipo"),
+            )
         )
+    mapa = mapa_nombre_unico_a_id(*alineados)
+    bloques: list[pl.DataFrame] = []
+    for d in alineados:
+        d = completar_identificacion_por_nombre(d, mapa)
+        d = asignar_clave_fusion(d)
         d = d.filter(pl.col("_id_key") != "")
         if d.height > 0:
             bloques.append(d)
@@ -263,16 +388,7 @@ def fusionar_por_id(
     listado = filtrar_filas_con_nombre(listado)
 
     if priorizados is not None and priorizados.height > 0:
-        prio = priorizados.with_columns(
-            pl.col("_id_key").map_elements(normalizar_id, return_dtype=pl.Utf8).alias("_id_key")
-        ).filter(pl.col("_id_key") != "")
-        listado = listado.with_columns(
-            pl.col("Identificación")
-            .map_elements(normalizar_id, return_dtype=pl.Utf8)
-            .alias("_id_key")
-        )
-        listado = listado.join(prio.select(["_id_key", *COLUMNAS_PRIORIZADO]), on="_id_key", how="left")
-        listado = listado.drop("_id_key")
+        listado = unir_extra_por_id_o_nombre(listado, priorizados)
     else:
         for col in COLUMNAS_PRIORIZADO:
             if col not in listado.columns:
@@ -285,37 +401,39 @@ def fusionar_por_id(
     )
 
     cols_horarios_interno = ["Identificación", *cols_materias]
-    bloques_h: list[pl.DataFrame] = []
+    if COL_NOMBRE not in cols_horarios_interno:
+        cols_horarios_interno.insert(1, COL_NOMBRE)
+    bloques_h_raw: list[pl.DataFrame] = []
     for df in horarios_partes:
         if df.height == 0:
             continue
         cols_h = list(cols_horarios_interno)
         if COL_PERIODO_ACTUAL in df.columns and COL_PERIODO_ACTUAL not in cols_h:
             cols_h.append(COL_PERIODO_ACTUAL)
-        d = alinear_dataframe_salida(df, cols_h).with_columns(
-            pl.col("Identificación")
-            .map_elements(normalizar_id, return_dtype=pl.Utf8)
-            .alias("_id_key")
-        ).filter(pl.col("_id_key") != "")
+        bloques_h_raw.append(alinear_dataframe_salida(df, cols_h))
+
+    mapa_h = mapa_nombre_unico_a_id(listado, *bloques_h_raw)
+    listado = completar_identificacion_por_nombre(listado, mapa_h)
+    consolidado = asignar_clave_fusion(listado)
+
+    bloques_h: list[pl.DataFrame] = []
+    for d in bloques_h_raw:
+        d = completar_identificacion_por_nombre(d, mapa_h)
+        d = asignar_clave_fusion(d)
+        d = d.filter(pl.col("_id_key") != "")
         if d.height > 0:
             bloques_h.append(d)
 
-    consolidado = listado.with_columns(
-        pl.col("Identificación")
-        .map_elements(normalizar_id, return_dtype=pl.Utf8)
-        .alias("_id_key")
-    )
-
     if bloques_h:
-        cols_h_fusion = list(cols_horarios_interno)
+        cols_h_fusion = [c for c in cols_horarios_interno if c != COL_NOMBRE]
         if any(COL_PERIODO_ACTUAL in b.columns for b in bloques_h):
-            cols_h_fusion.append(COL_PERIODO_ACTUAL)
+            if COL_PERIODO_ACTUAL not in cols_h_fusion:
+                cols_h_fusion.append(COL_PERIODO_ACTUAL)
         horarios = _fusionar_bloques_por_id(bloques_h, cols_h_fusion)
-        horarios = horarios.with_columns(
-            pl.col("Identificación")
-            .map_elements(normalizar_id, return_dtype=pl.Utf8)
-            .alias("_id_key")
-        )
+        if "_id_key" not in horarios.columns:
+            horarios = asignar_clave_fusion(
+                completar_identificacion_por_nombre(horarios, mapa_h)
+            )
         consolidado = consolidado.join(
             horarios.select(["_id_key", *cols_materias]),
             on="_id_key",
@@ -343,7 +461,8 @@ def fusionar_por_id(
                 .alias(COL_PERIODO_ACTUAL)
             ).drop("_periodo_h")
 
-    consolidado = consolidado.drop("_id_key")
+    if "_id_key" in consolidado.columns:
+        consolidado = consolidado.drop("_id_key")
     columnas_final = [*cols_listado, *cols_materias]
     consolidado = alinear_dataframe_salida(consolidado, columnas_final)
     consolidado = deduplicar_por_nombre(consolidado)

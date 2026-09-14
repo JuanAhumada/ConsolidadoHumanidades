@@ -38,6 +38,7 @@ from consolidado.core.normalizacion import (
     formatear_monto_beca_vista,
     formatear_periodo_cod,
     normalizar_id,
+    periodo_academico_nota,
 )
 from consolidado.core.prioridad import fmt_pts
 from consolidado.core.colores_programa import color_programa, estilo_color
@@ -57,6 +58,7 @@ from consolidado.storage.notas import listar_notas
 _CAMPOS_ACADEMICO = (
     "Activos",
     "Periodo ingreso",
+    "Pensum",
     "Reintegros",
     "Repitiendo",
 )
@@ -402,6 +404,17 @@ def _seccion_horario(fila: dict, columnas: list[str], num_materias: int) -> dict
     for dia in por_dia:
         por_dia[dia].sort(key=lambda x: x.get("inicio") or "")
     dias = [d for d in _DIAS_SEMANA if por_dia[d]]
+    if sin_dia:
+        por_dia["Virtual"] = [
+            {
+                **item,
+                "dia": "Virtual",
+                "inicio": (item.get("horario") or "Virtual"),
+                "fin": "",
+            }
+            for item in sin_dia
+        ]
+        dias = [*dias, "Virtual"]
     if not campos and not filas:
         return None
     return {
@@ -505,7 +518,7 @@ def construir_vista_ficha(cfg: dict, fila: dict, *, num_materias: int) -> dict:
 
 
 _CAMPOS_IDENTIDAD_ALTA = ("Identificación", "Nombre y apellidos", "Programa")
-_CAMPOS_ACADEMICO_ALTA = ("Activos", "Periodo ingreso", "Reintegros", "Repitiendo")
+_CAMPOS_ACADEMICO_ALTA = ("Activos", "Periodo ingreso", "Pensum", "Reintegros", "Repitiendo")
 _MAX_MATERIAS_ALTA = 8
 
 
@@ -651,6 +664,7 @@ def obtener_ficha_estudiante(
     identificacion: str,
     *,
     version_id: int | None = None,
+    notas_todas: bool = False,
 ) -> dict | None:
     """
     Devuelve la ficha del estudiante o None si no está en SQL ni en el consolidado.
@@ -700,6 +714,15 @@ def obtener_ficha_estudiante(
         vista["horario"]["periodo"] = periodo
     nivel = fila.get("Nivel prioridad")
     marca = obtener_marca_gradua(id_key, base=base)
+    periodo_notas = periodo_academico_nota()
+    notas = listar_notas(id_key, base=base)
+    notas_n = len(notas)
+    if not notas_todas:
+        notas = [
+            n
+            for n in notas
+            if not n.get("periodo") or n.get("periodo") == periodo_notas
+        ]
     return {
         "identificacion": id_key,
         "nombre": nombre,
@@ -723,6 +746,9 @@ def obtener_ficha_estudiante(
         "se_gradua": None if marca is None else bool(marca.get("se_gradua")),
         "gradua_en": (marca or {}).get("actualizado_en") or "",
         "gradua_por": (marca or {}).get("usuario") or "",
-        "notas": listar_notas(id_key, base=base),
+        "notas": notas,
+        "notas_n": notas_n,
+        "periodo_notas": periodo_notas,
+        "notas_todas": notas_todas,
         **vista,
     }

@@ -10,11 +10,14 @@ import polars as pl
 from consolidado.config.settings import carpeta_excels
 from consolidado.core.archivos import _elegir_hoja_datos, _leer_hoja_datos
 from consolidado.core.columnas import _buscar_columna_por_aliases
-from consolidado.core.constants import _ALIASES_RUNTIME, aplicar_config
+from consolidado.core.constants import COL_NOMBRE, _ALIASES_RUNTIME, aplicar_config
 from consolidado.core.excel_io import _leer_hoja_excel, _nombres_hojas_excel
-from consolidado.core.fusion import filtrar_filas_programas_permitidos
+from consolidado.core.fusion import (
+    filtrar_filas_programas_permitidos,
+    unir_extra_por_id_o_nombre,
+)
 from consolidado.core.normalizacion import (
-    clave_cruce_identificacion,
+    clave_fusion_estudiante,
     combinar_valores,
     normalizar_encabezado,
 )
@@ -122,6 +125,15 @@ def categorias_documento(cfg: dict[str, Any] | None = None) -> list[str]:
     return cats or ["Extra"]
 
 
+_PISTAS_NOMBRE = (
+    "nombre y apellido",
+    "nombres y apellido",
+    "nombre completo",
+    "nombre estudiante",
+    "nombre de estudiante",
+)
+
+
 def aliases_identificacion(cfg: dict[str, Any] | None = None) -> list[str]:
     if not _ALIASES_RUNTIME:
         aplicar_config(cfg)
@@ -214,6 +226,37 @@ def columnas_config_documento(
     return out
 
 
+def _columna_nombre_documento(columnas: list[str], doc: dict | None = None) -> str | None:
+    aliases = [
+        str(a).strip()
+        for a in ((doc or {}).get("columna_nombre_aliases") or [])
+        if str(a).strip()
+    ]
+    if aliases:
+        hallada = _buscar_columna_por_aliases(columnas, aliases)
+        if hallada:
+            return hallada
+    hallada = _buscar_columna_por_aliases(
+        columnas,
+        [
+            "nombre y apellidos",
+            "nombres y apellidos",
+            "nombre completo",
+            "nombre estudiante",
+            "nombre de estudiante",
+            "alumno",
+            "nombre",
+        ],
+    )
+    if hallada:
+        return hallada
+    for col in columnas:
+        norma = normalizar_encabezado(col)
+        if any(pista in norma for pista in _PISTAS_NOMBRE):
+            return col
+    return None
+
+
 def _columna_llave_documento(columnas: list[str], doc: dict) -> str | None:
     """Columna del Excel extra que se cruza con Identificación del consolidado."""
     aliases = [
@@ -241,16 +284,18 @@ def procesar_documento_adicional(ruta: Path, doc: dict) -> pl.DataFrame:
 
     columnas = [str(c) for c in df.columns]
     col_id = _columna_llave_documento(columnas, doc)
-    if not col_id:
+    col_nombre = _columna_nombre_documento(columnas, doc)
+    if not col_id and not col_nombre:
         raise ValueError(
             f"{doc.get('titulo', ruta.name)}: no se encontró la llave foránea "
-            "(debe coincidir con Identificación del consolidado)."
+            "(Identificación o Nombre y apellidos del consolidado)."
         )
 
     columnas_doc = [
         c
         for c in (doc.get("columnas") or [])
-        if c.get("salida") and (c.get("aliases") or [""])[0] != col_id
+        if c.get("salida")
+        and (c.get("aliases") or [""])[0] not in {col_id, col_nombre}
     ]
     salidas = [c["salida"] for c in columnas_doc if c.get("salida")]
     if not salidas:
@@ -258,10 +303,16 @@ def procesar_documento_adicional(ruta: Path, doc: dict) -> pl.DataFrame:
 
     registros: list[dict] = []
     for row in df.iter_rows(named=True):
-        id_key = clave_cruce_identificacion(row[col_id])
+        id_val = row[col_id] if col_id else None
+        nom_val = row[col_nombre] if col_nombre else None
+        id_key = clave_fusion_estudiante(id_val, nom_val)
         if not id_key:
             continue
         fila: dict = {"_id_key": id_key}
+        if col_id:
+            fila["Identificación"] = row[col_id]
+        if col_nombre:
+            fila[COL_NOMBRE] = row[col_nombre]
         for col_def in columnas_doc:
             salida = col_def.get("salida")
             if not salida:
@@ -276,9 +327,13 @@ def procesar_documento_adicional(ruta: Path, doc: dict) -> pl.DataFrame:
 
     tmp = pl.DataFrame(registros)
     filas: list[dict] = []
+    extras_id = [c for c in ("Identificación", COL_NOMBRE) if c in tmp.columns]
     for key in tmp["_id_key"].unique().sort().to_list():
         grp = tmp.filter(pl.col("_id_key") == key)
         fila: dict = {"_id_key": key}
+        for extra in extras_id:
+            vals = [v for v in grp[extra].to_list() if v is not None and str(v).strip()]
+            fila[extra] = vals[0] if vals else None
         for col in salidas:
             fila[col] = combinar_valores(grp[col].to_list()) or None
         filas.append(fila)
@@ -291,14 +346,10 @@ def _unir_documentos_adicionales(
     base: Path,
     carpeta: Path | None = None,
 ) -> pl.DataFrame:
-    if "Identificación" not in consolidado.columns:
+    if "Identificación" not in consolidado.columns and COL_NOMBRE not in consolidado.columns:
         return consolidado
     carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
-    resultado = consolidado.with_columns(
-        pl.col("Identificación")
-        .map_elements(clave_cruce_identificacion, return_dtype=pl.Utf8)
-        .alias("_id_key")
-    )
+    resultado = consolidado
     for doc in cfg.get("documentos_adicionales", []):
         nombre = doc.get("nombre_guardado")
         if not nombre:
@@ -307,15 +358,18 @@ def _unir_documentos_adicionales(
         if not ruta.is_file():
             continue
         extra = procesar_documento_adicional(ruta, doc)
-        data_cols = [c for c in extra.columns if c != "_id_key"]
+        data_cols = [
+            c
+            for c in extra.columns
+            if c not in {"_id_key", COL_NOMBRE, "Identificación"}
+        ]
         if extra.height == 0 or not data_cols:
             continue
-        extra = extra.select(["_id_key", *data_cols])
-        resultado = resultado.join(extra, on="_id_key", how="left", suffix="_docx")
+        resultado = unir_extra_por_id_o_nombre(resultado, extra)
         for c in data_cols:
             col_extra = f"{c}_docx"
             if col_extra in resultado.columns:
                 resultado = resultado.with_columns(
                     pl.coalesce(pl.col(c), pl.col(col_extra)).alias(c)
                 ).drop(col_extra)
-    return resultado.drop("_id_key")
+    return resultado

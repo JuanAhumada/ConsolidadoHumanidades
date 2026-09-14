@@ -2,25 +2,35 @@
 
 Aplicación para fusionar Excels de estudiantes (matriculados, becas, priorizados, alertas, horarios) en un consolidado con puntaje de prioridad, fichas, seguimiento y versiones históricas.
 
-La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI.
+La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI. Versión **1.6.11**. Usuario inicial: **admin** / **admin**.
 
-**Usuarios (Windows, sin Python):** doble clic en `ConsolidadoHumanidades.exe`.
+## Descargas
 
-- Si bajó [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Windows.zip), extraiga: en la raíz están el `.exe` y **`Archivos iniciales.zip`** (cárguelo en Data). Ese ZIP vive en **Git LFS** (véase más abajo).
-- Si bajó el ZIP del código, pulse el `ConsolidadoHumanidades.exe` de la **raíz del repo** (es un lanzador de 7 KB; localiza o descomprime el paquete). Usuario inicial: `admin` / `admin`.
+| Sistema | Paquete | Cómo se instala |
+|---------|---------|-----------------|
+| **Windows** | [ConsolidadoHumanidades-Windows.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Windows.zip) | Extraiga y pulse `ConsolidadoHumanidades.exe`. Incluye **Archivos iniciales.zip**. Este ZIP va con Git LFS (véase más abajo). |
+| **macOS** | [ConsolidadoHumanidades-macOS.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-macOS.zip) | Extraiga, pulse `Instalar.command` (hace falta **Python 3.11+** de [python.org](https://www.python.org/downloads/macos/)) y luego **Consolidado Humanidades**. Si macOS bloquea el archivo: clic derecho → Abrir. |
+| **Linux** | [ConsolidadoHumanidades-Linux.zip](https://github.com/JuanAhumada/ConsolidadoHumanidades/raw/Torre/release/ConsolidadoHumanidades-Linux.zip) | Extraiga, `chmod +x Instalar.sh Abrir.sh` y `./Instalar.sh` (**Python 3.11+** y `python3-venv`; en Debian/Ubuntu también `python3-tk`). |
+
+Los tres paquetes incluyen **Archivos iniciales.zip**: cárguelo en **Data → Paquete inicial**. El **Download ZIP** de GitHub **no** baja los archivos LFS; el de Windows hay que bajarlo por el enlace de arriba o clonar con `git lfs pull`.
+
+No se puede generar el `.exe` de Windows ni un binario nativo de Mac/Linux desde otro sistema. Mac y Linux llevan el código y un instalador local.
 
 ## Requisitos
 
-- Python 3.11+ (recomendado 3.13)
-- Windows (GUI y `.exe` probados ahí)
+- Python 3.11+ (recomendado 3.13) si instala desde código, Mac o Linux
+- Windows: el `.exe` ya trae Python embebido
 
-## Instalación
+## Instalación desde código
 
 ```bat
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+python main.py
 ```
+
+En macOS/Linux: `python3 -m venv .venv` y `source .venv/bin/activate`.
 
 ## Git LFS
 
@@ -29,6 +39,8 @@ GitHub bloquea archivos de más de **100 MB** en git normal. Este repo usa [Git 
 | Qué | Cómo se versiona |
 |-----|------------------|
 | `release/ConsolidadoHumanidades-Windows.zip` | **Git LFS** (supera 100 MB) |
+| `release/ConsolidadoHumanidades-macOS.zip` | git normal (código + instalador; no incluye Python) |
+| `release/ConsolidadoHumanidades-Linux.zip` | git normal (código + instalador; no incluye Python) |
 | `ConsolidadoHumanidades.exe` (lanzador de la raíz) | git normal (~7 KB) |
 | `ArchivosPrueba2026-1.zip` | git normal (~19 MB) |
 | `dist/` (salida de PyInstaller) | **no se sube**; regenerar con `build_exe.bat` |
@@ -41,8 +53,6 @@ git lfs pull
 ```
 
 GitHub Desktop usa LFS si Git LFS está instalado. Sin `git lfs pull`, `release/ConsolidadoHumanidades-Windows.zip` queda como un puntero de texto, no como el paquete real.
-
-El **Download ZIP** del repositorio en GitHub **no** descarga los archivos LFS. Para el instalable use el enlace de `release/` de arriba o clone con LFS.
 
 ## Cómo ejecutar
 
@@ -71,35 +81,78 @@ Abre la web en el navegador. Usuario inicial: **admin** / **admin** (cámbielo e
 1. El admin carga Excels en **Data** (`datos/entrada/`). El de Permanencia y ruta de grado es opcional.
 2. **Generar** corre el pipeline (`consolidado.core.pipeline`): lee fuentes → fusiona por identificación → prioridad → alertas → ruta de grado → Excel + **nueva versión SQL**.
 3. Las consultas (ficha, seguimiento, gráficas) leen la **última versión** en `datos/consolidado.db`.
-4. Las **metas de graduación y permanencia** se leen del Excel de Permanencia y se muestran en Inicio (no van en SQL).
+4. Las **metas de graduación y permanencia** se leen del Excel de Permanencia (en vivo) y se muestran en Metas / Inicio; los ajustes de Meta # y Meta % de graduación sí van en SQL (`metas_grado_override`).
 5. Cada generación es un snapshot nuevo. **Nunca se sobrescribe** una versión previa.
 
 La clave del estudiante es la **identificación** normalizada. En SQL la fila es `(identificacion, version_id)`: no hay un maestro único; identidad y beca/horario se vuelven a guardar en cada corte.
+
+Hay **una sola base SQLite** (`datos/consolidado.db`). Los libros `bd1`, `bd12`, `bd2`… no son bases aparte: son **Excel fuente** que, al generar, se fusionan en un corte versionado.
 
 ### Periodo de la versión vs periodo del estudiante
 
 - **Periodo de la versión:** sale de la fecha del corte (ene–jun → `YYYY-1`, jul–dic → `YYYY-2`).
 - **Periodo actual del estudiante:** `COD_PERIODO` / `COD_PENSUM` de BD1 y BD12, 5 dígitos (`20261` → `2026-1`). Es el que muestra el horario de la ficha.
 
+## Excel fuente → SQLite y módulos
+
+Para **poder generar** el consolidado hacen falta **cuatro** libros. El resto es opcional: el módulo queda vacío o incompleto.
+
+`bd1` y `bd12` son los únicos que **crean estudiantes**. El resto **solo enriquecen** a quien ya salió de matriculados (o de un alta manual).
+
+| Excel | Archivo | ¿Obligatorio? | Tabla SQL | Módulos que lo usan |
+|-------|---------|---------------|-----------|---------------------|
+| **bd1** Matriculados activos | `bd1.xlsx` (`BASE` + `HORARIO`) | **Sí** | `estudiantes_base` (datos, horario, periodo) | Ficha, Horario, Inicio, Seguimiento, Gráficas, Parcializado, Versiones |
+| **bd12** Matriculados entrenamiento | `bd12.xlsx` | **Sí** | Igual que bd1 | Los mismos (población de entrenamiento) |
+| **bd2** Grupos priorizados | `bd2.xlsx` | **Sí** | `estudiantes_priorizado` | Ficha Priorizado, Seguimiento Priorizado, puntaje |
+| **bd_prio_psi** / **bd_prio_lic** | priorizado enriquecido | No | `estudiantes_priorizado` (adaptación / ruta) | Ficha Priorizado y Ruta, puntaje |
+| **bd3** Becas y crédito | `bd3.xlsx` | **Sí** | `estudiantes_rendimiento` | Ficha Becas, Seguimiento Beca, puntaje |
+| **bd_rep** Asignaturas repetidas | `bd_rep.xlsx` | No | `estudiantes_rendimiento` (`Repitiendo`) | Ficha Horario, Seguimiento Repitiendo |
+| **bd_permanencia** | Permanencia y ruta de grado | No | Extras en `estudiantes_base` (ruta, cohorte, % créditos) | **Proyección**, ficha Ruta de grado. **Metas** lee este Excel en vivo |
+| **bd_graduacion** | Gestión de graduación | No | Extras de ruta/estado de grado | Proyección y ficha (completa permanencia) |
+| **Alertas** com/psi inicial y final | `bd_alertas_*` | No (finales marcados opcionales) | `estudiantes_alertas` | Ficha Alertas, Seguimiento Alertas |
+| **Documentos adicionales** | los que añada el admin | No | Extras en `fila_json` de base | Ficha (categoría elegida) |
+
+| Módulo web | De dónde sale |
+|------------|----------------|
+| Inicio, Ficha, Seguimiento, Gráficas, Parcializado | Última (o elegida) versión SQL |
+| Proyección a grado | SQL (ruta/cohorte) + `estudiante_gradua_semestre` |
+| Metas | Excel `bd_permanencia` **en vivo** + `metas_grado_override` |
+| Versiones | Tabla `versiones` + Excel en `salida/` |
+| Información / Usuarios / Historial | Código y tablas globales, no dependen de un Excel concreto |
+
 ## Base SQLite (`datos/consolidado.db`)
 
-Al cambiar el esquema, suba `SCHEMA_VERSION` en `consolidado/storage/db.py` y añada la migración en `inicializar_db` (hoy va en **12**).
+Al cambiar el esquema, suba `SCHEMA_VERSION` en `consolidado/storage/db.py` y añada la migración en `inicializar_db` (hoy va en **13**).
+
+Clave de estudiante en cada corte: `(identificacion, version_id)`. `fila_json` guarda horario, ruta de grado y columnas extra.
+
+### Por versión (se borran en cascada con el corte)
 
 | Tabla | Rol |
 |-------|-----|
-| `versiones` | Metadatos de cada corte |
-| `estudiantes_base` | Identidad, contactos, periodo, puntaje, `fila_json` |
+| `versiones` | Periodo, fecha, conteos, `columnas_json`, ruta Excel |
+| `estudiantes_base` | Identidad, contactos, periodos, puntaje, horario y extras en `fila_json` |
+| `estudiantes_priorizado` | Priorizado, motivo, adaptación, activación |
 | `estudiantes_rendimiento` | Beca, funcionario, repitiendo |
-| `estudiantes_priorizado` | Priorizado, adaptación, activación |
-| `estudiantes_alertas` | Alertas de esa versión |
-| `priorizados_propios` | Marca propia (global, no por versión) |
-| `alertas_propias` | Alerta propia (global) |
-| `priorizados_contactados` | Check de Seguimiento (global) |
-| `modificaciones` | Bitácora (Historial) |
-| `estudiantes_manuales` | Alta a mano (global; se reinyectan al generar) |
-| `usuarios` | Login y roles |
+| `estudiantes_alertas` | Alertas inicial/final y alerta propia de ese corte |
 
-`fila_json` es la fuente para reconstruir la ficha. Las columnas indexables son atajos de búsqueda.
+### Globales (no dependen del consolidado)
+
+| Tabla | Rol |
+|-------|-----|
+| `usuarios` | Login (admin / consulta) |
+| `schema_meta` | Versión del esquema |
+| `priorizados_propios` | Marca «priorizado propio» |
+| `alertas_propias` | Alerta propia |
+| `alertas_descartadas` | Tipos de alerta quitados a mano |
+| `priorizados_contactados` | Check de Seguimiento |
+| `seguimiento_atenciones` | Estadísticas de atenciones |
+| `seguimiento_notas` | Notas de la ficha / Seguimiento |
+| `estudiante_gradua_semestre` | «¿Se gradúa este semestre?» |
+| `estudiante_ediciones` | Campos editados en la ficha |
+| `estudiantes_manuales` | Alta a mano (se reinyectan al generar) |
+| `metas_grado_override` | Meta # y Meta % de graduación editadas |
+| `modificaciones` | Historial |
 
 ## Configuración
 
@@ -120,7 +173,7 @@ Al cargar, los defaults se fusionan con el JSON: columnas nuevas del código se 
 | `datos/consolidado.db` | SQLite |
 | `salida/` | Excel generado por versión |
 | `docs/` | Manual técnico |
-| `empaque/` | Lanzador Windows (sin consola) |
+| `empaque/` | Lanzador Windows y paquetes Mac/Linux |
 | `consolidado/` | Código |
 
 Los `.xlsx` sueltos y la `.db` **no van al repositorio** (datos de estudiantes). Qué sí se versiona (git vs LFS) está en **Git LFS**.
@@ -154,7 +207,7 @@ consolidado/
     avisos.py           Tarjetas si el .exe no arranca
   gui/                  CustomTkinter (legado, aún usable)
 docs/MANUAL_TECNICO.md  Arquitectura y reglas
-empaque/                Lanzador Windows (sin consola)
+empaque/                Lanzador Windows y paquetes Mac/Linux
 ```
 
 Para seguir un cambio:
@@ -169,14 +222,15 @@ No mezcle el periodo de la **versión** (`periodo_desde_fecha`) con el **Periodo
 
 ## Ejecutable
 
-Doble clic en **`ConsolidadoHumanidades.exe`**. No se abre una terminal. Si falla el arranque, aparece una tarjeta.
+- **Windows:** doble clic en `ConsolidadoHumanidades.exe`. No se abre una terminal. Si falla el arranque, aparece una tarjeta.
+- **Mac:** extraiga el ZIP, pulse **Instalar** y luego **Consolidado Humanidades**.
+- **Linux:** extraiga el ZIP y ejecute `./Instalar.sh`.
 
 El manual de uso está dentro de la web: signo **?** (esquina superior derecha).
 
-Para regenerar el paquete (sin publicarlo a git):
-
 ```bat
 build_exe.bat
+python empaque/macos/armar_paquete.py
 ```
 
-Fuentes del lanzador: `empaque/`. Manual técnico: `docs/MANUAL_TECNICO.md`.
+`build_exe.bat` genera el ZIP de Windows. `armar_paquete.py` genera los de Mac y Linux (se puede correr en Windows). Fuentes del lanzador: `empaque/`. Manual técnico: `docs/MANUAL_TECNICO.md`.

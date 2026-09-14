@@ -9,6 +9,7 @@ Las plantillas reciben es_admin y el usuario de sesión vía _render.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import webbrowser
@@ -57,7 +58,7 @@ from consolidado.storage.contactados import estadisticas_atenciones, marcar_cont
 from consolidado.storage.graduacion import marcar_gradua
 from consolidado.storage.ediciones import GRUPOS_EDITABLES, borrar_ediciones_grupo, clave_campo_edicion, guardar_ediciones
 from consolidado.storage.estudiantes_manuales import crear_estudiante_manual
-from consolidado.storage.notas import agregar_nota, quitar_nota
+from consolidado.storage.notas import agregar_nota, excel_anotaciones_bytes, listar_todas_notas, quitar_nota
 from consolidado.storage.db import (
     buscar_estudiantes,
     listar_versiones,
@@ -114,7 +115,12 @@ _PREFIJOS_ADMIN = (
     "/api/documento",
     "/api/fuente",
 )
-_RUTAS_ADMIN_EXTRA = {"/versiones/importar", "/versiones/generar", "/estudiante/crear"}
+_RUTAS_ADMIN_EXTRA = {
+    "/versiones/importar",
+    "/versiones/generar",
+    "/estudiante/crear",
+    "/metas/guardar",
+}
 
 
 def _es_publico(path: str) -> bool:
@@ -285,9 +291,44 @@ async def inicio(request: Request) -> HTMLResponse:
     return _render(request, "inicio.html", nav="inicio")
 
 
+def _notas_todas(request: Request) -> bool:
+    val = (request.query_params.get("notas") or "").strip().lower()
+    return val in {"todas", "all", "1", "si", "sí"}
+
+
 @app.get("/metas", response_class=HTMLResponse)
 async def pagina_metas(request: Request) -> HTMLResponse:
     return _render(request, "metas.html", nav="metas", metas=services.metas_ruta_grado())
+
+
+@app.post("/metas/guardar")
+async def guardar_metas_grado(request: Request) -> RedirectResponse:
+    form = await request.form()
+    periodo = str(form.get("periodo") or "").strip()
+    n = 0
+    try:
+        n = int(str(form.get("n_filas") or "0"))
+    except ValueError:
+        n = 0
+    filas = []
+    for i in range(n):
+        programa = str(form.get(f"programa_{i}") or "").strip()
+        if not programa:
+            continue
+        filas.append(
+            {
+                "programa": programa,
+                "meta_num": str(form.get(f"meta_num_{i}") or "").strip(),
+                "meta_pct": str(form.get(f"meta_pct_{i}") or "").strip(),
+            }
+        )
+    try:
+        from consolidado.storage.metas import guardar_overrides
+
+        guardar_overrides(periodo, filas)
+    except ValueError as exc:
+        return _redir("/metas", err=str(exc))
+    return _redir("/metas", msg="Metas de graduación actualizadas.")
 
 
 @app.get("/colores", response_class=HTMLResponse)
@@ -647,9 +688,16 @@ async def pagina_estudiante(request: Request, q: str = "") -> HTMLResponse:
             resultados = buscar_estudiantes_en_fuentes(cfg, PROJECT_ROOT, q.strip(), limite=40)
         _pintar_programas(resultados)
         if len(resultados) == 1:
-            ficha = obtener_ficha_estudiante(cfg, PROJECT_ROOT, resultados[0]["identificacion"])
+            ficha = obtener_ficha_estudiante(
+                cfg,
+                PROJECT_ROOT,
+                resultados[0]["identificacion"],
+                notas_todas=_notas_todas(request),
+            )
         elif q.strip().isdigit() or len(q.strip()) >= 5:
-            ficha = obtener_ficha_estudiante(cfg, PROJECT_ROOT, q.strip())
+            ficha = obtener_ficha_estudiante(
+                cfg, PROJECT_ROOT, q.strip(), notas_todas=_notas_todas(request)
+            )
     ficha_cat, ficha_sec = _tabs_ficha(request, ficha)
     extra: dict[str, Any] = {}
     usuario = getattr(request.state, "usuario", None) or _usuario_sesion(request)
@@ -677,7 +725,9 @@ async def pagina_estudiante(request: Request, q: str = "") -> HTMLResponse:
 @app.get("/estudiante/{identificacion}", response_class=HTMLResponse)
 async def ficha_estudiante(request: Request, identificacion: str) -> HTMLResponse:
     cfg = services.cfg_actual()
-    ficha = obtener_ficha_estudiante(cfg, PROJECT_ROOT, identificacion)
+    ficha = obtener_ficha_estudiante(
+        cfg, PROJECT_ROOT, identificacion, notas_todas=_notas_todas(request)
+    )
     if ficha is None:
         extra: dict[str, Any] = {}
         usuario = getattr(request.state, "usuario", None) or _usuario_sesion(request)
@@ -983,6 +1033,24 @@ async def quitar_nota_seguimiento(
         entidad="estudiante",
     )
     return _redir(destino, msg="Nota eliminada.")
+
+
+@app.get("/notas/excel")
+async def descargar_anotaciones() -> Response:
+    df, _ = services.df_ultima_version()
+    contenido = excel_anotaciones_bytes(
+        listar_todas_notas(PROJECT_ROOT),
+        estudiantes=df,
+        base=PROJECT_ROOT,
+    )
+    nombre = "anotaciones_seguimiento.xlsx"
+    return Response(
+        content=contenido,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nombre}"'
+        },
+    )
 
 
 @app.get("/seguimiento/estadisticas", response_class=HTMLResponse)
@@ -1377,9 +1445,19 @@ async def api_parcializado(version_id: int) -> JSONResponse:
 async def api_parcializado_conteo(
     version_id: int,
     programa: list[str] = Query(default=[]),
+    beca: list[str] = Query(default=[]),
+    nivel: list[str] = Query(default=[]),
+    cohorte: list[str] = Query(default=[]),
+    pensum: list[str] = Query(default=[]),
 ) -> JSONResponse:
+    filtros = {
+        "beca": [v for v in beca if str(v).strip()],
+        "nivel": [v for v in nivel if str(v).strip()],
+        "cohorte": [v for v in cohorte if str(v).strip()],
+        "pensum": [v for v in pensum if str(v).strip()],
+    }
     try:
-        n = services.conteo_parcializado(version_id, programa or None)
+        n = services.conteo_parcializado(version_id, programa or None, filtros)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
     return JSONResponse({"filas": n})
@@ -1395,9 +1473,18 @@ async def descargar_parcializado(request: Request) -> Response:
     columnas = [str(v).strip() for v in form.getlist("columna") if str(v).strip()]
     todas = str(form.get("todas_carreras") or "") in {"1", "on", "true"}
     programas = [] if todas else [str(v).strip() for v in form.getlist("programa") if str(v).strip()]
+    filtros = {
+        "beca": [str(v).strip() for v in form.getlist("beca") if str(v).strip()],
+        "nivel": [str(v).strip() for v in form.getlist("nivel") if str(v).strip()],
+        "cohorte": [str(v).strip() for v in form.getlist("cohorte") if str(v).strip()],
+        "pensum": [str(v).strip() for v in form.getlist("pensum") if str(v).strip()],
+    }
     try:
         contenido, nombre = services.excel_parcializado(
-            version_id, columnas=columnas, programas=programas or None
+            version_id,
+            columnas=columnas,
+            programas=programas or None,
+            filtros=filtros,
         )
     except ValueError as exc:
         return _redir("/parcializado", err=str(exc))
@@ -1546,13 +1633,21 @@ async def guardar_puntajes_web(notas: str = Form("")) -> RedirectResponse:
 
 
 @app.get("/graficas", response_class=HTMLResponse)
-async def pagina_graficas(request: Request) -> HTMLResponse:
-    df, meta = services.df_ultima_version()
-    cfg = services.cfg_actual()
-    permitidas = cfg.get("columnas_graficas")
-    if not isinstance(permitidas, list):
-        permitidas = None
-    columnas = columnas_graficables(df, permitidas=permitidas) if df is not None else []
+async def pagina_graficas(
+    request: Request,
+    version: int | None = None,
+) -> HTMLResponse:
+    versiones = services.listar_versiones_parcializado()
+    datos = None
+    if versiones:
+        vid = version if version is not None else int(versiones[0]["id"])
+        try:
+            datos = services.datos_graficas(vid)
+        except ValueError:
+            datos = None
+    columnas = (datos or {}).get("columnas") or []
+    programas = (datos or {}).get("programas") or []
+    meta = (datos or {}).get("version")
     return _render(
         request,
         "graficas.html",
@@ -1560,18 +1655,31 @@ async def pagina_graficas(request: Request) -> HTMLResponse:
         columnas=columnas,
         tipos=TIPOS_GRAFICA,
         meta=meta,
-        programas=services.programas_ultima_version(),
+        programas=programas,
+        versiones=versiones,
     )
+
+
+@app.get("/api/graficas/{version_id}")
+async def api_graficas_version(version_id: int) -> JSONResponse:
+    try:
+        return JSONResponse(services.datos_graficas(version_id))
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 @app.get("/api/grafica")
 async def api_grafica(
     columna: str,
-    tipo: str = "bar",
+    tipo: str = "line",
     top: int = 25,
     programa: str = "",
+    version_id: int | None = None,
 ) -> JSONResponse:
-    df, _ = services.df_ultima_version()
+    try:
+        df, _ = services.df_version(version_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
     if df is None or df.height == 0:
         raise HTTPException(400, "No hay datos del consolidado. Genere uno primero.")
     cfg = services.cfg_actual()
@@ -1592,14 +1700,10 @@ async def api_grafica(
 
 @app.post("/api/grafica/powerbi")
 async def api_grafica_powerbi(payload: dict[str, Any] = Body(...)) -> Response:
-    df, _ = services.df_ultima_version()
-    if df is None or df.height == 0:
-        raise HTTPException(400, "No hay datos del consolidado. Genere uno primero.")
     cfg = services.cfg_actual()
     permitidas = cfg.get("columnas_graficas")
     if not isinstance(permitidas, list):
         permitidas = None
-    habilitadas = columnas_graficables(df, permitidas=permitidas)
     items = payload.get("graficas") if isinstance(payload, dict) else None
     if not items:
         raise HTTPException(400, "Indique al menos una gráfica lista.")
@@ -1607,9 +1711,18 @@ async def api_grafica_powerbi(payload: dict[str, Any] = Body(...)) -> Response:
     try:
         for item in items:
             columna = str(item.get("columna") or "")
+            vid = item.get("version_id")
+            try:
+                version_id = int(vid) if vid not in (None, "") else None
+            except (TypeError, ValueError):
+                version_id = None
+            df, _ = services.df_version(version_id)
+            if df is None or df.height == 0:
+                raise ValueError("No hay datos del consolidado. Genere uno primero.")
+            habilitadas = columnas_graficables(df, permitidas=permitidas)
             if columna not in habilitadas:
                 raise ValueError(f"La columna «{columna}» no está habilitada para gráficas.")
-            tipo = str(item.get("tipo") or "bar")
+            tipo = str(item.get("tipo") or "line")
             top = int(item.get("top") or 20)
             programa = str(item.get("programa") or "")
             data = preparar_datos_grafica(
@@ -1662,8 +1775,15 @@ async def api_apagar() -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
-def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:
+def _es_instalacion_local() -> bool:
     if getattr(sys, "frozen", False):
+        return True
+    marca = (os.environ.get("CONSOLIDADO_LOCAL") or "").strip().lower()
+    return marca in {"1", "true", "yes", "si", "sí"}
+
+
+def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:
+    if _es_instalacion_local():
         _run_empaquetado(host, port, open_browser=open_browser)
         return
     if open_browser:

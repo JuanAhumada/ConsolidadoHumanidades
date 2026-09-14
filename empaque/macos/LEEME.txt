@@ -1,0 +1,21 @@
+Consolidado de Humanidades — instalación en Mac
+==============================================
+
+1. Instale Python 3.11 o superior si aún no lo tiene:
+   https://www.python.org/downloads/macos/
+   En el instalador marque «Install Python» y deje «Add Python to PATH».
+
+2. Extraiga este ZIP a una carpeta permanente (por ejemplo Documentos).
+   No separe la aplicación de la carpeta «app»: tienen que ir juntas.
+
+3. Primera vez: pulse «Instalar.command».
+   Si macOS dice que no se puede abrir: clic derecho → Abrir → Abrir.
+
+4. Después use «Consolidado Humanidades» (doble clic) o «Abrir.command».
+   Se abre el navegador en http://127.0.0.1:8765/
+   Usuario inicial: admin / admin
+
+5. En Data puede cargar «Archivos iniciales.zip» para probar con los Excel de ejemplo.
+
+Para apagar la aplicación, cierre la pestaña del navegador y confirme.
+Para volver a instalar, pulse otra vez Instalar.command (no borra sus datos en app/datos).
