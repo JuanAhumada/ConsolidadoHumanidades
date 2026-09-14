@@ -71,7 +71,7 @@ a:hover { color: var(--accent-bright); text-decoration: underline; text-underlin
 
 .layout {
   display: grid;
-  grid-template-columns: 268px 1fr;
+  grid-template-columns: 292px 1fr;
   min-height: 100vh;
   position: relative;
   z-index: 1;
@@ -174,13 +174,14 @@ html.nav-hidden .nav-show {
 }
 
 .brand-mark {
-  width: 2.35rem;
-  height: 2.35rem;
+  width: 3.5rem;
+  height: 3.5rem;
   border-radius: 12px;
   display: block;
-  object-fit: cover;
-  margin-bottom: 0.85rem;
-  box-shadow: 0 10px 24px var(--accent-glow);
+  object-fit: contain;
+  background: #9a1b2e;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 10px 24px rgba(139, 16, 32, 0.35);
 }
 
 .brand:hover h1 { color: #fff; }
@@ -188,9 +189,9 @@ html.nav-hidden .nav-show {
 
 .brand h1 {
   margin: 0;
-  font-size: 1.55rem;
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  font-size: 1.05rem;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
   color: #fff;
   font-family: var(--font-display);
   font-weight: 600;
@@ -3592,13 +3593,14 @@ html.ayuda-abierta body.page-login {
 }
 
 .login-logo {
-  width: 4.1rem;
-  height: 4.1rem;
-  border-radius: 16px;
-  object-fit: cover;
+  width: 4.6rem;
+  height: 4.6rem;
+  border-radius: 14px;
+  object-fit: contain;
+  background: #9a1b2e;
   display: block;
   margin: 0 auto 0.95rem;
-  box-shadow: 0 12px 28px var(--accent-glow);
+  box-shadow: 0 12px 28px rgba(139, 16, 32, 0.4);
 }
 
 .login-kicker {
@@ -3614,9 +3616,9 @@ html.ayuda-abierta body.page-login {
   margin: 0.28rem 0 0;
   color: #fff;
   font-family: var(--font-display);
-  font-size: 2rem;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
 }
 
 .login-lead {

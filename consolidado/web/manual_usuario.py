@@ -62,7 +62,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "Entran quienes, según ruta de grado y permanencia, tienen cohorte o periodo de grado cercano, muchos créditos, o opción de grado / inglés / Saber Pro en curso.",
             "Aún no: no han confirmado que se gradúan este semestre (incluye a quienes dijeron que no).",
             "Se gradúan: los que en la ficha respondieron Sí a «¿Se gradúa este semestre?».",
-            "Organizar ordena las tarjetas por cohorte de grado (la más cercana primero) o por porcentaje de créditos aprobados (de mayor a menor).",
+            "Organizar ordena las tarjetas por cohorte de graduación (la más cercana primero) o por porcentaje de créditos aprobados (de mayor a menor).",
             "Abra la ficha desde la tarjeta para marcar Sí o No y para dejar notas de seguimiento.",
         ],
     },

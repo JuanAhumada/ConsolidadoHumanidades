@@ -80,7 +80,7 @@ class AppConsolidado(ctk.CTk):
         self._paginas: dict[str, ctk.CTkFrame] = {}
         self._pagina_activa: str | None = None
 
-        self.title("Consolidado de Humanidades")
+        self.title("Bienestar Académico")
         self.geometry("1180x780")
         self.minsize(960, 640)
         self.configure(fg_color=COLOR_PAGE)

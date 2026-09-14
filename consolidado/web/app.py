@@ -99,7 +99,7 @@ def _web_dir() -> Path:
 WEB_DIR = _web_dir()
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
-app = FastAPI(title="Consolidado de Humanidades", version=APP_VERSION)
+app = FastAPI(title="Bienestar Académico", version=APP_VERSION)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 _RUTAS_PUBLICAS = {"/login", "/logout", "/api/apagar"}
