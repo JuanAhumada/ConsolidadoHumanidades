@@ -237,6 +237,7 @@ def _seccion_academico(fila: dict, extras: list[str] | None = None) -> dict:
     etiquetas = (
         ("Activos", "Activo"),
         ("Periodo ingreso", "Periodo de Ingreso"),
+        ("Pensum", "Pensum"),
         ("Reintegros", "Reintegros"),
         ("Repitiendo", "Repitiendo"),
     )

@@ -19,6 +19,7 @@ from consolidado.core.fusion import unir_extra_por_id_o_nombre
 from consolidado.core.normalizacion import (
     _es_nulo,
     clave_fusion_estudiante,
+    clave_orden_etiqueta,
     formatear_periodo_cod,
     normalizar_encabezado,
     programa_es_permitido,
@@ -855,6 +856,7 @@ def _grafica_bloque_meta(tipo: str, bloque: dict[str, Any]) -> dict[str, Any] | 
     filas = bloque.get("filas") or []
     if not filas:
         return None
+    filas = sorted(filas, key=lambda f: clave_orden_etiqueta(str(f.get("programa") or "")))
     labels = [str(f.get("programa") or "") for f in filas]
     meta_pct = [_pct_de_texto(f.get("meta_pct")) for f in filas]
     alc_pct = [_pct_de_texto(f.get("alcanzado_pct")) for f in filas]
@@ -929,11 +931,8 @@ def _graficas_metas_por_carrera(
                 orden_prog.append(programa)
             por_prog.setdefault(programa, {})[periodo] = fila
 
-    def _ord_periodo(periodo: str) -> tuple[int, str]:
-        clave = _clave_periodo(periodo)
-        return (clave if clave is not None else 10**9, periodo)
-
-    periodos.sort(key=_ord_periodo)
+    periodos.sort(key=clave_orden_etiqueta)
+    orden_prog.sort(key=clave_orden_etiqueta)
     marcas = [bool(es_proyeccion.get(p)) for p in periodos]
     graficas: list[dict[str, Any]] = []
     for programa in orden_prog:
@@ -976,6 +975,7 @@ def _grafica_historico(bloque: dict[str, Any], clave: str) -> dict[str, Any] | N
     ]
     if not filas:
         return None
+    filas = sorted(filas, key=lambda f: clave_orden_etiqueta(str(f.get("periodo") or "")))
     programa = bloque.get("programa") or "Programa"
     nombre = "Permanencia" if clave == "permanencia" else "Graduación"
     return {

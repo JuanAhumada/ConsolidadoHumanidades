@@ -7,35 +7,35 @@ from tkinter import ttk
 
 from consolidado.gui.icons import limpiar_cache_iconos
 
-# Tipografía con jerarquía clara (Calibri / Bahnschrift en Windows).
-FONT_MARCA = ("Bahnschrift", 22, "bold")
-FONT_TITULO = ("Bahnschrift", 26, "bold")
-FONT_SUBTITULO = ("Calibri", 16, "bold")
-FONT_TEXTO = ("Calibri", 14)
-FONT_PEQUENA = ("Calibri", 12)
-FONT_GUIA = ("Calibri", 12)
-FONT_NAV = ("Calibri", 14)
+# Tipografía institucional (Red Hat Display; Segoe UI si no está instalada).
+FONT_MARCA = ("Red Hat Display", 22, "bold")
+FONT_TITULO = ("Red Hat Display", 26, "bold")
+FONT_SUBTITULO = ("Red Hat Display", 16, "bold")
+FONT_TEXTO = ("Red Hat Display", 14)
+FONT_PEQUENA = ("Red Hat Display", 12)
+FONT_GUIA = ("Red Hat Display", 12)
+FONT_NAV = ("Red Hat Display", 14)
 
-# Paleta institucional (teal sobre slate claro) — evita púrpuras genéricos.
-COLOR_OK = "#0d9f6e"
-COLOR_FALTA = "#e11d48"
-COLOR_OPCIONAL = "#64748b"
-COLOR_ACENTO = "#0f766e"
-COLOR_ACENTO_HOVER = "#0d9488"
-COLOR_ACENTO_SUAVE = ("#ccfbf1", "#134e4a")
-COLOR_TEXTO = ("#0f172a", "#e2e8f0")
-COLOR_TEXTO_MUTED = ("#64748b", "#94a3b8")
-COLOR_BORDE = ("#e2e8f0", "#334155")
-COLOR_SIDEBAR = ("#0f172a", "#020617")
-COLOR_SIDEBAR_ITEM = ("#1e293b", "#0f172a")
-COLOR_SIDEBAR_ACTIVO = ("#0f766e", "#0d9488")
-COLOR_PAGE = ("#f1f5f9", "#0b1220")
-COLOR_CARD = ("#ffffff", "#111827")
-COLOR_TOPBAR = ("#ffffff", "#0f172a")
+# Paleta institucional CUC: Auburn, oro, verde bosque y grises.
+COLOR_OK = "#078930"
+COLOR_FALTA = "#A3161A"
+COLOR_OPCIONAL = "#A5A5A5"
+COLOR_ACENTO = "#A3161A"
+COLOR_ACENTO_HOVER = "#C41C21"
+COLOR_ACENTO_SUAVE = ("#F6E4E5", "#6B0E12")
+COLOR_TEXTO = ("#2A2A2A", "#F4F4F4")
+COLOR_TEXTO_MUTED = ("#595959", "#A5A5A5")
+COLOR_BORDE = ("#CCCCCC", "#595959")
+COLOR_SIDEBAR = ("#2A0506", "#2A0506")
+COLOR_SIDEBAR_ITEM = ("#6B0E12", "#3D080A")
+COLOR_SIDEBAR_ACTIVO = ("#A3161A", "#C41C21")
+COLOR_PAGE = ("#F4F4F4", "#2A0506")
+COLOR_CARD = ("#ffffff", "#3D080A")
+COLOR_TOPBAR = ("#ffffff", "#2A0506")
 
 _COLORES_FONDO = {
-    "dark": "#0b1220",
-    "light": "#f1f5f9",
+    "dark": "#2A0506",
+    "light": "#F4F4F4",
 }
 
 
@@ -61,8 +61,8 @@ def estilo_boton_primario() -> dict:
 def estilo_boton_secundario() -> dict:
     """Botón outline visible en claro y oscuro."""
     return {
-        "fg_color": ("#ffffff", "#1e293b"),
-        "hover_color": ("#f1f5f9", "#334155"),
+        "fg_color": ("#ffffff", "#3D080A"),
+        "hover_color": ("#F4F4F4", "#6B0E12"),
         "border_width": 1,
         "border_color": COLOR_BORDE,
         "text_color": COLOR_TEXTO,
@@ -73,7 +73,7 @@ def estilo_boton_secundario() -> dict:
 def estilo_boton_ghost() -> dict:
     return {
         "fg_color": "transparent",
-        "hover_color": ("#e2e8f0", "#1e293b"),
+        "hover_color": ("#E8E8E8", "#6B0E12"),
         "border_width": 0,
         "text_color": COLOR_TEXTO_MUTED,
         "corner_radius": 10,
@@ -118,7 +118,7 @@ def estilo_nav_item(*, activo: bool = False) -> dict:
     return {
         "fg_color": "transparent",
         "hover_color": COLOR_SIDEBAR_ITEM,
-        "text_color": ("#cbd5e1", "#94a3b8"),
+        "text_color": ("#CCCCCC", "#A5A5A5"),
         "corner_radius": 12,
         "anchor": "w",
         "height": 42,
@@ -134,11 +134,11 @@ def configurar_tabview(tabview: ctk.CTkTabview) -> None:
     if not getattr(tabview, "_tab_dict", None):
         return
     tabview.configure(
-        segmented_button_fg_color=("#e2e8f0", "#1e293b"),
+        segmented_button_fg_color=("#E8E8E8", "#3D080A"),
         segmented_button_selected_color=(COLOR_ACENTO, COLOR_ACENTO),
         segmented_button_selected_hover_color=(COLOR_ACENTO_HOVER, COLOR_ACENTO_HOVER),
-        segmented_button_unselected_color=("#f8fafc", "#111827"),
-        segmented_button_unselected_hover_color=("#e2e8f0", "#334155"),
+        segmented_button_unselected_color=("#F7F7F7", "#2A0506"),
+        segmented_button_unselected_hover_color=("#E8E8E8", "#6B0E12"),
         text_color=COLOR_TEXTO,
     )
 
@@ -212,10 +212,10 @@ def configurar_treeview(tree: ttk.Treeview) -> None:
     style = ttk.Style()
     style.theme_use("clam")
     if ctk.get_appearance_mode() == "Dark":
-        bg, fg, field, heading = "#111827", "#e2e8f0", "#1e293b", "#1e293b"
+        bg, fg, field, heading = "#3D080A", "#F4F4F4", "#6B0E12", "#6B0E12"
         select_bg, select_fg = COLOR_ACENTO, "#ffffff"
     else:
-        bg, fg, field, heading = "#ffffff", "#0f172a", "#f8fafc", "#f1f5f9"
+        bg, fg, field, heading = "#ffffff", "#2A2A2A", "#F7F7F7", "#F4F4F4"
         select_bg, select_fg = COLOR_ACENTO, "#ffffff"
     style.configure(
         "Consolidado.Treeview",
@@ -224,13 +224,13 @@ def configurar_treeview(tree: ttk.Treeview) -> None:
         fieldbackground=field,
         rowheight=32,
         borderwidth=0,
-        font=("Calibri", 12),
+        font=("Red Hat Display", 12),
     )
     style.configure(
         "Consolidado.Treeview.Heading",
         background=heading,
         foreground=fg,
-        font=("Calibri", 11, "bold"),
+        font=("Red Hat Display", 11, "bold"),
         relief="flat",
     )
     style.map(

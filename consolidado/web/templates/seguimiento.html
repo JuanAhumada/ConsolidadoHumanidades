@@ -27,6 +27,24 @@
 </nav>
 {% endif %}
 
+{% if mostrar_filtro_beca %}
+<nav class="seg-carreras seg-tipos" aria-label="Filtrar por tipo de beca">
+  <a class="{% if filtro_beca_general %}active{% endif %}" href="{{ href_becas_general }}">Todas las becas</a>
+  {% for t in tipos_beca %}
+  <a class="{% if t.activo %}active{% endif %}" href="{{ t.href }}" title="{{ t.nombre }}">{{ t.nombre }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
+{% if mostrar_filtro_prio %}
+<nav class="seg-carreras seg-tipos" aria-label="Filtrar por tipo de priorizado">
+  <a class="{% if filtro_prio_general %}active{% endif %}" href="{{ href_prio_general }}">Todos los motivos</a>
+  {% for t in tipos_prio %}
+  <a class="{% if t.activo %}active{% endif %}" href="{{ t.href }}" title="{{ t.nombre }}">{{ t.nombre }}</a>
+  {% endfor %}
+</nav>
+{% endif %}
+
 <nav class="seg-switch" aria-label="Tipo de prioridad">
   {% for c in categorias %}
   <a class="{% if c.id==cat %}active{% endif %}" href="{{ c.href }}">
@@ -121,6 +139,8 @@
     </button>
     <h3><a href="/estudiante/{{ f.identificacion }}">{{ f.nombre }}</a></h3>
     <p class="seg-card-score"><strong>{{ f.puntaje_txt }}</strong> {% if cat == 'alertas' %}alertas{% elif cat == 'notas' %}notas{% else %}pts{% endif %}</p>
+    {% if cat == 'beca' and f.tipos_beca %}<p class="seg-card-nota">{{ f.tipos_beca | join(', ') }}</p>{% endif %}
+    {% if cat == 'priorizado' and f.motivos_prio %}<p class="seg-card-nota">{{ f.motivos_prio | join(', ') }}</p>{% elif cat == 'priorizado' and f.motivo %}<p class="seg-card-nota">{{ f.motivo }}</p>{% endif %}
     {% if cat == 'notas' and f.ultima_nota %}<p class="seg-card-nota">{{ f.ultima_nota }}</p>{% endif %}
   </article>
   {% else %}
@@ -161,6 +181,12 @@
   <input type="hidden" name="vista" value="{{ vista }}"/>
   {% for p in programas_sel %}
   <input type="hidden" name="prog" value="{{ p }}"/>
+  {% endfor %}
+  {% for t in tipos_beca_sel %}
+  <input type="hidden" name="beca" value="{{ t }}"/>
+  {% endfor %}
+  {% for t in tipos_prio_sel %}
+  <input type="hidden" name="motivo" value="{{ t }}"/>
   {% endfor %}
 </form>
 

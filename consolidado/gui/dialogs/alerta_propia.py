@@ -46,7 +46,7 @@ class DialogoAlertaPropia(ctk.CTkToplevel):
         )
         ctk.CTkButton(fila_bus, text="Buscar", width=90, command=self._buscar).pack(side="left")
 
-        self.lista = tk.Listbox(marco, height=10, font=("Segoe UI", 11))
+        self.lista = tk.Listbox(marco, height=10, font=("Red Hat Display", 11))
         self.lista.pack(fill="both", expand=True, pady=(0, 10))
 
         ctk.CTkLabel(marco, text="Detalle de la alerta:", anchor="w").pack(anchor="w")

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from consolidado.core.colores_programa import color_programa, estilo_color
+from consolidado.core.charts import partir_items
 from consolidado.core.constants import (
     COL_NUM_ALERTA_FINAL,
     COL_NUM_ALERTA_INICIAL,
@@ -115,6 +116,7 @@ def _fila_base(fila: dict[str, Any], ids_contactados: set[str]) -> dict[str, Any
         "puntaje_txt": fmt_pts(puntaje),
         "priorizado": _es_valor_true(fila.get("Priorizado")),
         "motivo": _texto(fila.get("Motivo Prio.")),
+        "motivos_prio": partir_items(_texto(fila.get("Motivo Prio."))),
         "detalle_gprio": _texto(fila.get("Detalle GPrio.")),
         "detalle_prioridad": _texto(fila.get("Detalle prioridad")),
         "telefono": _texto(fila.get("Teléfono celular")),
@@ -124,6 +126,7 @@ def _fila_base(fila: dict[str, Any], ids_contactados: set[str]) -> dict[str, Any
         "periodo_actual": _texto(fila.get("Periodo actual")),
         "reintegros": _texto(fila.get("Reintegros")),
         "tipo_beca": _texto(fila.get("Tipo de beca o crédito")),
+        "tipos_beca": partir_items(_texto(fila.get("Tipo de beca o crédito"))),
         "total_beca": _texto(fila.get("Total beca")),
         "funcionario_beca": _texto(fila.get("Funcionario que tiene a cargo la beca")),
         "repitiendo": _es_valor_true(fila.get("Repitiendo")),
@@ -172,17 +175,37 @@ def _entra_en_categoria(item: dict[str, Any], cat: dict[str, str]) -> bool:
     return _puntaje_categoria(item, cat) > 0
 
 
+def _tiene_tipo(partes: list[str], seleccion: list[str]) -> bool:
+    if not seleccion:
+        return True
+    claves = {s.casefold() for s in seleccion if s}
+    return any(p.casefold() in claves for p in partes)
+
+
+def _opciones_tipo(filas: list[dict[str, Any]], campo: str) -> list[str]:
+    vistos: list[str] = []
+    for f in filas:
+        for parte in f.get(campo) or []:
+            if parte and parte not in vistos:
+                vistos.append(parte)
+    return sorted(vistos, key=lambda s: s.casefold())
+
+
 def listar_seguimiento(
     *,
     cat_id: str = "general",
     vista: str = "pendientes",
     programas: list[str] | None = None,
+    tipos_beca: list[str] | None = None,
+    tipos_prio: list[str] | None = None,
     base: Path | None = None,
 ) -> dict[str, Any]:
     """Estudiantes de la última versión con nivel ≥ 1, filtrados por categoría."""
     base = base or PROJECT_ROOT
     cat = categoria_seguimiento(cat_id)
     programas_sel = [p.strip() for p in (programas or []) if p and str(p).strip()]
+    becas_sel = [t.strip() for t in (tipos_beca or []) if t and str(t).strip()]
+    motivos_sel = [t.strip() for t in (tipos_prio or []) if t and str(t).strip()]
     vacio = {
         "categoria": cat,
         "categorias": [
@@ -195,6 +218,10 @@ def listar_seguimiento(
         "meta": None,
         "programas": [],
         "programas_sel": [],
+        "tipos_beca": [],
+        "tipos_beca_sel": [],
+        "tipos_prio": [],
+        "tipos_prio_sel": [],
     }
     ult = ultima_version(base)
     if ult is None:
@@ -244,6 +271,15 @@ def listar_seguimiento(
         )
 
     filtradas = [f for f in universo_f if _entra_en_categoria(f, cat)]
+    tipos_beca_opciones = _opciones_tipo(filtradas, "tipos_beca")
+    tipos_prio_opciones = _opciones_tipo(filtradas, "motivos_prio")
+    becas_sel = [t for t in becas_sel if t in tipos_beca_opciones]
+    motivos_sel = [t for t in motivos_sel if t in tipos_prio_opciones]
+    cid = cat["id"]
+    if cid in {"general", "beca"} and becas_sel:
+        filtradas = [f for f in filtradas if _tiene_tipo(f.get("tipos_beca") or [], becas_sel)]
+    if cid in {"general", "priorizado"} and motivos_sel:
+        filtradas = [f for f in filtradas if _tiene_tipo(f.get("motivos_prio") or [], motivos_sel)]
     filtradas.sort(
         key=lambda f: (
             -_puntaje_categoria(f, cat),
@@ -274,4 +310,8 @@ def listar_seguimiento(
         "meta": ult,
         "programas": programas_opciones,
         "programas_sel": programas_sel,
+        "tipos_beca": tipos_beca_opciones,
+        "tipos_beca_sel": becas_sel,
+        "tipos_prio": tipos_prio_opciones,
+        "tipos_prio_sel": motivos_sel,
     }

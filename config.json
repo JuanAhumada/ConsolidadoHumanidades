@@ -175,6 +175,13 @@
     "periodo_ultima_matricula": [
       "periodo ultima matricula"
     ],
+    "pensum": [
+      "pensum",
+      "cod modalidad",
+      "cod_modalidad",
+      "codigo modalidad",
+      "código modalidad"
+    ],
     "reintegros": [
       "reintegros"
     ],
@@ -230,6 +237,9 @@
     "verde": "2ECC71",
     "gris": "BDC3C7"
   },
+  "info_puntajes": {
+    "notas": ""
+  },
   "categorias_fuente": {
     "base": "Base",
     "priorizado": "Priorizado",
@@ -252,7 +262,8 @@
         "Periodo actual",
         "Reintegros",
         "Lugar de nacimiento",
-        "Lugar de residencia"
+        "Lugar de residencia",
+        "Pensum"
       ]
     },
     {

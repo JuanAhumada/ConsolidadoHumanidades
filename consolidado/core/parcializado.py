@@ -18,6 +18,7 @@ from consolidado.config.settings import construir_grupos_encabezado
 from consolidado.core.charts import (
     COL_PROGRAMA_GRAFICA,
     _partir_categorias,
+    filas_items_separados,
     filtrar_df_por_carreras,
     programas_disponibles,
 )
@@ -30,6 +31,7 @@ COLUMNAS_BASICAS = (
 )
 
 COL_TIPO_BECA = "Tipo de beca o crédito"
+COL_MOTIVO_PRIO = "Motivo Prio."
 COL_NIVEL_PRIORIDAD = "Nivel prioridad"
 COL_COHORTE_GRAD = "Cohorte de graduación"
 COL_PENSUM = "Pensum"
@@ -156,26 +158,11 @@ def recortar_dataframe(
 
 
 def filas_becas_separadas(df: pl.DataFrame) -> list[dict[str, Any]]:
-    if COL_TIPO_BECA not in df.columns:
-        return []
-    out: list[dict[str, Any]] = []
-    for row in df.iter_rows(named=True):
-        ident = row.get("Identificación")
-        nombre = row.get("Nombre y apellidos")
-        programa = row.get("Programa")
-        partes = _partir_categorias(str(row.get(COL_TIPO_BECA) or ""))
-        if not partes:
-            continue
-        for beca in partes:
-            out.append(
-                {
-                    "Identificación": ident,
-                    "Nombre y apellidos": nombre,
-                    "Programa": programa,
-                    "Beca": beca,
-                }
-            )
-    return out
+    return filas_items_separados(df, columna=COL_TIPO_BECA, campo="Beca")
+
+
+def filas_motivos_separados(df: pl.DataFrame) -> list[dict[str, Any]]:
+    return filas_items_separados(df, columna=COL_MOTIVO_PRIO, campo="Motivo")
 
 
 def _valor_excel(val: Any) -> Any:
@@ -301,6 +288,19 @@ def excel_parcializado_bytes(
             fondo=fondo,
         )
 
+    motivos = filas_motivos_separados(filtrado)
+    if motivos:
+        cols_m = ["Identificación", "Nombre y apellidos", "Programa", "Motivo"]
+        _escribir_hoja(
+            wb,
+            "Priorizados",
+            cols_m,
+            [[_valor_excel(f.get(c)) for c in cols_m] for f in motivos],
+            tabla_nombre="Priorizados",
+            cabecera=cabecera,
+            fondo=fondo,
+        )
+
     if notas is not None:
         ids = set()
         if "Identificación" in filtrado.columns:
@@ -368,6 +368,7 @@ def excel_parcializado_bytes(
         ("Columnas", recorte.width),
         ("Filas", recorte.height),
         ("Filas de becas", len(becas)),
+        ("Filas de motivos", len(motivos)),
     ]
     for clave, _col, titulo in FILTROS_EXTRA:
         vals = [v for v in (filtros.get(clave) or []) if str(v).strip()]

@@ -175,6 +175,13 @@
     "periodo_ultima_matricula": [
       "periodo ultima matricula"
     ],
+    "pensum": [
+      "pensum",
+      "cod modalidad",
+      "cod_modalidad",
+      "codigo modalidad",
+      "código modalidad"
+    ],
     "reintegros": [
       "reintegros"
     ],

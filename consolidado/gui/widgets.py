@@ -165,8 +165,8 @@ class IconButton(ctk.CTkButton):
             self._tip_win,
             text=self._tooltip,
             font=FONT_PEQUENA,
-            bg="#0f172a",
-            fg="#f8fafc",
+            bg="#2A0506",
+            fg="#F4F4F4",
             padx=8,
             pady=4,
             relief="flat",
@@ -314,7 +314,7 @@ class PanelPasos(ctk.CTkFrame):
                 corner_radius=8,
                 fg_color=COLOR_ACENTO,
                 text_color="white",
-                font=("Bahnschrift", 12, "bold"),
+                font=("Red Hat Display", 12, "bold"),
             ).pack(side="left")
             ctk.CTkLabel(cab, text=titulo, font=FONT_SUBTITULO, text_color=COLOR_TEXTO).pack(
                 side="left", padx=(10, 0)
@@ -362,7 +362,7 @@ class PanelPasos(ctk.CTkFrame):
         )
         borde_listo = COLOR_OK if listo_generar else COLOR_ACENTO
         borde_ok = COLOR_OK
-        borde_neutro = ("#e2e8f0", "#334155")
+        borde_neutro = ("#CCCCCC", "#595959")
         for i, tarjeta in enumerate(self._tarjetas):
             if i == 2 and listo_generar:
                 tarjeta.configure(border_color=borde_listo)
@@ -466,20 +466,13 @@ class Sidebar(ctk.CTkFrame):
         marca.pack(fill="x", padx=18, pady=(22, 18))
         ctk.CTkLabel(
             marca,
-            text="Facultad de Humanidades y Ciencias Sociales",
-            font=("Bahnschrift", 13, "bold"),
-            text_color="#f8fafc",
+            text="Bienestar Estudiantil",
+            font=("Red Hat Display", 13, "bold"),
+            text_color="#F4F4F4",
             anchor="w",
             wraplength=196,
             justify="left",
         ).pack(anchor="w")
-        ctk.CTkLabel(
-            marca,
-            text="Bienestar Académico",
-            font=FONT_PEQUENA,
-            text_color="#94a3b8",
-            anchor="w",
-        ).pack(anchor="w", pady=(2, 0))
 
         self.nav = ctk.CTkFrame(self, fg_color="transparent")
         self.nav.pack(fill="x", padx=12, pady=(8, 0))
@@ -568,8 +561,8 @@ class TablaPriorizados(ctk.CTkFrame):
         scroll.pack(side="right", fill="y")
         configurar_treeview(self.tree)
         self.tree.bind("<Button-1>", self._on_click, add="+")
-        self.tree.tag_configure("contactado", foreground="#64748b")
-        self.tree.tag_configure("inactivo", foreground="#94a3b8")
+        self.tree.tag_configure("contactado", foreground="#595959")
+        self.tree.tag_configure("inactivo", foreground="#A5A5A5")
 
     def limpiar(self) -> None:
         for item in self.tree.get_children():
@@ -737,9 +730,9 @@ def fila_archivo(
 
     tarjeta = ctk.CTkFrame(
         marco,
-        fg_color=("#f8fafc", "#1e293b"),
+        fg_color=("#F7F7F7", "#3D080A"),
         border_width=1,
-        border_color=("#e2e8f0", "#334155"),
+        border_color=("#CCCCCC", "#595959"),
         corner_radius=12,
     )
     tarjeta.grid(row=fila, column=0, columnspan=3, sticky="ew", pady=4)

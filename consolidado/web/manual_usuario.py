@@ -5,15 +5,11 @@ from __future__ import annotations
 MANUAL_USUARIO: dict[str, dict[str, object]] = {
     "inicio": {
         "titulo": "Inicio",
-        "resumen": "Punto de entrada: resumen de la facultad y atajos.",
+        "resumen": "Resumen de la última versión y descarga del Excel.",
         "pasos": [
-            "A la derecha del título está el paso a paso y el número de estudiantes de la última versión.",
-            "Las tarjetas de abajo abren ficha, seguimiento, gráficas y metas.",
-            "«Descargar último Excel» abre el historial de versiones; ahí puede bajar el más reciente u otro corte.",
-            "Si es administrador, «Generar nuevo consolidado» lo lleva a Data, que es el único sitio donde se genera.",
+            "A la derecha está el número de estudiantes de la última versión; pulse la tarjeta para abrir el historial.",
+            "Arriba a la derecha, «Descargar último consolidado» baja el Excel más reciente.",
             "Si cierra la pestaña, el navegador preguntará; acéptelo para apagar la aplicación y liberar el puerto.",
-            "Si es administrador, también verá accesos a Data, datos antiguos, historial, configuración y usuarios.",
-            "El aviso de si ya se puede generar el consolidado aparece en Data, no en el menú.",
         ],
     },
     "estudiante": {

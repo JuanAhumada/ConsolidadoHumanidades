@@ -120,10 +120,14 @@ def leer_dataframe_desde_excel_consolidado(
     else:
         # infer_schema_length=None evita fallos por bool/null mixtos en columnas
         df = pl.from_dicts(datos, infer_schema_length=None)
-        for c in columnas:
-            if c not in df.columns:
-                df = df.with_columns(pl.lit(None).alias(c))
-        df = df.select([c for c in columnas if c in df.columns])
+
+    from consolidado.core.export import recombinar_becas_y_motivos
+
+    df = recombinar_becas_y_motivos(df)
+    for c in columnas:
+        if c not in df.columns:
+            df = df.with_columns(pl.lit(None).alias(c))
+    df = df.select([c for c in columnas if c in df.columns])
 
     return df, num_materias
 

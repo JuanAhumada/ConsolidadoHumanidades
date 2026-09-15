@@ -75,6 +75,7 @@ _CARACTERES_TILDE = "áéíóúüÁÉÍÓÚÜñÑ"
 COL_FECHA_NACIMIENTO = "Fecha de nacimiento"
 
 COL_PERIODO_ACTUAL = "Periodo actual"
+COL_PENSUM = "Pensum"
 
 COL_ACTIVOS = "Activos"
 

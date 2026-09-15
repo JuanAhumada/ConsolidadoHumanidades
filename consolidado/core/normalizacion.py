@@ -294,6 +294,63 @@ def _clave_periodo(periodo: str) -> tuple[int, int] | None:
     return int(m.group(1)), int(m.group(2))
 
 
+_MESES_ORDEN = {
+    str(nombre).casefold().translate(_REEMPLAZO_ACENTOS): i + 1
+    for i, nombre in enumerate(_MESES_ES)
+}
+_RE_FECHA_MES_NOMBRE = re.compile(
+    r"^([A-Za-zÁÉÍÓÚáéíóúüÜñÑ]+)\s*[-/.\s]\s*(\d{1,2})\s*[-/.\s]\s*(\d{2,4})$"
+)
+_RE_FECHA_DIA_MES = re.compile(
+    r"^(\d{1,2})\s*[-/.\s]\s*([A-Za-zÁÉÍÓÚáéíóúüÜñÑ]+)\s*[-/.\s]\s*(\d{2,4})$"
+)
+
+
+def _parsear_fecha_etiqueta(texto: str) -> date | None:
+    s = str(texto or "").strip()
+    if not s:
+        return None
+    d = _parsear_fecha_texto(s, FORMATO_FECHA_DMY) or _parsear_fecha_texto(s, FORMATO_FECHA_MDY)
+    if d:
+        return d
+    m = _RE_FECHA_MES_NOMBRE.match(s)
+    if m:
+        mes = _MESES_ORDEN.get(m.group(1).casefold().translate(_REEMPLAZO_ACENTOS))
+        if mes:
+            try:
+                return date(_anio_completo(int(m.group(3))), mes, int(m.group(2)))
+            except ValueError:
+                return None
+    m = _RE_FECHA_DIA_MES.match(s)
+    if m:
+        mes = _MESES_ORDEN.get(m.group(2).casefold().translate(_REEMPLAZO_ACENTOS))
+        if mes:
+            try:
+                return date(_anio_completo(int(m.group(3))), mes, int(m.group(1)))
+            except ValueError:
+                return None
+    return None
+
+
+def clave_orden_etiqueta(texto: str) -> tuple:
+    """Orden de eje X: fechas y periodos cronológicos, luego número, luego A–Z."""
+    s = str(texto or "").strip()
+    d = _parsear_fecha_etiqueta(s)
+    if d:
+        return (0, d.toordinal(), s.casefold())
+    periodo = formatear_periodo_cod(s)
+    if periodo:
+        clave = _clave_periodo(periodo)
+        if clave:
+            return (1, clave[0] * 2 + clave[1], s.casefold())
+    compacto = s.replace(" ", "").replace(",", ".")
+    try:
+        return (2, float(compacto), s.casefold())
+    except ValueError:
+        pass
+    return (3, 0.0, s.casefold())
+
+
 def periodo_mas_reciente(valores: list) -> str | None:
     """Elige el periodo YYYY-N más reciente entre varios orígenes."""
     mejores: list[tuple[tuple[int, int], str]] = []

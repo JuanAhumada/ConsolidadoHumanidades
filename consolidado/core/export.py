@@ -10,6 +10,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from consolidado.config.settings import construir_columnas_salida, construir_grupos_encabezado, etiqueta_export_columna
+from consolidado.core.charts import filas_items_separados, partir_items
 from consolidado.core.columnas import alinear_dataframe_salida, formatear_dataframe_salida
 from consolidado.core.constants import (
     ANCHO_MAXIMO_COLUMNA_EXCEL,
@@ -24,6 +25,7 @@ from consolidado.core.constants import (
     COL_TELEFONO_CELULAR,
     COL_TIPO_ALERTA_FINAL,
     COL_TIPO_ALERTA_INICIAL,
+    COL_TIPO_BECA,
     COL_TOTAL_BECA,
     FONT_MATERIA_REPETIDA,
     FORMATO_FECHA_DMY,
@@ -31,6 +33,7 @@ from consolidado.core.constants import (
     _cfg,
     max_materias_en_dataframe,
 )
+from consolidado.core.parcializado import _escribir_hoja, _valor_excel
 from consolidado.core.excel_io import _longitud_visible_celda
 from consolidado.core.normalizacion import (
     _es_nulo,
@@ -47,6 +50,130 @@ from consolidado.core.repetidas import _materia_es_repetida
 FONT_TITULO_GRUPO_EXCEL = Font(bold=True, size=14)
 FONT_ENCABEZADO_COLUMNA_EXCEL = Font(bold=True, size=11)
 FONT_DATOS_EXCEL = Font(size=11)
+
+COL_MOTIVO_PRIO = "Motivo Prio."
+_RE_COL_BECA_N = re.compile(r"^Beca (\d+)$")
+_RE_COL_MOTIVO_N = re.compile(r"^Motivo (\d+)$")
+
+
+def _max_partes_columna(df: pl.DataFrame, col: str) -> int:
+    if col not in df.columns:
+        return 0
+    mx = 0
+    for v in df.get_column(col).to_list():
+        if v is None:
+            continue
+        n = len(partir_items(str(v)))
+        if n > mx:
+            mx = n
+    return mx
+
+
+def _valores_partidos_columna(df: pl.DataFrame, col: str, indice: int) -> list:
+    if col not in df.columns:
+        return [None] * df.height
+    out: list = []
+    for v in df.get_column(col).to_list():
+        partes = partir_items(str(v)) if v is not None else []
+        out.append(partes[indice] if indice < len(partes) else None)
+    return out
+
+
+def expandir_becas_y_motivos(
+    df: pl.DataFrame,
+    columnas: list[str],
+    grupos: list[tuple[str, list[str]]],
+) -> tuple[pl.DataFrame, list[str], list[tuple[str, list[str]]]]:
+    """En el Excel, una cédula por fila y un tipo por columna (Beca 1…, Motivo 1…)."""
+    n_becas = _max_partes_columna(df, COL_TIPO_BECA)
+    n_motivos = _max_partes_columna(df, COL_MOTIVO_PRIO)
+    cols_beca = [f"Beca {i}" for i in range(1, n_becas + 1)] if n_becas else []
+    cols_motivo = [f"Motivo {i}" for i in range(1, n_motivos + 1)] if n_motivos else []
+    if not cols_beca and not cols_motivo:
+        return df, columnas, grupos
+
+    extra: dict[str, list] = {}
+    for i, nombre in enumerate(cols_beca):
+        extra[nombre] = _valores_partidos_columna(df, COL_TIPO_BECA, i)
+    for i, nombre in enumerate(cols_motivo):
+        extra[nombre] = _valores_partidos_columna(df, COL_MOTIVO_PRIO, i)
+    trabajo = df.with_columns([pl.Series(nombre, vals) for nombre, vals in extra.items()])
+
+    def _reemplazar(cols: list[str]) -> list[str]:
+        out: list[str] = []
+        for c in cols:
+            if c == COL_TIPO_BECA and cols_beca:
+                out.extend(cols_beca)
+            elif c == COL_MOTIVO_PRIO and cols_motivo:
+                out.extend(cols_motivo)
+            else:
+                out.append(c)
+        return out
+
+    nuevas_columnas = _reemplazar(columnas)
+    nuevos_grupos = [(nombre, _reemplazar(cols)) for nombre, cols in grupos]
+    return trabajo, nuevas_columnas, nuevos_grupos
+
+
+def recombinar_becas_y_motivos(df: pl.DataFrame) -> pl.DataFrame:
+    """Si el Excel trae Beca 1… / Motivo 1…, vuelve a las columnas canónicas."""
+    becas = sorted(
+        (c for c in df.columns if _RE_COL_BECA_N.match(c)),
+        key=lambda c: int(_RE_COL_BECA_N.match(c).group(1)),  # type: ignore[union-attr]
+    )
+    motivos = sorted(
+        (c for c in df.columns if _RE_COL_MOTIVO_N.match(c)),
+        key=lambda c: int(_RE_COL_MOTIVO_N.match(c).group(1)),  # type: ignore[union-attr]
+    )
+    extra: dict[str, list] = {}
+    drop: list[str] = []
+
+    def _unir(cols: list[str], sep: str) -> list:
+        filas = []
+        for vals in df.select(cols).iter_rows():
+            partes = [str(v).strip() for v in vals if v is not None and str(v).strip()]
+            filas.append(sep.join(partes) or None)
+        return filas
+
+    if becas and COL_TIPO_BECA not in df.columns:
+        extra[COL_TIPO_BECA] = _unir(becas, " | ")
+        drop.extend(becas)
+    if motivos and COL_MOTIVO_PRIO not in df.columns:
+        extra[COL_MOTIVO_PRIO] = _unir(motivos, ", ")
+        drop.extend(motivos)
+    if not extra:
+        return df
+    out = df.with_columns([pl.Series(nombre, vals) for nombre, vals in extra.items()])
+    return out.drop([c for c in drop if c in out.columns])
+
+
+def _escribir_hojas_separadas(wb, df: pl.DataFrame) -> None:
+    cabecera = Font(bold=True, color="FFFFFF")
+    fondo = PatternFill("solid", fgColor="0C6B63")
+    becas = filas_items_separados(df, columna=COL_TIPO_BECA, campo="Beca")
+    if becas:
+        cols_b = ["Identificación", "Nombre y apellidos", "Programa", "Beca"]
+        _escribir_hoja(
+            wb,
+            "Becas",
+            cols_b,
+            [[_valor_excel(f.get(c)) for c in cols_b] for f in becas],
+            tabla_nombre="Becas",
+            cabecera=cabecera,
+            fondo=fondo,
+        )
+    motivos = filas_items_separados(df, columna=COL_MOTIVO_PRIO, campo="Motivo")
+    if motivos:
+        cols_m = ["Identificación", "Nombre y apellidos", "Programa", "Motivo"]
+        _escribir_hoja(
+            wb,
+            "Priorizados",
+            cols_m,
+            [[_valor_excel(f.get(c)) for c in cols_m] for f in motivos],
+            tabla_nombre="Priorizados",
+            cabecera=cabecera,
+            fondo=fondo,
+        )
 
 _BORDE_DELGADO = Side(style="thin", color="C0C0C0")
 _BORDE_GRUESO = Side(style="medium", color="555555")
@@ -261,18 +388,20 @@ def guardar_excel_consolidado(
     num_materias: int | None = None,
     materias_repetidas: dict[str, set[str]] | None = None,
 ) -> Path:
-    """Una sola hoja con encabezados principales (Datos, Priorizados, Becas, Materias)."""
+    """Listado con becas/motivos en columnas; hojas Becas y Priorizados (1 cédula + 1 tipo)."""
     cfg = cfg or _cfg()
     n_mat = num_materias if num_materias is not None else max_materias_en_dataframe(consolidado)
     columnas = construir_columnas_salida(cfg, n_mat)
     grupos = construir_grupos_encabezado(cfg, n_mat)
+    datos, columnas, grupos = expandir_becas_y_motivos(consolidado, columnas, grupos)
     nombre_hoja = cfg.get("salida", {}).get("hoja", HOJA_LISTADO)
 
     wb = Workbook()
     ws = wb.active
     ws.title = nombre_hoja
     _escribir_hoja_consolidada(
-        ws, consolidado, columnas, grupos, materias_repetidas=materias_repetidas
+        ws, datos, columnas, grupos, materias_repetidas=materias_repetidas
     )
+    _escribir_hojas_separadas(wb, consolidado)
     return _guardar_workbook_excel(wb, ruta)
 
