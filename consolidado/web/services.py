@@ -32,7 +32,6 @@ from consolidado.core.pipeline import ejecutar_consolidado, generar_dataframe_co
 from consolidado.core.charts import (
     columna_excluida_grafica,
     columnas_graficables,
-    es_columna_materia_grafica,
     programas_disponibles,
 )
 from consolidado.core.columnas import aliases_para_slot, construir_mapa_columnas, usando_aliases
@@ -67,8 +66,8 @@ from consolidado.storage.db import (
 )
 from consolidado.storage.modificaciones import comparar_versiones, registrar_modificacion
 from consolidado.storage.versiones import (
-    asegurar_excel_version,
     asegurar_semilla_si_vacia,
+    exportar_excel_version,
     importar_excel_como_version,
 )
 
@@ -102,13 +101,13 @@ def metas_ruta_grado() -> dict[str, Any]:
 def _tinta_sobre_hex(hex_color: str) -> str:
     h = str(hex_color or "").lstrip("#")
     if len(h) != 6:
-        return "#0a1628"
+        return "#2A2A2A"
     try:
         r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     except ValueError:
-        return "#0a1628"
+        return "#2A2A2A"
     luma = 0.299 * r + 0.587 * g + 0.114 * b
-    return "#0a1628" if luma >= 155 else "#ffffff"
+    return "#2A2A2A" if luma >= 155 else "#ffffff"
 
 
 def leyenda_colores() -> dict[str, Any]:
@@ -583,7 +582,7 @@ def generar_version_historica(
 
 
 def excel_de_version(version_id: int) -> Path:
-    return asegurar_excel_version(version_id, PROJECT_ROOT)
+    return exportar_excel_version(version_id, PROJECT_ROOT)
 
 
 def df_ultima_version():
@@ -991,18 +990,22 @@ def columnas_config_graficas() -> list[dict[str, Any]]:
     cfg = cfg_actual()
     df, _ = df_ultima_version()
     if df is not None:
-        todas = [str(c) for c in df.columns if not es_columna_materia_grafica(str(c))]
+        todas = [str(c) for c in df.columns if not columna_excluida_grafica(str(c))]
     else:
         todas = [
             c
             for c in construir_columnas_salida(cfg, 1)
-            if not es_columna_materia_grafica(c)
+            if not columna_excluida_grafica(c)
         ]
     guardadas = cfg.get("columnas_graficas")
     if isinstance(guardadas, list):
-        activas = {str(c).strip() for c in guardadas if str(c).strip()}
+        activas = {
+            str(c).strip()
+            for c in guardadas
+            if str(c).strip() and not columna_excluida_grafica(str(c))
+        }
     else:
-        activas = {c for c in todas if not columna_excluida_grafica(c)}
+        activas = set(todas)
     return [{"nombre": c, "activa": c in activas} for c in todas]
 
 

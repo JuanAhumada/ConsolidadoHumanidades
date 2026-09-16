@@ -80,7 +80,7 @@ class AppConsolidado(ctk.CTk):
         self._paginas: dict[str, ctk.CTkFrame] = {}
         self._pagina_activa: str | None = None
 
-        self.title("Bienestar Académico")
+        self.title("Bienestar Estudiantil")
         self.geometry("1180x780")
         self.minsize(960, 640)
         self.configure(fg_color=COLOR_PAGE)
@@ -108,10 +108,10 @@ class AppConsolidado(ctk.CTk):
 
         self.sidebar.configurar_navegacion(
             [
-                ("archivos", "Archivos", self._ico("folder", color="#e2e8f0")),
-                ("priorizados", "Priorizados", self._ico("add_user", color="#e2e8f0")),
-                ("alertas", "Alertas", self._ico("info", color="#e2e8f0")),
-                ("versiones", "Versiones", self._ico("save", color="#e2e8f0")),
+                ("archivos", "Archivos", self._ico("folder", color="#CCCCCC")),
+                ("priorizados", "Priorizados", self._ico("add_user", color="#CCCCCC")),
+                ("alertas", "Alertas", self._ico("info", color="#CCCCCC")),
+                ("versiones", "Versiones", self._ico("save", color="#CCCCCC")),
             ],
             self._navegar,
         )
@@ -131,20 +131,20 @@ class AppConsolidado(ctk.CTk):
             fila_pie,
             icon=self._ico_tema_sidebar(),
             tooltip="Modo claro / oscuro",
-            fg_color=("#1e293b", "#0f172a"),
-            hover_color=("#334155", "#1e293b"),
+            fg_color=("#6B0E12", "#2A0506"),
+            hover_color=("#A3161A", "#3D080A"),
             command=self._toggle_tema,
         )
         self.btn_tema.pack(side="left")
         BotonIconoTexto(
             fila_pie,
-            icon=self._ico("settings", size=16, color="#cbd5e1"),
+            icon=self._ico("settings", size=16, color="#CCCCCC"),
             texto="Config",
             height=36,
             command=self.cambiar_datos,
-            fg_color=("#1e293b", "#0f172a"),
-            hover_color=("#334155", "#1e293b"),
-            text_color="#cbd5e1",
+            fg_color=("#6B0E12", "#2A0506"),
+            hover_color=("#A3161A", "#3D080A"),
+            text_color="#CCCCCC",
             border_width=0,
             corner_radius=10,
         ).pack(side="right")
@@ -591,7 +591,7 @@ class AppConsolidado(ctk.CTk):
     def _ico_tema_sidebar(self) -> ctk.CTkImage:
         return self._ico(
             "sun" if modo_apariencia_actual() == "dark" else "moon",
-            color="#e2e8f0",
+            color="#CCCCCC",
         )
 
     def _actualizar_lista_archivos(self) -> None:

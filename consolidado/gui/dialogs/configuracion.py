@@ -167,7 +167,7 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
             anchor="w", padx=8, pady=(8, 8)
         )
 
-        lista = tk.Listbox(marco, height=12, font=("Segoe UI", 10))
+        lista = tk.Listbox(marco, height=12, font=("Red Hat Display", 10))
         lista.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         for item in self.cfg.get(clave_cfg, []):
             lista.insert(tk.END, item)
@@ -212,14 +212,14 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
 
     def _pestana_graficas(self) -> None:
         from consolidado.config.settings import construir_columnas_salida
-        from consolidado.core.charts import columna_excluida_grafica, es_columna_materia_grafica
+        from consolidado.core.charts import columna_excluida_grafica
 
         marco = self.tabview.add("Gráficas")
         ctk.CTkLabel(
             marco,
-            text="Marque las columnas del tablero. De base se dejan fuera "
-            "identificación, nombres, celulares, correos, fechas y lugares. "
-            "Las materias, horarios y profesores no se listan.",
+            text="Marque las columnas del tablero. No se listan datos únicos "
+            "(identificación, nombres, celulares, correos, fechas, lugares y detalles) "
+            "ni materias, horarios o profesores.",
             font=FONT_TEXTO,
             wraplength=740,
             justify="left",
@@ -231,13 +231,17 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
         todas = [
             c
             for c in construir_columnas_salida(self.cfg, 1)
-            if not es_columna_materia_grafica(c)
+            if not columna_excluida_grafica(c)
         ]
         guardadas = self.cfg.get("columnas_graficas")
         if isinstance(guardadas, list):
-            activas = {str(c).strip() for c in guardadas if str(c).strip()}
+            activas = {
+                str(c).strip()
+                for c in guardadas
+                if str(c).strip() and not columna_excluida_grafica(str(c))
+            }
         else:
-            activas = {c for c in todas if not columna_excluida_grafica(c)}
+            activas = set(todas)
         self._vars_grafica: dict[str, tk.BooleanVar] = {}
         for nombre in todas:
             var = tk.BooleanVar(value=nombre in activas)
@@ -334,8 +338,12 @@ class DialogoCambiarDatos(ctk.CTkToplevel):
         self.cfg["programas_excluidos"] = list(self.lista_excluidos.get(0, tk.END))
         self.cfg["columnas_motivo_priorizado"] = list(self.lista_motivos.get(0, tk.END))
         if getattr(self, "_vars_grafica", None):
+            from consolidado.core.charts import columna_excluida_grafica
+
             self.cfg["columnas_graficas"] = [
-                nombre for nombre, var in self._vars_grafica.items() if var.get()
+                nombre
+                for nombre, var in self._vars_grafica.items()
+                if var.get() and not columna_excluida_grafica(nombre)
             ]
         guardar_config(self.cfg, self.base)
         merge.aplicar_config(self.cfg, self.base)

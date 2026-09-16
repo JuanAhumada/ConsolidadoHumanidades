@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Iniciar sesión · Bienestar Académico</title>
+  <title>Iniciar sesión · Bienestar Estudiantil</title>
   <link rel="icon" type="image/png" href="/static/logo.png?v={{ app_version }}"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/static/app.css?v={{ app_version }}"/>
 </head>
 <body class="page-login" data-ayuda="{{ ayuda_clave or 'login' }}">
@@ -23,10 +23,9 @@
   <main class="login-shell">
     <section class="login-card">
       <header class="login-brand">
-        <img class="login-logo" src="/static/logo.png?v={{ app_version }}" alt="Facultad de Humanidades y Ciencias Sociales" width="72" height="72"/>
-        <p class="login-kicker">Bienestar Académico · v{{ app_version }}</p>
-        <h1>Facultad de Humanidades y Ciencias Sociales</h1>
-        <p class="login-lead">Inicie sesión para continuar</p>
+        <img class="login-logo" src="/static/logo.png?v={{ app_version }}" alt="CUC · Facultad de Ciencias Humanas y Sociales"/>
+        <h1>Bienestar Estudiantil</h1>
+        <p class="login-lead">Inicie sesión para continuar · {{ app_version_label }}</p>
       </header>
       <form class="login-form" method="post" action="/login">
         <input type="hidden" name="siguiente" value="{{ siguiente or '/' }}"/>

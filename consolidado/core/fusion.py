@@ -18,6 +18,7 @@ from consolidado.core.constants import (
     COL_FUNCIONARIO_BECA,
     COL_NOMBRE,
     COL_PERIODO_ACTUAL,
+    COL_PENSUM,
     COL_TELEFONO_CELULAR,
     COL_TOTAL_BECA,
     SALIDA_COLUMNAS_LISTADO,
@@ -410,6 +411,8 @@ def fusionar_por_id(
         cols_h = list(cols_horarios_interno)
         if COL_PERIODO_ACTUAL in df.columns and COL_PERIODO_ACTUAL not in cols_h:
             cols_h.append(COL_PERIODO_ACTUAL)
+        if COL_PENSUM in df.columns and COL_PENSUM not in cols_h:
+            cols_h.append(COL_PENSUM)
         bloques_h_raw.append(alinear_dataframe_salida(df, cols_h))
 
     mapa_h = mapa_nombre_unico_a_id(listado, *bloques_h_raw)
@@ -429,6 +432,9 @@ def fusionar_por_id(
         if any(COL_PERIODO_ACTUAL in b.columns for b in bloques_h):
             if COL_PERIODO_ACTUAL not in cols_h_fusion:
                 cols_h_fusion.append(COL_PERIODO_ACTUAL)
+        if any(COL_PENSUM in b.columns for b in bloques_h):
+            if COL_PENSUM not in cols_h_fusion:
+                cols_h_fusion.append(COL_PENSUM)
         horarios = _fusionar_bloques_por_id(bloques_h, cols_h_fusion)
         if "_id_key" not in horarios.columns:
             horarios = asignar_clave_fusion(
@@ -460,6 +466,19 @@ def fusionar_por_id(
                 )
                 .alias(COL_PERIODO_ACTUAL)
             ).drop("_periodo_h")
+        if COL_PENSUM in horarios.columns:
+            if COL_PENSUM not in consolidado.columns:
+                consolidado = consolidado.with_columns(pl.lit(None).cast(pl.Utf8).alias(COL_PENSUM))
+            consolidado = consolidado.join(
+                horarios.select(["_id_key", COL_PENSUM]).rename(
+                    {COL_PENSUM: "_pensum_h"}
+                ),
+                on="_id_key",
+                how="left",
+            )
+            consolidado = consolidado.with_columns(
+                pl.coalesce(pl.col(COL_PENSUM), pl.col("_pensum_h")).alias(COL_PENSUM)
+            ).drop("_pensum_h")
 
     if "_id_key" in consolidado.columns:
         consolidado = consolidado.drop("_id_key")

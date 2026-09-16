@@ -2,7 +2,7 @@
 
 Aplicación para fusionar Excels de estudiantes (matriculados, becas, priorizados, alertas, horarios) en un consolidado con puntaje de prioridad, fichas, seguimiento y versiones históricas.
 
-La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI. Versión **1.6.11**. Usuario inicial: **admin** / **admin**.
+La interfaz principal es **web** (FastAPI). También hay GUI de escritorio y CLI. Versión **beta 0.7**. Usuario inicial: **admin** / **admin**.
 
 ## Descargas
 

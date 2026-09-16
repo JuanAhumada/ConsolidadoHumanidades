@@ -56,7 +56,7 @@ class DialogoConsultaEstudiante(ctk.CTkToplevel):
             command=self._ver_ficha,
         ).pack(side="left")
 
-        self.lista = tk.Listbox(marco, height=5, font=("Segoe UI", 11))
+        self.lista = tk.Listbox(marco, height=5, font=("Red Hat Display", 11))
         self.lista.pack(fill="x", pady=(0, 10))
         self.lista.bind("<Double-1>", lambda _e: self._ver_ficha())
 

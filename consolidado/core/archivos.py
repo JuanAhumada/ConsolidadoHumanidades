@@ -16,6 +16,7 @@ from consolidado.core.columnas import construir_mapa_columnas, renombrar_y_filtr
 from consolidado.core.constants import (
     COL_NOMBRE,
     COL_PERIODO_ACTUAL,
+    COL_PENSUM,
     _COLUMNAS_MOTIVO_PRIO_RUNTIME,
     aplicar_config,
 )
@@ -195,6 +196,10 @@ def _mapear_columnas_horario(df: pl.DataFrame) -> dict[str, str | None]:
         "genero": _columna_horario(df, "GENERO"),
         "cod_periodo": _columna_horario(df, "COD_PERIODO"),
         "cod_pensum": _columna_horario(df, "COD_PENSUM"),
+        "cod_modalidad": (
+            _columna_horario(df, "COD_MODALIDAD")
+            or _columna_horario(df, "PENSUM")
+        ),
         "nom_subgrupo": _columna_horario(df, "NOM_SUBGRUPO"),
         "num_grupo": _columna_horario(df, "NUM_GRUPO"),
         "nom_materia": _columna_horario(df, "NOM_MATERIA"),
@@ -218,6 +223,7 @@ def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
 
     por_id: dict[str, list[dict]] = {}
     periodos: dict[str, list[str]] = {}
+    pensums: dict[str, list[str]] = {}
     nombres_por_id: dict[str, str] = {}
     for row in df_horario.iter_rows(named=True):
         id_val = row[c["num_identificacion"]] if c.get("num_identificacion") else None
@@ -244,6 +250,10 @@ def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
             periodo = formatear_periodo_cod(row[c["cod_pensum"]])
         if periodo:
             periodos.setdefault(id_key, []).append(periodo)
+        if c.get("cod_modalidad"):
+            pensum = _texto_horario(row[c["cod_modalidad"]])
+            if pensum and pensum not in pensums.get(id_key, []):
+                pensums.setdefault(id_key, []).append(pensum)
 
     if not por_id:
         return pl.DataFrame()
@@ -260,6 +270,9 @@ def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
         periodo_est = periodo_mas_reciente(periodos.get(id_key, []))
         if periodo_est:
             fila[COL_PERIODO_ACTUAL] = periodo_est
+        pensum_est = combinar_valores(pensums.get(id_key, []))
+        if pensum_est:
+            fila[COL_PENSUM] = pensum_est
         for i, it in enumerate(items, start=1):
             if it["materia"]:
                 fila[f"Materia {i}"] = it["materia"]

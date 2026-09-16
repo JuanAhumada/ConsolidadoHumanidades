@@ -16,8 +16,8 @@ def mostrar_tarjeta(
     except Exception:
         return
 
-    acento = "#c43c55" if tipo == "error" else "#c47a12"
-    fondo = "#f3f6f9"
+    acento = "#A3161A" if tipo == "error" else "#C9A227"
+    fondo = "#F4F4F4"
     papel = "#ffffff"
 
     root = tk.Tk()
@@ -29,7 +29,7 @@ def mostrar_tarjeta(
     marco = tk.Frame(root, bg=fondo, padx=28, pady=24)
     marco.pack(fill="both", expand=True)
 
-    tarjeta = tk.Frame(marco, bg=papel, highlightbackground="#d5dee8", highlightthickness=1, padx=22, pady=20)
+    tarjeta = tk.Frame(marco, bg=papel, highlightbackground="#CCCCCC", highlightthickness=1, padx=22, pady=20)
     tarjeta.pack(fill="both", expand=True)
 
     barra = tk.Frame(tarjeta, bg=acento, height=4)
@@ -39,8 +39,8 @@ def mostrar_tarjeta(
         tarjeta,
         text=titulo,
         bg=papel,
-        fg="#0a1628",
-        font=("Segoe UI", 13, "bold"),
+        fg="#2A2A2A",
+        font=("Red Hat Display", 13, "bold"),
         anchor="w",
         justify="left",
     ).pack(fill="x")
@@ -48,8 +48,8 @@ def mostrar_tarjeta(
         tarjeta,
         text=mensaje,
         bg=papel,
-        fg="#5a6b7d",
-        font=("Segoe UI", 10),
+        fg="#595959",
+        font=("Red Hat Display", 10),
         wraplength=380,
         anchor="w",
         justify="left",
@@ -67,7 +67,7 @@ def mostrar_tarjeta(
         activebackground=acento,
         activeforeground="#ffffff",
         relief="flat",
-        font=("Segoe UI", 10, "bold"),
+        font=("Red Hat Display", 10, "bold"),
         padx=16,
         pady=6,
         cursor="hand2",

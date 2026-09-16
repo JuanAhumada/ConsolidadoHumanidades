@@ -9,6 +9,7 @@ from typing import Any
 
 from consolidado.core.colores_programa import colores_para_etiquetas
 from consolidado.core.constants import es_columna_materia_horario
+from consolidado.core.normalizacion import clave_orden_etiqueta
 
 import polars as pl
 from openpyxl import Workbook
@@ -46,31 +47,31 @@ _ALIAS_TIPO = {
 }
 
 PALETA_GRAFICA = (
-    "#0c6b63",
-    "#e07a3d",
-    "#3b6fd8",
-    "#c43c5e",
-    "#8b5cf6",
-    "#d4a017",
-    "#0ea5e9",
-    "#ef4444",
-    "#84cc16",
-    "#db2777",
-    "#2563eb",
-    "#f59e0b",
-    "#14b8a6",
-    "#7c3aed",
-    "#f97316",
-    "#6366f1",
-    "#10b981",
-    "#e11d48",
-    "#64748b",
-    "#a855f7",
-    "#0891b2",
-    "#ca8a04",
-    "#4f46e5",
-    "#16a34a",
-    "#be123c",
+    "#A3161A",
+    "#C9A227",
+    "#FCD116",
+    "#078930",
+    "#595959",
+    "#A5A5A5",
+    "#8B1216",
+    "#E0B52C",
+    "#0AA33A",
+    "#3D080A",
+    "#CCCCCC",
+    "#6B0E12",
+    "#D4B01C",
+    "#045A1E",
+    "#7A1014",
+    "#C41C21",
+    "#B08918",
+    "#0C6B28",
+    "#F6E4E5",
+    "#2A0506",
+    "#A3861C",
+    "#4A0A0C",
+    "#E8B4B6",
+    "#D4F0DE",
+    "#8A8A8A",
 )
 
 
@@ -100,6 +101,8 @@ COLUMNAS_GRAFICA_UNICAS = frozenset(
         "Detalle prioridad",
         "Detalle GPrio.",
         "Detalle Propio",
+        "Fecha adaptacion",
+        "Fecha activacion de ruta",
     }
 )
 
@@ -119,11 +122,13 @@ _CLAVES_UNICAS = (
     "correo",
     "e-mail",
     "email",
-    "fecha de nacimiento",
+    "fecha",
     "lugar de nacimiento",
     "lugar de residencia",
     "dirección",
     "direccion",
+    "detalle",
+    "_id_key",
 )
 _RE_MATERIA_AMPLIA = re.compile(r"^(materia|horario|profesor)s?\b", re.I)
 
@@ -144,6 +149,8 @@ def columna_excluida_grafica(col: str) -> bool:
     nombre = str(col or "").strip()
     if not nombre:
         return True
+    if nombre.startswith("_"):
+        return True
     if es_columna_materia_grafica(nombre):
         return True
     if nombre in COLUMNAS_GRAFICA_UNICAS:
@@ -160,14 +167,51 @@ def columnas_graficables(
     cols = [str(c) for c in df.columns]
     if permitidas is not None:
         ok = {str(c).strip() for c in permitidas if str(c).strip()}
-        return [c for c in cols if c in ok and not es_columna_materia_grafica(c)]
+        cols = [c for c in cols if c in ok]
     return [c for c in cols if not columna_excluida_grafica(c)]
+
+
+_RE_PARTIR_ITEMS = re.compile(r"\s*\|\s*|,\s+")
+
+
+def partir_items(texto: str) -> list[str]:
+    """Parte becas (`|`) y motivos (`, `) en un ítem por valor."""
+    s = str(texto or "").strip()
+    if not s or s.lower() in {"none", "null", "nan", "nat", "—", "-"}:
+        return []
+    return [p.strip() for p in _RE_PARTIR_ITEMS.split(s.replace("||", "|")) if p.strip()]
 
 
 def _partir_categorias(texto: str) -> list[str]:
     """Si el valor trae varios ítems unidos con «|», cada uno cuenta aparte."""
-    partes = [p.strip() for p in str(texto).replace("||", "|").split("|") if p.strip()]
-    return partes or [str(texto).strip()]
+    partes = partir_items(texto)
+    return partes or ([str(texto).strip()] if str(texto).strip() else [])
+
+
+def filas_items_separados(
+    df: pl.DataFrame,
+    *,
+    columna: str,
+    campo: str,
+) -> list[dict[str, Any]]:
+    """Una fila por cédula e ítem (beca o motivo), con columnas fijas."""
+    if columna not in df.columns:
+        return []
+    out: list[dict[str, Any]] = []
+    for row in df.iter_rows(named=True):
+        partes = partir_items(str(row.get(columna) or ""))
+        if not partes:
+            continue
+        for item in partes:
+            out.append(
+                {
+                    "Identificación": row.get("Identificación"),
+                    "Nombre y apellidos": row.get("Nombre y apellidos"),
+                    "Programa": row.get("Programa"),
+                    campo: item,
+                }
+            )
+    return out
 
 
 COL_PROGRAMA_GRAFICA = "Programa"
@@ -245,11 +289,10 @@ def preparar_datos_grafica(
 
     cont = Counter(valores)
     items = [(k, n) for k, n in cont.items() if n > 0]
-    items.sort(key=lambda par: (par[1], str(par[0]).casefold()))
     tope = max(1, min(top, 50))
     if len(items) > tope:
-        items = sorted(items, key=lambda par: (-par[1], str(par[0]).casefold()))[:tope]
-        items.sort(key=lambda par: (par[1], str(par[0]).casefold()))
+        items = sorted(items, key=lambda par: (-par[1], clave_orden_etiqueta(par[0])))[:tope]
+    items.sort(key=lambda par: clave_orden_etiqueta(par[0]))
     labels = [k for k, _ in items]
     data = [n for _, n in items]
     es_programa = columna.strip().casefold() in {"programa"}

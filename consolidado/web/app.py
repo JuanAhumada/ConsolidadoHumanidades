@@ -32,6 +32,7 @@ from consolidado.config.settings import (
 )
 from consolidado.core.charts import (
     TIPOS_GRAFICA,
+    columna_excluida_grafica,
     columnas_graficables,
     excel_powerbi_desde_graficas,
     preparar_datos_grafica,
@@ -45,7 +46,7 @@ from consolidado.core.priorizados import (
 from consolidado.core.seguimiento import CATEGORIAS_SEGUIMIENTO, listar_seguimiento
 from consolidado.core.proyeccion_grado import listar_proyeccion
 from consolidado.paths import BUNDLE_DIR, PROJECT_ROOT
-from consolidado.version import APP_VERSION
+from consolidado.version import APP_VERSION, APP_VERSION_LABEL
 from consolidado.storage.alertas_fuente import (
     descartar_alerta_fuente,
 )
@@ -99,7 +100,7 @@ def _web_dir() -> Path:
 WEB_DIR = _web_dir()
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
-app = FastAPI(title="Bienestar Académico", version=APP_VERSION)
+app = FastAPI(title="Bienestar Estudiantil", version=APP_VERSION)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
 _RUTAS_PUBLICAS = {"/login", "/logout", "/api/apagar"}
@@ -199,6 +200,7 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "vista": "pendientes",
         "manual_usuario": MANUAL_USUARIO,
         "app_version": APP_VERSION,
+        "app_version_label": APP_VERSION_LABEL,
     }
     data.update(extra)
     data["ayuda_clave"] = data.get("ayuda_clave") or data.get("nav") or "inicio"
@@ -260,6 +262,7 @@ async def pagina_login(request: Request) -> HTMLResponse:
             "manual_usuario": MANUAL_USUARIO,
             "ayuda_clave": "login",
             "app_version": APP_VERSION,
+            "app_version_label": APP_VERSION_LABEL,
         },
     )
 
@@ -764,11 +767,26 @@ async def ficha_estudiante(request: Request, identificacion: str) -> HTMLRespons
     )
 
 
-def _url_seguimiento(cat: str, vista: str, programas: list[str] | None = None) -> str:
+def _url_seguimiento(
+    cat: str,
+    vista: str,
+    programas: list[str] | None = None,
+    *,
+    becas: list[str] | None = None,
+    motivos: list[str] | None = None,
+) -> str:
     pares: list[tuple[str, str]] = [("cat", cat), ("vista", vista)]
     for programa in programas or []:
         if programa:
             pares.append(("prog", programa))
+    if cat in {"general", "beca"}:
+        for beca in becas or []:
+            if beca:
+                pares.append(("beca", beca))
+    if cat in {"general", "priorizado"}:
+        for motivo in motivos or []:
+            if motivo:
+                pares.append(("motivo", motivo))
     return "/seguimiento?" + urlencode(pares)
 
 
@@ -797,11 +815,22 @@ async def pagina_seguimiento(
     cat: str = "general",
     vista: str = "pendientes",
     prog: list[str] = Query(default=[]),
+    beca: list[str] = Query(default=[]),
+    motivo: list[str] = Query(default=[]),
 ) -> HTMLResponse:
-    data = listar_seguimiento(cat_id=cat, vista=vista, programas=prog, base=PROJECT_ROOT)
+    data = listar_seguimiento(
+        cat_id=cat,
+        vista=vista,
+        programas=prog,
+        tipos_beca=beca,
+        tipos_prio=motivo,
+        base=PROJECT_ROOT,
+    )
     cat_id = data["categoria"]["id"]
     vista_ok = data["vista"]
     sel = list(data["programas_sel"])
+    sel_beca = list(data["tipos_beca_sel"])
+    sel_motivo = list(data["tipos_prio_sel"])
     categorias = [
         {**c, "href": _url_seguimiento(c["id"], vista_ok, sel)}
         for c in data["categorias"]
@@ -817,7 +846,39 @@ async def pagina_seguimiento(
                 "nombre": nombre,
                 "corta": color_programa(nombre).get("corta") or nombre,
                 "activo": nombre in sel,
-                "href": _url_seguimiento(cat_id, vista_ok, nuevo),
+                "href": _url_seguimiento(
+                    cat_id, vista_ok, nuevo, becas=sel_beca, motivos=sel_motivo
+                ),
+            }
+        )
+    tipos_beca_ui = []
+    for nombre in data["tipos_beca"]:
+        if nombre in sel_beca:
+            nuevo = [t for t in sel_beca if t != nombre]
+        else:
+            nuevo = sel_beca + [nombre]
+        tipos_beca_ui.append(
+            {
+                "nombre": nombre,
+                "activo": nombre in sel_beca,
+                "href": _url_seguimiento(
+                    cat_id, vista_ok, sel, becas=nuevo, motivos=sel_motivo
+                ),
+            }
+        )
+    tipos_prio_ui = []
+    for nombre in data["tipos_prio"]:
+        if nombre in sel_motivo:
+            nuevo = [t for t in sel_motivo if t != nombre]
+        else:
+            nuevo = sel_motivo + [nombre]
+        tipos_prio_ui.append(
+            {
+                "nombre": nombre,
+                "activo": nombre in sel_motivo,
+                "href": _url_seguimiento(
+                    cat_id, vista_ok, sel, becas=sel_beca, motivos=nuevo
+                ),
             }
         )
     return _render(
@@ -835,9 +896,30 @@ async def pagina_seguimiento(
         programas=programas_ui,
         programas_sel=sel,
         filtro_general=not sel,
-        href_carreras_general=_url_seguimiento(cat_id, vista_ok, []),
-        href_pendientes=_url_seguimiento(cat_id, "pendientes", sel),
-        href_todos=_url_seguimiento(cat_id, "todos", sel),
+        href_carreras_general=_url_seguimiento(
+            cat_id, vista_ok, [], becas=sel_beca, motivos=sel_motivo
+        ),
+        tipos_beca=tipos_beca_ui,
+        tipos_beca_sel=sel_beca,
+        filtro_beca_general=not sel_beca,
+        href_becas_general=_url_seguimiento(
+            cat_id, vista_ok, sel, becas=[], motivos=sel_motivo
+        ),
+        tipos_prio=tipos_prio_ui,
+        tipos_prio_sel=sel_motivo,
+        filtro_prio_general=not sel_motivo,
+        href_prio_general=_url_seguimiento(
+            cat_id, vista_ok, sel, becas=sel_beca, motivos=[]
+        ),
+        mostrar_filtro_beca=cat_id in {"general", "beca"} and bool(data["tipos_beca"]),
+        mostrar_filtro_prio=cat_id in {"general", "priorizado"}
+        and bool(data["tipos_prio"]),
+        href_pendientes=_url_seguimiento(
+            cat_id, "pendientes", sel, becas=sel_beca, motivos=sel_motivo
+        ),
+        href_todos=_url_seguimiento(
+            cat_id, "todos", sel, becas=sel_beca, motivos=sel_motivo
+        ),
         href_estadisticas="/seguimiento/estadisticas",
         alertas_propias=cargar_alertas_propias(PROJECT_ROOT) if cat_id == "alertas" else [],
     )
@@ -1083,6 +1165,8 @@ async def marcar_seguimiento(
     cat: str = Form("general"),
     vista: str = Form("pendientes"),
     prog: list[str] = Form(default=[]),
+    beca: list[str] = Form(default=[]),
+    motivo: list[str] = Form(default=[]),
 ) -> RedirectResponse:
     marcar_contactado(
         identificacion,
@@ -1098,7 +1182,7 @@ async def marcar_seguimiento(
         identificacion=identificacion,
     )
     return RedirectResponse(
-        _url_seguimiento(cat, vista, prog),
+        _url_seguimiento(cat, vista, prog, becas=beca, motivos=motivo),
         status_code=303,
     )
 
@@ -1270,7 +1354,9 @@ async def guardar_config_web(request: Request) -> RedirectResponse:
     cfg["aliases"] = aliases
     if "graficas_presentes" in form:
         cfg["columnas_graficas"] = [
-            str(v).strip() for v in form.getlist("grafica") if str(v).strip()
+            str(v).strip()
+            for v in form.getlist("grafica")
+            if str(v).strip() and not columna_excluida_grafica(str(v))
         ]
     guardar_config(cfg, PROJECT_ROOT)
     aplicar_config(cfg, PROJECT_ROOT)

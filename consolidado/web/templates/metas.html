@@ -292,8 +292,8 @@ document.querySelectorAll("[data-metas-tabs]").forEach(function (block) {
   try { graficas = JSON.parse(raw.textContent || "[]"); } catch (e) { graficas = []; }
   const porId = {};
   graficas.forEach((g) => { if (g && g.id) porId[g.id] = g; });
-  const colores = ["#0c6b63", "#c47a12"];
-  const coloresProy = ["#6366f1", "#db2777"];
+  const colores = ["#A3161A", "#C9A227"];
+  const coloresProy = ["#078930", "#FCD116"];
   const charts = [];
 
   function opcionesLinea(dato) {
