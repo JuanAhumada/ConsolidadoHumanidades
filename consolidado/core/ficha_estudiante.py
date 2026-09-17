@@ -54,6 +54,7 @@ from consolidado.storage.db import (
 from consolidado.storage.ediciones import clave_campo_edicion, cargar_ediciones, overlay_ediciones_fila
 from consolidado.storage.graduacion import obtener_marca_gradua
 from consolidado.storage.notas import listar_notas
+from consolidado.storage.priorizados import es_priorizado_propio
 
 _CAMPOS_ACADEMICO = (
     "Activos",
@@ -751,5 +752,6 @@ def obtener_ficha_estudiante(
         "notas_n": notas_n,
         "periodo_notas": periodo_notas,
         "notas_todas": notas_todas,
+        "priorizado_propio": es_priorizado_propio(id_key, base),
         **vista,
     }

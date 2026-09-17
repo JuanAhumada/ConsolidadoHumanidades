@@ -23,9 +23,19 @@
     <div class="field">
       <label for="columna">Columna</label>
       <select id="columna" {% if not columnas %}disabled{% endif %}>
-        {% for c in columnas %}
-        <option value="{{ c }}" {% if c == 'Programa' or c == 'Nivel prioridad' %}selected{% endif %}>{{ c }}</option>
+        {% if grupos %}
+        {% for g in grupos %}
+        <optgroup label="{{ g.nombre }}">
+          {% for c in g.columnas %}
+          <option value="{{ c }}" {% if c == 'Programa' %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </optgroup>
         {% endfor %}
+        {% else %}
+        {% for c in columnas %}
+        <option value="{{ c }}" {% if c == 'Programa' %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+        {% endif %}
       </select>
     </div>
     <div class="field">
@@ -171,6 +181,24 @@ function fillSelect(sel, items, current, placeholder) {
   if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
 }
 
+function fillSelectGrouped(sel, grupos, current) {
+  if (!sel) return;
+  const prev = current == null ? sel.value : String(current);
+  sel.innerHTML = '';
+  (grupos || []).forEach((g) => {
+    const og = document.createElement('optgroup');
+    og.label = g.nombre || 'Grupo';
+    (g.columnas || []).forEach((c) => {
+      const o = document.createElement('option');
+      o.value = c;
+      o.textContent = c;
+      og.appendChild(o);
+    });
+    if (og.childElementCount) sel.appendChild(og);
+  });
+  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+
 function etiquetaVersion(id) {
   const sel = el('version');
   if (!sel) return '';
@@ -195,7 +223,7 @@ function pintarMetaVersion(data) {
 
 async function cargarVersion(id) {
   const key = String(id || '');
-  if (!key) return { columnas: [], programas: [], version: null };
+  if (!key) return { columnas: [], grupos: [], programas: [], version: null };
   if (versionCache[key]) return versionCache[key];
   const res = await fetch(`/api/graficas/${encodeURIComponent(key)}`);
   const data = await res.json().catch(() => ({}));
@@ -212,7 +240,11 @@ async function cargarVersion(id) {
 
 async function aplicarOpcionesDeVersion(id, cfg) {
   const data = await cargarVersion(id);
-  fillSelect(el('columna'), data.columnas || [], cfg && cfg.columna);
+  if (data.grupos && data.grupos.length) {
+    fillSelectGrouped(el('columna'), data.grupos, cfg && cfg.columna);
+  } else {
+    fillSelect(el('columna'), data.columnas || [], cfg && cfg.columna);
+  }
   fillSelect(el('programa'), data.programas || [], cfg && cfg.programa, 'Todas');
   pintarMetaVersion(data);
   return data;

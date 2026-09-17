@@ -19,17 +19,19 @@ from consolidado.config.settings import (
     cargar_config,
     carpeta_excels,
     construir_columnas_salida,
+    construir_grupos_encabezado,
     etiqueta_alias,
     guardar_config,
     guardar_excel_fuente,
     slot_es_requerido,
 )
-from consolidado.core.constants import aplicar_config
+from consolidado.core.constants import aplicar_config, max_materias_en_dataframe
 from consolidado.core.colores_programa import colores_programas_fijos
 from consolidado.core.permanencia import cargar_metas
 from consolidado.storage.metas import aplicar_overrides_metas
 from consolidado.core.pipeline import ejecutar_consolidado, generar_dataframe_consolidado
 from consolidado.core.charts import (
+    agrupar_columnas_grafica,
     columna_excluida_grafica,
     columnas_graficables,
     programas_disponibles,
@@ -873,9 +875,14 @@ def datos_graficas(version_id: int | None = None) -> dict[str, Any]:
     if not isinstance(permitidas, list):
         permitidas = None
     columnas = columnas_graficables(df, permitidas=permitidas) if df is not None else []
+    n_mat = 1
+    if df is not None:
+        n_mat = max(int((meta or {}).get("num_materias") or 0), max_materias_en_dataframe(df), 1)
+    grupos = agrupar_columnas_grafica(columnas, construir_grupos_encabezado(cfg, n_mat))
     return {
         "version": {**meta, "etiqueta": _etiqueta_version(meta)} if meta else None,
         "columnas": columnas,
+        "grupos": grupos,
         "programas": programas_disponibles(df) if df is not None else [],
         "filas": df.height if df is not None else 0,
         "versiones": versiones,

@@ -1021,11 +1021,26 @@ def _fusionar_filas_categoria(
     return out
 
 
+_DF_CACHE: dict[int, pl.DataFrame] = {}
+_DF_CACHE_MAX = 2
+
+
+def invalidar_cache_dataframe(version_id: int | None = None) -> None:
+    if version_id is None:
+        _DF_CACHE.clear()
+        return
+    _DF_CACHE.pop(int(version_id), None)
+
+
 def cargar_dataframe_version(
     version_id: int,
     base: Path | None = None,
 ) -> pl.DataFrame:
-    meta = obtener_version(version_id, base)
+    vid = int(version_id)
+    hit = _DF_CACHE.get(vid)
+    if hit is not None:
+        return hit
+    meta = obtener_version(vid, base)
     if meta is None:
         raise ValueError(f"No existe la versión id={version_id}")
     with conexion(base) as conn:
@@ -1045,7 +1060,7 @@ def cargar_dataframe_version(
             WHERE b.version_id = ?
             ORDER BY b.nombre COLLATE NOCASE, b.identificacion
             """,
-            (version_id,),
+            (vid,),
         ).fetchall()
     filas = [
         _fusionar_filas_categoria(
@@ -1053,7 +1068,11 @@ def cargar_dataframe_version(
         )
         for r in rows
     ]
-    return filas_a_dataframe(filas, meta["columnas"])
+    df = filas_a_dataframe(filas, meta["columnas"])
+    _DF_CACHE[vid] = df
+    while len(_DF_CACHE) > _DF_CACHE_MAX:
+        _DF_CACHE.pop(next(iter(_DF_CACHE)))
+    return df
 
 
 def obtener_fila_estudiante(
@@ -1201,6 +1220,7 @@ def vaciar_versiones(base: Path | None = None) -> int:
         if "estudiantes" in tablas:
             conn.execute("DELETE FROM estudiantes")
         conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('versiones')")
+    invalidar_cache_dataframe()
     return n
 
 

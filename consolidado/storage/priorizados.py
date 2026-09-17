@@ -86,6 +86,24 @@ def guardar_priorizados_propios(
     return ruta_base_datos(base)
 
 
+def es_priorizado_propio(identificacion: str, base: Path | None = None) -> bool:
+    """True si la identificación tiene un priorizado propio activo."""
+    ident = str(identificacion or "").strip()
+    if not ident:
+        return False
+    base = base or PROJECT_ROOT
+    inicializar_db(base)
+    with conexion(base) as conn:
+        row = conn.execute(
+            """
+            SELECT 1 FROM priorizados_propios
+            WHERE identificacion = ? AND activo = 1
+            """,
+            (ident,),
+        ).fetchone()
+    return row is not None
+
+
 def agregar_priorizado_propio(
     entrada: dict[str, Any],
     base: Path | None = None,

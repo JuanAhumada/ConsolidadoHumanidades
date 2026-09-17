@@ -100,6 +100,13 @@ def _web_dir() -> Path:
 WEB_DIR = _web_dir()
 TEMPLATES = Jinja2Templates(directory=str(WEB_DIR / "templates"))
 
+
+def _css_rev() -> str:
+    try:
+        return str(int((WEB_DIR / "static" / "app.css").stat().st_mtime))
+    except OSError:
+        return APP_VERSION
+
 app = FastAPI(title="Bienestar Estudiantil", version=APP_VERSION)
 app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
@@ -178,16 +185,25 @@ app.add_middleware(
 )
 
 
+_NAVS_CON_ESTADO = frozenset({"inicio", "archivos", "versiones", "datos-antiguos"})
+
+
 def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
-    cfg = services.cfg_actual()
-    estado = services.estado_archivos(cfg)
     usuario = extra.pop("usuario", None)
     if usuario is None and not extra.pop("sin_sesion", False):
         usuario = _usuario_sesion(request)
+    nav = extra.pop("nav", "archivos")
+    cfg = extra.pop("cfg", None)
+    estado = extra.pop("estado", None)
+    if nav in _NAVS_CON_ESTADO:
+        if cfg is None:
+            cfg = services.cfg_actual()
+        if estado is None:
+            estado = services.estado_archivos(cfg)
     data = {
         "cfg": cfg,
-        "estado": estado,
-        "nav": extra.pop("nav", "archivos"),
+        "estado": estado or {},
+        "nav": nav,
         "flash": request.query_params.get("msg"),
         "error": request.query_params.get("err") or extra.pop("error", None),
         "hoy": date.today().isoformat(),
@@ -201,6 +217,7 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "manual_usuario": MANUAL_USUARIO,
         "app_version": APP_VERSION,
         "app_version_label": APP_VERSION_LABEL,
+        "css_rev": _css_rev(),
     }
     data.update(extra)
     data["ayuda_clave"] = data.get("ayuda_clave") or data.get("nav") or "inicio"
@@ -263,6 +280,7 @@ async def pagina_login(request: Request) -> HTMLResponse:
             "ayuda_clave": "login",
             "app_version": APP_VERSION,
             "app_version_label": APP_VERSION_LABEL,
+            "css_rev": _css_rev(),
         },
     )
 
@@ -1217,6 +1235,7 @@ async def toggle_activo(
     identificacion: str = Form(...),
     activo: str = Form("1"),
     vista: str = Form("completo"),
+    volver: str = Form(""),
 ) -> RedirectResponse:
     activo_ok = activo in {"1", "true", "on"}
     set_priorizado_activo(identificacion, activo=activo_ok, base=PROJECT_ROOT)
@@ -1226,7 +1245,10 @@ async def toggle_activo(
         entidad="estudiante",
         identificacion=identificacion,
     )
-    return RedirectResponse("/seguimiento?cat=priorizado&vista=todos&msg=Estado+actualizado", status_code=303)
+    destino = _volver_interno(
+        volver, "/seguimiento?cat=priorizado&vista=todos"
+    )
+    return _redir(destino, msg="Estado actualizado")
 
 
 @app.post("/priorizados/anadir")
@@ -1235,6 +1257,7 @@ async def anadir_propio(
     nombre: str = Form(""),
     motivo: str = Form("Priorizado propio"),
     detalle: str = Form(""),
+    volver: str = Form(""),
 ) -> RedirectResponse:
     agregar_priorizado_propio(
         {
@@ -1252,7 +1275,10 @@ async def anadir_propio(
         identificacion=identificacion,
         detalle={"motivo": motivo, "nombre": nombre},
     )
-    return RedirectResponse("/seguimiento?cat=priorizado&vista=todos&msg=Priorizado+guardado", status_code=303)
+    destino = _volver_interno(
+        volver, "/seguimiento?cat=priorizado&vista=todos"
+    )
+    return _redir(destino, msg="Priorizado guardado")
 
 
 @app.post("/alertas/fuente/quitar")
@@ -1732,6 +1758,7 @@ async def pagina_graficas(
         except ValueError:
             datos = None
     columnas = (datos or {}).get("columnas") or []
+    grupos = (datos or {}).get("grupos") or []
     programas = (datos or {}).get("programas") or []
     meta = (datos or {}).get("version")
     return _render(
@@ -1739,6 +1766,7 @@ async def pagina_graficas(
         "graficas.html",
         nav="graficas",
         columnas=columnas,
+        grupos=grupos,
         tipos=TIPOS_GRAFICA,
         meta=meta,
         programas=programas,
