@@ -1,5 +1,53 @@
 {% extends "base.html" %}
 {% block title %}Seguimiento{% endblock %}
+{% block head %}
+<style>
+.seg-filtro-bar {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+.seg-filtros { display: flex; width: 100%; margin: 0 0 0.75rem; }
+.seg-filtros .seg-carreras { margin: 0; }
+.seg-filtros-acciones { margin-left: auto; flex: 0 0 auto; }
+.seg-filtro { position: relative; }
+.seg-filtros-acciones .seg-filtro-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+.seg-filtro-panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  z-index: 80;
+  width: min(20rem, calc(100vw - 2rem));
+  max-height: 16rem;
+  overflow: auto;
+  padding: 0.65rem;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.seg-filtro-panel[hidden] { display: none !important; }
+.seg-filtro-panel a {
+  display: block;
+  padding: 0.28rem 0.4rem;
+  margin: 0 0 0.4rem;
+  border-radius: 8px;
+  background: none;
+  box-shadow: none;
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+</style>
+{% endblock %}
 {% block content %}
 <div class="topbar">
   <div>
@@ -18,6 +66,9 @@
   </div>
 </div>
 
+{% if programas or mostrar_filtro_beca or mostrar_filtro_prio %}
+<div class="seg-filtros">
+  <div class="seg-filtro-bar">
 {% if programas %}
 <nav class="seg-carreras" aria-label="Filtrar por carrera">
   <a class="{% if filtro_general %}active{% endif %}" href="{{ href_carreras_general }}">General</a>
@@ -27,22 +78,57 @@
 </nav>
 {% endif %}
 
+{% if mostrar_filtro_beca or mostrar_filtro_prio %}
+<nav class="seg-carreras seg-filtros-acciones" aria-label="Filtros de seguimiento">
 {% if mostrar_filtro_beca %}
-<nav class="seg-carreras seg-tipos" aria-label="Filtrar por tipo de beca">
-  <a class="{% if filtro_beca_general %}active{% endif %}" href="{{ href_becas_general }}">Todas las becas</a>
-  {% for t in tipos_beca %}
-  <a class="{% if t.activo %}active{% endif %}" href="{{ t.href }}" title="{{ t.nombre }}">{{ t.nombre }}</a>
-  {% endfor %}
-</nav>
+<div class="seg-filtro{% if not filtro_beca_general %} has-sel{% endif %}">
+  <a href="#filtro-beca" class="active seg-filtro-btn js-seg-filtro-btn" role="button" aria-expanded="false" aria-haspopup="listbox">
+    Becas
+    {% if not filtro_beca_general %}<span class="seg-filtro-n">{{ tipos_beca_sel|length }}</span>{% endif %}
+    <svg class="seg-filtro-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+      <path d="M4 5h16l-6.2 7.4V19l-3.6 2v-8.6L4 5z"/>
+    </svg>
+  </a>
+  <div class="seg-filtro-panel" hidden role="group" aria-label="Filtrar por tipo de beca">
+    <input type="search" class="js-seg-filtro-busca" placeholder="Buscar beca" autocomplete="off"/>
+    <a class="seg-filtro-todas{% if filtro_beca_general %} is-on{% endif %}" href="{{ href_becas_general }}">Todas las becas</a>
+    {% for t in tipos_beca %}
+    <label class="seg-filtro-opt js-seg-filtro-item" data-nombre="{{ t.nombre }}">
+      <input type="checkbox" class="js-seg-filtro-opt" data-href="{{ t.href }}" {% if t.activo %}checked{% endif %}/>
+      <span>{{ t.nombre }}</span>
+    </label>
+    {% endfor %}
+    <p class="seg-filtro-vacio" hidden>Sin coincidencias.</p>
+  </div>
+</div>
 {% endif %}
 
 {% if mostrar_filtro_prio %}
-<nav class="seg-carreras seg-tipos" aria-label="Filtrar por tipo de priorizado">
-  <a class="{% if filtro_prio_general %}active{% endif %}" href="{{ href_prio_general }}">Todos los motivos</a>
-  {% for t in tipos_prio %}
-  <a class="{% if t.activo %}active{% endif %}" href="{{ t.href }}" title="{{ t.nombre }}">{{ t.nombre }}</a>
-  {% endfor %}
+<div class="seg-filtro{% if not filtro_prio_general %} has-sel{% endif %}">
+  <a href="#filtro-prio" class="active seg-filtro-btn js-seg-filtro-btn" role="button" aria-expanded="false" aria-haspopup="listbox">
+    Priorizados
+    {% if not filtro_prio_general %}<span class="seg-filtro-n">{{ tipos_prio_sel|length }}</span>{% endif %}
+    <svg class="seg-filtro-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+      <path d="M4 5h16l-6.2 7.4V19l-3.6 2v-8.6L4 5z"/>
+    </svg>
+  </a>
+  <div class="seg-filtro-panel" hidden role="group" aria-label="Filtrar por tipo de priorizado">
+    <input type="search" class="js-seg-filtro-busca" placeholder="Buscar motivo" autocomplete="off"/>
+    <a class="seg-filtro-todas{% if filtro_prio_general %} is-on{% endif %}" href="{{ href_prio_general }}">Todos los motivos</a>
+    {% for t in tipos_prio %}
+    <label class="seg-filtro-opt js-seg-filtro-item" data-nombre="{{ t.nombre }}">
+      <input type="checkbox" class="js-seg-filtro-opt" data-href="{{ t.href }}" {% if t.activo %}checked{% endif %}/>
+      <span>{{ t.nombre }}</span>
+    </label>
+    {% endfor %}
+    <p class="seg-filtro-vacio" hidden>Sin coincidencias.</p>
+  </div>
+</div>
+{% endif %}
 </nav>
+{% endif %}
+  </div>
+</div>
 {% endif %}
 
 <nav class="seg-switch" aria-label="Tipo de prioridad">
@@ -53,56 +139,6 @@
   </a>
   {% endfor %}
 </nav>
-
-{% if cat == 'priorizado' %}
-<div class="card seg-panel">
-  <h3>Añadir priorizado propio</h3>
-  <form method="post" action="/priorizados/anadir" class="form-row">
-    <div class="field">
-      <label for="prio-id">Identificación</label>
-      <input id="prio-id" type="text" name="identificacion" required placeholder="Cédula o documento"/>
-    </div>
-    <div class="field">
-      <label for="prio-nombre">Nombre</label>
-      <input id="prio-nombre" type="text" name="nombre" placeholder="Nombre del estudiante"/>
-    </div>
-    <div class="field">
-      <label for="prio-motivo">Motivo</label>
-      <input id="prio-motivo" type="text" name="motivo" value="Priorizado propio"/>
-    </div>
-    <div class="field">
-      <label for="prio-detalle">Detalle</label>
-      <input id="prio-detalle" type="text" name="detalle" placeholder="Nota adicional"/>
-    </div>
-    <div class="form-actions-row">
-      <button class="btn" type="submit">Guardar</button>
-    </div>
-  </form>
-</div>
-{% endif %}
-
-{% if cat == 'alertas' %}
-<div class="card seg-panel">
-  <h3>Añadir alerta propia</h3>
-  <form method="post" action="/alertas/anadir" class="form-row">
-    <div class="field">
-      <label for="alerta-id">Identificación</label>
-      <input id="alerta-id" type="text" name="identificacion" required placeholder="Cédula o documento"/>
-    </div>
-    <div class="field">
-      <label for="alerta-nombre">Nombre</label>
-      <input id="alerta-nombre" type="text" name="nombre" placeholder="Nombre del estudiante"/>
-    </div>
-    <div class="field" style="grid-column:1/-1;">
-      <label for="alerta-detalle">Detalle</label>
-      <input id="alerta-detalle" type="text" name="detalle" required placeholder="Motivo o nota de la alerta"/>
-    </div>
-    <div class="form-actions-row">
-      <button class="btn" type="submit">Guardar</button>
-    </div>
-  </form>
-</div>
-{% endif %}
 
 {% if cat == 'notas' %}
 <div class="card seg-panel">
@@ -137,11 +173,15 @@
       <span class="seg-check-box {% if f.contactado %}is-on{% endif %}" aria-hidden="true"></span>
       <span class="seg-check-lbl">{% if f.contactado %}Marcado{% else %}Marcar{% endif %}</span>
     </button>
-    <h3><a href="/estudiante/{{ f.identificacion }}">{{ f.nombre }}</a></h3>
-    <p class="seg-card-score"><strong>{{ f.puntaje_txt }}</strong> {% if cat == 'alertas' %}alertas{% elif cat == 'notas' %}notas{% else %}pts{% endif %}</p>
-    {% if cat == 'beca' and f.tipos_beca %}<p class="seg-card-nota">{{ f.tipos_beca | join(', ') }}</p>{% endif %}
-    {% if cat == 'priorizado' and f.motivos_prio %}<p class="seg-card-nota">{{ f.motivos_prio | join(', ') }}</p>{% elif cat == 'priorizado' and f.motivo %}<p class="seg-card-nota">{{ f.motivo }}</p>{% endif %}
-    {% if cat == 'notas' and f.ultima_nota %}<p class="seg-card-nota">{{ f.ultima_nota }}</p>{% endif %}
+    <div class="seg-card-body">
+      <div class="seg-card-top">
+        <h3><a href="/estudiante/{{ f.identificacion }}">{{ f.nombre }}</a></h3>
+        <p class="seg-card-score"><strong>{{ f.puntaje_txt }}</strong> {% if cat == 'alertas' %}alertas{% elif cat == 'notas' %}notas{% else %}pts{% endif %}</p>
+      </div>
+      {% if cat == 'beca' and f.tipos_beca %}<p class="seg-card-nota">{{ f.tipos_beca | join(', ') }}</p>{% endif %}
+      {% if cat == 'priorizado' and f.motivos_prio %}<p class="seg-card-nota">{{ f.motivos_prio | join(', ') }}</p>{% elif cat == 'priorizado' and f.motivo %}<p class="seg-card-nota">{{ f.motivo }}</p>{% endif %}
+      {% if cat == 'notas' and f.ultima_nota %}<p class="seg-card-nota">{{ f.ultima_nota }}</p>{% endif %}
+    </div>
   </article>
   {% else %}
   <div class="card"><p class="muted">No hay estudiantes en esta categoría{% if vista=='pendientes' %} pendientes de marcar{% endif %}.</p></div>
@@ -205,6 +245,66 @@
 
 {% block scripts %}
 <script>
+(function () {
+  function cerrarFiltros(excepto) {
+    document.querySelectorAll(".seg-filtro.is-open").forEach((filtro) => {
+      if (filtro === excepto) return;
+      filtro.classList.remove("is-open");
+      const btn = filtro.querySelector(".js-seg-filtro-btn");
+      const panel = filtro.querySelector(".seg-filtro-panel");
+      if (btn) btn.setAttribute("aria-expanded", "false");
+      if (panel) panel.hidden = true;
+    });
+  }
+
+  document.querySelectorAll(".seg-filtro").forEach((filtro) => {
+    const btn = filtro.querySelector(".js-seg-filtro-btn");
+    const panel = filtro.querySelector(".seg-filtro-panel");
+    const busca = filtro.querySelector(".js-seg-filtro-busca");
+    const vacio = filtro.querySelector(".seg-filtro-vacio");
+    if (!btn || !panel) return;
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const abierto = filtro.classList.contains("is-open");
+      cerrarFiltros();
+      if (abierto) return;
+      filtro.classList.add("is-open");
+      btn.setAttribute("aria-expanded", "true");
+      panel.hidden = false;
+      if (busca) busca.focus();
+    });
+    if (!busca) return;
+    busca.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") ev.preventDefault();
+    });
+    busca.addEventListener("input", () => {
+      const q = busca.value.trim().toLowerCase();
+      let n = 0;
+      panel.querySelectorAll(".js-seg-filtro-item").forEach((el) => {
+        const nombre = (el.getAttribute("data-nombre") || el.textContent || "").toLowerCase();
+        const ok = !q || nombre.includes(q);
+        el.hidden = !ok;
+        if (ok) n += 1;
+      });
+      if (vacio) vacio.hidden = n > 0;
+    });
+  });
+  document.addEventListener("click", (ev) => {
+    if (!ev.target.closest(".seg-filtro")) cerrarFiltros();
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") cerrarFiltros();
+  });
+  document.querySelectorAll(".js-seg-filtro-opt").forEach((inp) => {
+    inp.addEventListener("change", () => {
+      const href = inp.getAttribute("data-href");
+      if (!href) return;
+      if (typeof marcarNavegacionInterna === "function") marcarNavegacionInterna();
+      location.href = href;
+    });
+  });
+})();
 (function () {
   const modal = document.getElementById("modal-marcar");
   const titulo = document.getElementById("modal-marcar-titulo");

@@ -10,7 +10,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from consolidado.config.settings import construir_columnas_salida, construir_grupos_encabezado, etiqueta_export_columna
-from consolidado.core.charts import filas_items_separados, partir_items
+from consolidado.core.charts import partir_items, tabla_items_en_columnas
 from consolidado.core.columnas import alinear_dataframe_salida, formatear_dataframe_salida
 from consolidado.core.constants import (
     ANCHO_MAXIMO_COLUMNA_EXCEL,
@@ -150,9 +150,8 @@ def recombinar_becas_y_motivos(df: pl.DataFrame) -> pl.DataFrame:
 def _escribir_hojas_separadas(wb, df: pl.DataFrame) -> None:
     cabecera = Font(bold=True, color="FFFFFF")
     fondo = PatternFill("solid", fgColor="0C6B63")
-    becas = filas_items_separados(df, columna=COL_TIPO_BECA, campo="Beca")
+    cols_b, becas = tabla_items_en_columnas(df, columna=COL_TIPO_BECA, prefijo="Beca")
     if becas:
-        cols_b = ["Identificación", "Nombre y apellidos", "Programa", "Beca"]
         _escribir_hoja(
             wb,
             "Becas",
@@ -162,9 +161,10 @@ def _escribir_hojas_separadas(wb, df: pl.DataFrame) -> None:
             cabecera=cabecera,
             fondo=fondo,
         )
-    motivos = filas_items_separados(df, columna=COL_MOTIVO_PRIO, campo="Motivo")
+    cols_m, motivos = tabla_items_en_columnas(
+        df, columna=COL_MOTIVO_PRIO, prefijo="Motivo"
+    )
     if motivos:
-        cols_m = ["Identificación", "Nombre y apellidos", "Programa", "Motivo"]
         _escribir_hoja(
             wb,
             "Priorizados",
@@ -388,7 +388,7 @@ def guardar_excel_consolidado(
     num_materias: int | None = None,
     materias_repetidas: dict[str, set[str]] | None = None,
 ) -> Path:
-    """Listado con becas/motivos en columnas; hojas Becas y Priorizados (1 cédula + 1 tipo)."""
+    """Listado y hojas Becas/Priorizados: una cédula por fila y Beca 1… / Motivo 1…."""
     cfg = cfg or _cfg()
     n_mat = num_materias if num_materias is not None else max_materias_en_dataframe(consolidado)
     columnas = construir_columnas_salida(cfg, n_mat)

@@ -335,7 +335,7 @@
       <div class="ficha-pane-body" data-panels="sec">
         <div class="ficha-pane-panel ficha-notas" role="tabpanel" data-panel="notas" {% if sec_sel != 'notas' %}hidden{% endif %}>
           <p class="muted">Las notas de diciembre a mayo cuentan para el primer semestre (diciembre entra al año siguiente). De junio a noviembre, para el segundo.</p>
-          <p class="ficha-notas-filtro">
+          <div class="ficha-notas-filtro">
             Semestre de notas: <strong>{{ ficha.periodo_notas }}</strong>
             {% if ficha.notas_todas %}
             <a class="btn sm" href="{{ ficha_path }}?cat={{ cat_sel }}&amp;sec=notas">Solo este semestre</a>
@@ -343,7 +343,18 @@
             <a class="btn sm secondary" href="{{ ficha_path }}?cat={{ cat_sel }}&amp;sec=notas&amp;notas=todas">Ver todas</a>
             {% endif %}
             <a class="btn sm secondary" href="/notas/excel">Exportar Excel</a>
-          </p>
+            {% if ficha.priorizado_propio %}
+            <span class="ficha-prio-propia-ok">Priorizado propio</span>
+            {% else %}
+            <form method="post" action="/priorizados/anadir" class="ficha-prio-propia" data-after-sec="notas">
+              <input type="hidden" name="identificacion" value="{{ ficha.identificacion }}"/>
+              <input type="hidden" name="nombre" value="{{ ficha.nombre }}"/>
+              <input type="hidden" name="motivo" value="Priorizado propio"/>
+              <input class="js-ficha-volver" type="hidden" name="volver" value="{{ ficha_path }}?cat={{ cat_sel }}&amp;sec=notas"/>
+              <button class="btn sm" type="submit">Agregar como priorizado propio</button>
+            </form>
+            {% endif %}
+          </div>
           {% if ficha.notas %}
           <ul class="ficha-notas-lista">
             {% for n in ficha.notas %}

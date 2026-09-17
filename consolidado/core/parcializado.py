@@ -18,9 +18,9 @@ from consolidado.config.settings import construir_grupos_encabezado
 from consolidado.core.charts import (
     COL_PROGRAMA_GRAFICA,
     _partir_categorias,
-    filas_items_separados,
     filtrar_df_por_carreras,
     programas_disponibles,
+    tabla_items_en_columnas,
 )
 from consolidado.core.constants import max_materias_en_dataframe
 
@@ -157,12 +157,12 @@ def recortar_dataframe(
     return recorte.select(cols)
 
 
-def filas_becas_separadas(df: pl.DataFrame) -> list[dict[str, Any]]:
-    return filas_items_separados(df, columna=COL_TIPO_BECA, campo="Beca")
+def filas_becas_separadas(df: pl.DataFrame) -> tuple[list[str], list[dict[str, Any]]]:
+    return tabla_items_en_columnas(df, columna=COL_TIPO_BECA, prefijo="Beca")
 
 
-def filas_motivos_separados(df: pl.DataFrame) -> list[dict[str, Any]]:
-    return filas_items_separados(df, columna=COL_MOTIVO_PRIO, campo="Motivo")
+def filas_motivos_separados(df: pl.DataFrame) -> tuple[list[str], list[dict[str, Any]]]:
+    return tabla_items_en_columnas(df, columna=COL_MOTIVO_PRIO, prefijo="Motivo")
 
 
 def _valor_excel(val: Any) -> Any:
@@ -275,9 +275,8 @@ def excel_parcializado_bytes(
         activa=True,
     )
 
-    becas = filas_becas_separadas(filtrado)
+    cols_b, becas = filas_becas_separadas(filtrado)
     if becas:
-        cols_b = ["Identificación", "Nombre y apellidos", "Programa", "Beca"]
         _escribir_hoja(
             wb,
             "Becas",
@@ -288,9 +287,8 @@ def excel_parcializado_bytes(
             fondo=fondo,
         )
 
-    motivos = filas_motivos_separados(filtrado)
+    cols_m, motivos = filas_motivos_separados(filtrado)
     if motivos:
-        cols_m = ["Identificación", "Nombre y apellidos", "Programa", "Motivo"]
         _escribir_hoja(
             wb,
             "Priorizados",

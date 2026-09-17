@@ -24,7 +24,7 @@ from consolidado.paths import PROJECT_ROOT
 from consolidado.storage.alertas_fuente import partir_tipos_alerta
 from consolidado.storage.alertas_propias import cargar_alertas_propias
 from consolidado.storage.contactados import cargar_ids_contactados
-from consolidado.storage.db import cargar_dataframe_version, ultima_version
+from consolidado.storage.db import cargar_dataframe_version, conexion, inicializar_db, ultima_version
 from consolidado.storage.ediciones import cargar_ediciones, overlay_ediciones_fila
 from consolidado.storage.notas import resumen_notas
 
@@ -191,6 +191,43 @@ def _opciones_tipo(filas: list[dict[str, Any]], campo: str) -> list[str]:
     return sorted(vistos, key=lambda s: s.casefold())
 
 
+_UNIVERSO_CACHE: dict[str, Any] = {"clave": None, "items": None}
+
+
+def _stamp_universo(base: Path, version_id: int) -> tuple:
+    inicializar_db(base)
+    with conexion(base) as conn:
+        n_ed = conn.execute("SELECT COUNT(*) AS n FROM estudiante_ediciones").fetchone()["n"]
+        n_notas = conn.execute("SELECT COUNT(*) AS n FROM seguimiento_notas").fetchone()["n"]
+        n_al = conn.execute("SELECT COUNT(*) AS n FROM alertas_propias").fetchone()["n"]
+    return (int(version_id), int(n_ed or 0), int(n_notas or 0), int(n_al or 0))
+
+
+def _construir_universo(
+    df,
+    *,
+    propias: dict[str, Any],
+    notas: dict[str, Any],
+    ediciones: dict[str, Any],
+) -> list[dict[str, Any]]:
+    universo: list[dict[str, Any]] = []
+    ids_vacio: set[str] = set()
+    for fila in df.iter_rows(named=True):
+        fila = overlay_ediciones_fila(fila, ediciones)
+        item = _fila_base(fila, ids_vacio)
+        if item is None:
+            continue
+        propia = propias.get(item["identificacion"])
+        if propia and not item["alerta_propia"]:
+            item["alerta_propia"] = _texto(propia.get("detalle"))
+            item["num_alertas"] = int(item["num_alertas"]) + 1
+        res = notas.get(item["identificacion"]) or {}
+        item["n_notas"] = int(res.get("n") or 0)
+        item["ultima_nota"] = str(res.get("ultima") or "")
+        universo.append(item)
+    return universo
+
+
 def listar_seguimiento(
     *,
     cat_id: str = "general",
@@ -229,35 +266,27 @@ def listar_seguimiento(
 
     df = cargar_dataframe_version(int(ult["id"]), base)
     ids_contactados = cargar_ids_contactados(base)
-    propias = {
-        normalizar_id(a.get("identificacion")): a
-        for a in cargar_alertas_propias(base)
-        if normalizar_id(a.get("identificacion"))
-    }
-    notas = resumen_notas(base)
-    ediciones = cargar_ediciones(base)
+    clave = _stamp_universo(base, int(ult["id"]))
+    if _UNIVERSO_CACHE.get("clave") != clave or _UNIVERSO_CACHE.get("items") is None:
+        propias = {
+            normalizar_id(a.get("identificacion")): a
+            for a in cargar_alertas_propias(base)
+            if normalizar_id(a.get("identificacion"))
+        }
+        notas = resumen_notas(base)
+        ediciones = cargar_ediciones(base)
+        _UNIVERSO_CACHE["clave"] = clave
+        _UNIVERSO_CACHE["items"] = _construir_universo(
+            df, propias=propias, notas=notas, ediciones=ediciones
+        )
+    universo_src = _UNIVERSO_CACHE["items"]
 
-    universo: list[dict[str, Any]] = []
-    for fila in df.iter_rows(named=True):
-        fila = overlay_ediciones_fila(fila, ediciones)
-        item = _fila_base(fila, ids_contactados)
-        if item is None:
-            continue
-        propia = propias.get(item["identificacion"])
-        if propia and not item["alerta_propia"]:
-            item["alerta_propia"] = _texto(propia.get("detalle"))
-            item["num_alertas"] = int(item["num_alertas"]) + 1
-        res = notas.get(item["identificacion"]) or {}
-        item["n_notas"] = int(res.get("n") or 0)
-        item["ultima_nota"] = str(res.get("ultima") or "")
-        universo.append(item)
-
-    programas_opciones = sorted({f["programa"] for f in universo if f["programa"]})
+    programas_opciones = sorted({f["programa"] for f in universo_src if f["programa"]})
     programas_sel = [p for p in programas_sel if p in programas_opciones]
     if programas_sel:
-        universo_f = [f for f in universo if f["programa"] in programas_sel]
+        universo_f = [f for f in universo_src if f["programa"] in programas_sel]
     else:
-        universo_f = universo
+        universo_f = universo_src
 
     cats_out: list[dict[str, Any]] = []
     for c in CATEGORIAS_SEGUIMIENTO:
@@ -266,7 +295,9 @@ def listar_seguimiento(
             {
                 **c,
                 "n": len(miembros),
-                "n_pendientes": sum(1 for f in miembros if not f["contactado"]),
+                "n_pendientes": sum(
+                    1 for f in miembros if f["identificacion"] not in ids_contactados
+                ),
             }
         )
 
@@ -289,22 +320,29 @@ def listar_seguimiento(
         )
     )
     tope = max((_puntaje_categoria(f, cat) for f in filtradas), default=1.0) or 1.0
+    pintadas: list[dict[str, Any]] = []
     for f in filtradas:
         valor = _puntaje_categoria(f, cat)
-        f["puntaje_lista"] = valor
-        f["puntaje_txt"] = fmt_pts(valor)
-        f["pct"] = round(min(valor / tope, 1.0) * 100) if tope else 0
+        pintadas.append(
+            {
+                **f,
+                "contactado": f["identificacion"] in ids_contactados,
+                "puntaje_lista": valor,
+                "puntaje_txt": fmt_pts(valor),
+                "pct": round(min(valor / tope, 1.0) * 100) if tope else 0,
+            }
+        )
 
     if vista != "todos":
-        visibles = [f for f in filtradas if not f["contactado"]]
+        visibles = [f for f in pintadas if not f["contactado"]]
     else:
-        visibles = filtradas
+        visibles = pintadas
 
     return {
         "categoria": cat,
         "categorias": cats_out,
         "filas": visibles,
-        "total": len(filtradas),
+        "total": len(pintadas),
         "visibles": len(visibles),
         "vista": "todos" if vista == "todos" else "pendientes",
         "meta": ult,

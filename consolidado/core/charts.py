@@ -87,6 +87,23 @@ def paleta_categorias(n: int) -> list[str]:
     return out[:n]
 
 
+COLUMNAS_GRAFICA_PUNTAJE = frozenset(
+    {
+        "Puntaje prioridad",
+        "Nivel prioridad",
+        "Detalle prioridad",
+        "Ptje Beca",
+        "Ptje Priorizado",
+        "Ptje Repitiendo",
+        "Ptje Reintegro",
+        "Ptje Propio",
+        "Ptje Activacion",
+        "Ptje Ruta",
+    }
+)
+
+_RE_COL_PUNTAJE = re.compile(r"^(ptje|puntaje|nivel prioridad)\b", re.IGNORECASE)
+
 COLUMNAS_GRAFICA_UNICAS = frozenset(
     {
         "Identificación",
@@ -98,7 +115,6 @@ COLUMNAS_GRAFICA_UNICAS = frozenset(
         "Lugar de nacimiento",
         "Lugar de residencia",
         "Dirección residencia",
-        "Detalle prioridad",
         "Detalle GPrio.",
         "Detalle Propio",
         "Fecha adaptacion",
@@ -153,7 +169,9 @@ def columna_excluida_grafica(col: str) -> bool:
         return True
     if es_columna_materia_grafica(nombre):
         return True
-    if nombre in COLUMNAS_GRAFICA_UNICAS:
+    if nombre in COLUMNAS_GRAFICA_UNICAS or nombre in COLUMNAS_GRAFICA_PUNTAJE:
+        return True
+    if _RE_COL_PUNTAJE.match(nombre):
         return True
     return _parece_informacion_unica(nombre)
 
@@ -171,6 +189,32 @@ def columnas_graficables(
     return [c for c in cols if not columna_excluida_grafica(c)]
 
 
+def agrupar_columnas_grafica(
+    columnas: list[str],
+    grupos: list[tuple[str, list[str]]] | None = None,
+) -> list[dict[str, Any]]:
+    """Repartir columnas graficables en los grupos de encabezado del consolidado."""
+    habilitadas = [str(c) for c in columnas if str(c).strip()]
+    if not habilitadas:
+        return []
+    disponibles = set(habilitadas)
+    vistos: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for nombre, cols_grupo in grupos or []:
+        miembros = [
+            c for c in cols_grupo
+            if c in disponibles and c not in vistos
+        ]
+        if not miembros:
+            continue
+        vistos.update(miembros)
+        out.append({"nombre": str(nombre or "Grupo").strip() or "Grupo", "columnas": miembros})
+    resto = [c for c in habilitadas if c not in vistos]
+    if resto:
+        out.append({"nombre": "Otros", "columnas": resto})
+    return out
+
+
 _RE_PARTIR_ITEMS = re.compile(r"\s*\|\s*|,\s+")
 
 
@@ -186,6 +230,39 @@ def _partir_categorias(texto: str) -> list[str]:
     """Si el valor trae varios ítems unidos con «|», cada uno cuenta aparte."""
     partes = partir_items(texto)
     return partes or ([str(texto).strip()] if str(texto).strip() else [])
+
+
+def tabla_items_en_columnas(
+    df: pl.DataFrame,
+    *,
+    columna: str,
+    prefijo: str,
+) -> tuple[list[str], list[dict[str, Any]]]:
+    """Una fila por estudiante; cada ítem en «Beca 1», «Beca 2»… (o Motivo)."""
+    if columna not in df.columns:
+        return [], []
+    grupos: list[tuple[dict[str, Any], list[str]]] = []
+    n = 0
+    for row in df.iter_rows(named=True):
+        partes = partir_items(str(row.get(columna) or ""))
+        if not partes:
+            continue
+        n = max(n, len(partes))
+        grupos.append((row, partes))
+    if not n:
+        return [], []
+    cols = ["Documento", "Nombre", "Carrera"] + [f"{prefijo} {i}" for i in range(1, n + 1)]
+    filas: list[dict[str, Any]] = []
+    for row, partes in grupos:
+        rec: dict[str, Any] = {
+            "Documento": row.get("Identificación"),
+            "Nombre": row.get("Nombre y apellidos"),
+            "Carrera": row.get("Programa"),
+        }
+        for i in range(1, n + 1):
+            rec[f"{prefijo} {i}"] = partes[i - 1] if i <= len(partes) else None
+        filas.append(rec)
+    return cols, filas
 
 
 def filas_items_separados(
