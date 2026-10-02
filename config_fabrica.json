@@ -85,7 +85,8 @@
       "nombre estudiante",
       "nombre completo",
       "alumno",
-      "apellidos y nombres"
+      "apellidos y nombres",
+      "nombre"
     ],
     "fecha_nacimiento": [
       "fecha nacimiento",

@@ -145,8 +145,13 @@ def generar_dataframe_consolidado(
     base: Path | None = None,
     archivos: list[Path] | None = None,
     carpeta_fuentes: Path | None = None,
+    dialogo_recuperacion: bool = False,
 ) -> tuple[pl.DataFrame, int]:
-    """Arma el consolidado en memoria (sin guardar Excel)."""
+    """Arma el consolidado en memoria (sin guardar Excel).
+
+    dialogo_recuperacion abre Tk solo en el escritorio. En la web y en
+    Mac/Linux sin pantalla un fallo de lectura se informa, no abre un diálogo.
+    """
     base = base or PROJECT_ROOT
     cfg = aplicar_config(cfg, base)
 
@@ -190,11 +195,19 @@ def generar_dataframe_consolidado(
                 continue
             if tipo == "bd2":
                 priorizados, _ = procesar_tabla_priorizados_con_recuperacion(
-                    p, etiqueta, tipo=tipo, hoja=hoja
+                    p,
+                    etiqueta,
+                    tipo=tipo,
+                    hoja=hoja,
+                    permitir_seleccionar_otro=dialogo_recuperacion,
                 )
                 continue
             df_listado, df_horarios, _ = preparar_archivo(
-                p, etiqueta, tipo=tipo, hoja=hoja
+                p,
+                etiqueta,
+                tipo=tipo,
+                hoja=hoja,
+                permitir_seleccionar_otro=dialogo_recuperacion,
             )
             max_materias = max(max_materias, max_materias_en_dataframe(df_horarios))
             partes.append(df_listado)
@@ -285,7 +298,11 @@ def ejecutar_consolidado(
     base = base or PROJECT_ROOT
     cfg = aplicar_config(cfg, base)
     consolidado, max_materias = generar_dataframe_consolidado(
-        cfg, base=base, archivos=archivos, carpeta_fuentes=carpeta_fuentes
+        cfg,
+        base=base,
+        archivos=archivos,
+        carpeta_fuentes=carpeta_fuentes,
+        dialogo_recuperacion=parent is not None,
     )
     materias_repetidas = _cargar_materias_repetidas_cfg(
         cfg, base, carpeta=carpeta_fuentes

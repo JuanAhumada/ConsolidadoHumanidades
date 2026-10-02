@@ -158,6 +158,7 @@ ALIASES_DEFAULT: dict[str, list[str]] = {
         "nombre completo",
         "alumno",
         "apellidos y nombres",
+        "nombre",
     ],
     "fecha_nacimiento": [
         "fecha nacimiento",
