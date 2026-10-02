@@ -19,7 +19,7 @@
   <p>Cuando el administrador genere un consolidado, podrá recortarlo aquí por carrera y columnas.</p>
 </article>
 {% else %}
-<form method="post" action="/parcializado/descargar" id="form-parc">
+<form method="post" action="/parcializado/descargar" id="form-parc" data-carga="parcializado" data-carga-archivo>
   <div class="grid grid-3 parc-stats">
     <div class="stat"><div class="n" id="parc-stat-filas">{% if datos %}{{ datos.filas }}{% else %}—{% endif %}</div><div class="l">Estudiantes</div></div>
     <div class="stat"><div class="n" id="parc-stat-cols">{% if datos %}{{ datos.basicas|length }}{% else %}—{% endif %}</div><div class="l">Columnas marcadas</div></div>
@@ -317,13 +317,12 @@
   });
 
   form.addEventListener("submit", (ev) => {
-    if (typeof marcarNavegacionInterna === "function") marcarNavegacionInterna();
     const nCols = Array.from(checksCols()).filter((c) => c.checked).length;
     if (!nCols) {
       ev.preventDefault();
       resumen.textContent = "Marque al menos una columna.";
     }
-  });
+  }, true);
 
   filasTotales = {{ (datos.filas if datos else 0) }};
   basicas = ["Identificación", "Nombre y apellidos", "Programa"];

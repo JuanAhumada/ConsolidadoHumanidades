@@ -567,9 +567,12 @@ html.ayuda-abierta body.page-graficas .main {
   border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.sidebar .cta .btn.secondary:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+.sidebar .cta .btn.secondary:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+#estado-actualizacion {
+  color: #A5A5A5;
 }
 
 .cta-progress {
@@ -4290,11 +4293,28 @@ button.seg-filtro-btn:hover {
   gap: 0.45rem;
   font-weight: 550;
 }
-.doc-destino select,
-.doc-destino input[type="text"] {
-  width: 100%;
-  max-width: 28rem;
+.doc-hoja-card {
+  margin: 0.7rem 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--paper-2);
+  overflow: hidden;
 }
+.doc-hoja-card > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem 0.95rem;
+  cursor: pointer;
+  font-weight: 650;
+  list-style: none;
+}
+.doc-hoja-card > summary::-webkit-details-marker { display: none; }
+.doc-hoja-body {
+  padding: 0 1rem 1rem;
+  border-top: 1px solid var(--line);
+}
+.doc-hoja-card .doc-preview-wrap { max-height: 12rem; }
 
 .doc-preview-wrap {
   max-height: 22rem;
@@ -5026,6 +5046,58 @@ button.seg-filtro-btn:hover {
 }
 #generar {
   scroll-margin-top: 1.25rem;
+}
+.carga-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  background: rgba(42, 5, 6, 0.72);
+  backdrop-filter: blur(8px);
+}
+.carga-overlay[hidden] {
+  display: none !important;
+}
+.carga-panel {
+  width: min(26rem, 100%);
+  padding: 1.85rem 1.7rem 1.7rem;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.carga-panel h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1.2rem;
+}
+.carga-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.carga-spinner {
+  width: 2.6rem;
+  height: 2.6rem;
+  margin: 0 auto 1.05rem;
+  border: 4px solid var(--accent-soft);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: carga-spin 0.75s linear infinite;
+}
+@keyframes carga-spin {
+  to { transform: rotate(360deg); }
+}
+body.esta-generando {
+  overflow: hidden;
+}
+body.esta-generando .layout,
+body.esta-generando .page-tools,
+body.esta-generando .nav-show {
+  pointer-events: none;
 }
 .seg-card-nota {
   margin: 0;

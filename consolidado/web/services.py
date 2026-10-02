@@ -6,11 +6,13 @@ No ponga lógica de negocio pesada aquí; delegue a core.pipeline y storage.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 import re
 import tempfile
+import threading
 import unicodedata
 
 from consolidado.config.settings import (
@@ -45,6 +47,7 @@ from consolidado.core.documentos import (
     slug_documento_id,
     sugerir_titulo_documento,
     vista_previa_excel,
+    vista_previa_todas_las_hojas,
     canonizar_grupo_encabezado,
     etiqueta_grupo_ficha,
 )
@@ -457,38 +460,54 @@ def parse_fecha(texto: str | None) -> date:
         raise ValueError("Fecha inválida. Use el formato AAAA-MM-DD.") from exc
 
 
+_bloqueo_generar = threading.Lock()
+
+
+@contextmanager
+def _ocupar_generacion() -> Iterator[None]:
+    if not _bloqueo_generar.acquire(blocking=False):
+        raise ValueError(
+            "Ya se está generando un consolidado. Espere a que termine; no pulse el botón otra vez."
+        )
+    try:
+        yield
+    finally:
+        _bloqueo_generar.release()
+
+
 def generar(
     *,
     fecha_version: date | None = None,
     notas: str | None = None,
     abrir: bool = True,
 ) -> dict[str, Any]:
-    cfg = cfg_actual()
-    asegurar_semilla_si_vacia(PROJECT_ROOT)
-    antes = ultima_version_por_id(PROJECT_ROOT)
-    consolidado, destino = ejecutar_consolidado(
-        cfg,
-        base=PROJECT_ROOT,
-        abrir=abrir,
-        fecha_version=fecha_version,
-        notas=notas,
-    )
-    despues = ultima_version_por_id(PROJECT_ROOT)
-    fecha = (fecha_version or date.today()).isoformat()
-    registrar_modificacion(
-        accion="generar",
-        resumen=f"Generó consolidado {fecha} · {consolidado.height} estudiantes",
-        entidad="version",
-        version_antes=_id_version(antes),
-        version_despues=_id_version(despues),
-        detalle={"excel": str(destino), "estudiantes": consolidado.height},
-    )
-    return {
-        "ok": True,
-        "estudiantes": consolidado.height,
-        "excel": str(destino),
-        "version": ultima_version(PROJECT_ROOT),
-    }
+    with _ocupar_generacion():
+        cfg = cfg_actual()
+        asegurar_semilla_si_vacia(PROJECT_ROOT)
+        antes = ultima_version_por_id(PROJECT_ROOT)
+        consolidado, destino = ejecutar_consolidado(
+            cfg,
+            base=PROJECT_ROOT,
+            abrir=abrir,
+            fecha_version=fecha_version,
+            notas=notas,
+        )
+        despues = ultima_version_por_id(PROJECT_ROOT)
+        fecha = (fecha_version or date.today()).isoformat()
+        registrar_modificacion(
+            accion="generar",
+            resumen=f"Generó consolidado {fecha} · {consolidado.height} estudiantes",
+            entidad="version",
+            version_antes=_id_version(antes),
+            version_despues=_id_version(despues),
+            detalle={"excel": str(destino), "estudiantes": consolidado.height},
+        )
+        return {
+            "ok": True,
+            "estudiantes": consolidado.height,
+            "excel": str(destino),
+            "version": ultima_version(PROJECT_ROOT),
+        }
 
 
 def importar_version(
@@ -523,64 +542,65 @@ def generar_version_historica(
     notas: str | None = None,
 ) -> dict[str, Any]:
     """Genera una versión SQL desde fuentes copiadas a una carpeta aislada."""
-    cfg = cfg_actual()
-    faltan: list[str] = []
-    slots = {s.get("id"): s for s in cfg.get("archivos_fuente", [])}
-    for slot in cfg.get("archivos_fuente", []):
-        if slot_es_requerido(slot) and slot.get("id") not in archivos_por_slot:
-            faltan.append(str(slot.get("titulo") or slot.get("id")))
-    if faltan:
-        raise ValueError(
-            "Faltan archivos obligatorios para la versión histórica: " + ", ".join(faltan)
+    with _ocupar_generacion():
+        cfg = cfg_actual()
+        faltan: list[str] = []
+        slots = {s.get("id"): s for s in cfg.get("archivos_fuente", [])}
+        for slot in cfg.get("archivos_fuente", []):
+            if slot_es_requerido(slot) and slot.get("id") not in archivos_por_slot:
+                faltan.append(str(slot.get("titulo") or slot.get("id")))
+        if faltan:
+            raise ValueError(
+                "Faltan archivos obligatorios para la versión histórica: " + ", ".join(faltan)
+            )
+        desconocidos = [sid for sid in archivos_por_slot if sid not in slots]
+        if desconocidos:
+            raise ValueError("Archivo(s) no reconocidos: " + ", ".join(desconocidos))
+
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        carpeta = PROJECT_ROOT / "datos" / "historico" / f"{fecha_version.isoformat()}_{stamp}"
+        carpeta.mkdir(parents=True, exist_ok=True)
+        for slot_id, (_nombre, contenido) in archivos_por_slot.items():
+            slot = slots[slot_id]
+            dest_name = slot.get("nombre_guardado") or f"{slot_id}.xlsx"
+            (carpeta / dest_name).write_bytes(contenido)
+
+        antes = ultima_version_por_id(PROJECT_ROOT)
+        texto_notas = (notas or "").strip() or (
+            f"Versión histórica desde fuentes aisladas · {fecha_version.isoformat()}"
         )
-    desconocidos = [sid for sid in archivos_por_slot if sid not in slots]
-    if desconocidos:
-        raise ValueError("Archivo(s) no reconocidos: " + ", ".join(desconocidos))
-
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    carpeta = PROJECT_ROOT / "datos" / "historico" / f"{fecha_version.isoformat()}_{stamp}"
-    carpeta.mkdir(parents=True, exist_ok=True)
-    for slot_id, (_nombre, contenido) in archivos_por_slot.items():
-        slot = slots[slot_id]
-        dest_name = slot.get("nombre_guardado") or f"{slot_id}.xlsx"
-        (carpeta / dest_name).write_bytes(contenido)
-
-    antes = ultima_version_por_id(PROJECT_ROOT)
-    texto_notas = (notas or "").strip() or (
-        f"Versión histórica desde fuentes aisladas · {fecha_version.isoformat()}"
-    )
-    consolidado, destino = ejecutar_consolidado(
-        cfg,
-        base=PROJECT_ROOT,
-        carpeta_fuentes=carpeta,
-        abrir=False,
-        fecha_version=fecha_version,
-        persistir_config=False,
-        notas=texto_notas,
-    )
-    despues = ultima_version_por_id(PROJECT_ROOT)
-    registrar_modificacion(
-        accion="generar_historico",
-        resumen=(
-            f"Montó datos antiguos {fecha_version.isoformat()}"
-            f" · {consolidado.height} estudiantes"
-        ),
-        entidad="version",
-        version_antes=_id_version(antes),
-        version_despues=_id_version(despues),
-        detalle={
-            "carpeta": str(carpeta),
+        consolidado, destino = ejecutar_consolidado(
+            cfg,
+            base=PROJECT_ROOT,
+            carpeta_fuentes=carpeta,
+            abrir=False,
+            fecha_version=fecha_version,
+            persistir_config=False,
+            notas=texto_notas,
+        )
+        despues = ultima_version_por_id(PROJECT_ROOT)
+        registrar_modificacion(
+            accion="generar_historico",
+            resumen=(
+                f"Montó datos antiguos {fecha_version.isoformat()}"
+                f" · {consolidado.height} estudiantes"
+            ),
+            entidad="version",
+            version_antes=_id_version(antes),
+            version_despues=_id_version(despues),
+            detalle={
+                "carpeta": str(carpeta),
+                "excel": str(destino),
+                "slots": list(archivos_por_slot),
+            },
+        )
+        return {
+            "ok": True,
+            "estudiantes": consolidado.height,
             "excel": str(destino),
-            "slots": list(archivos_por_slot),
-        },
-    )
-    return {
-        "ok": True,
-        "estudiantes": consolidado.height,
-        "excel": str(destino),
-        "carpeta": str(carpeta),
-        "version": despues,
-    }
+            "carpeta": str(carpeta),
+            "version": despues,
+        }
 
 
 def excel_de_version(version_id: int) -> Path:
@@ -625,7 +645,7 @@ def previsualizar_excel_bytes(
     cfg = cfg_actual()
     ruta = _escribir_tmp_excel(contenido, nombre)
     try:
-        data = vista_previa_excel(ruta, hoja=hoja, cfg=cfg)
+        data = vista_previa_todas_las_hojas(ruta, cfg=cfg)
     finally:
         try:
             ruta.unlink()
@@ -651,8 +671,52 @@ def previsualizar_documento_guardado(
     ruta = carpeta_excels(cfg, PROJECT_ROOT) / nombre
     if not ruta.is_file():
         raise ValueError("El Excel de este documento no está en la carpeta de entrada.")
-    data = vista_previa_excel(ruta, hoja=hoja or doc.get("hoja"), cfg=cfg)
-    usados = {
+    data = vista_previa_todas_las_hojas(ruta, cfg=cfg)
+    if hoja:
+        for item in data.get("por_hoja") or []:
+            if item.get("hoja") == hoja:
+                data["hoja"] = hoja
+                data["columnas"] = item.get("columnas") or []
+                data["filas"] = item.get("filas") or []
+                data["total_filas"] = item.get("total_filas") or 0
+                data["pk_sugerida"] = item.get("pk_sugerida")
+                break
+    hermanos = [
+        d
+        for d in cfg.get("documentos_adicionales") or []
+        if d.get("nombre_guardado") == nombre
+    ]
+    por_hoja_docs: dict[str, dict[str, Any]] = {}
+    sin_hoja: list[dict[str, Any]] = []
+    for hermano in hermanos:
+        clave_hoja = str(hermano.get("hoja") or "").strip()
+        if clave_hoja:
+            por_hoja_docs[clave_hoja] = hermano
+        else:
+            sin_hoja.append(hermano)
+    for item in data.get("por_hoja") or []:
+        extra = por_hoja_docs.get(str(item.get("hoja") or "").strip())
+        if extra is None and sin_hoja:
+            extra = sin_hoja.pop(0)
+        if extra is None:
+            continue
+        usados = {
+            (c.get("aliases") or [""])[0]: c.get("salida") or (c.get("aliases") or [""])[0]
+            for c in extra.get("columnas") or []
+            if (c.get("aliases") or [""])[0]
+        }
+        item["documento"] = {
+            "id": extra.get("id"),
+            "titulo": extra.get("titulo"),
+            "grupo_encabezado": extra.get("grupo_encabezado") or extra.get("categoria") or "",
+            "grupo_etiqueta": etiqueta_grupo_ficha(
+                extra.get("grupo_encabezado") or extra.get("categoria") or ""
+            ),
+            "hoja": extra.get("hoja") or item.get("hoja"),
+            "pk": (extra.get("columna_identificacion_aliases") or [item.get("pk_sugerida")])[0],
+            "columnas_usadas": usados,
+        }
+    usados_doc = {
         (c.get("aliases") or [""])[0]: c.get("salida") or (c.get("aliases") or [""])[0]
         for c in doc.get("columnas") or []
         if (c.get("aliases") or [""])[0]
@@ -661,6 +725,7 @@ def previsualizar_documento_guardado(
     data["titulo_sugerido"] = doc.get("titulo") or sugerir_titulo_documento(nombre)
     data["categorias"] = categorias_documento(cfg)
     data["categorias_fijas"] = [etiqueta for etiqueta, _ in CATEGORIAS_FICHA]
+    data["origen_doc_id"] = doc.get("id")
     data["documento"] = {
         "id": doc.get("id"),
         "titulo": doc.get("titulo"),
@@ -670,7 +735,7 @@ def previsualizar_documento_guardado(
         ),
         "hoja": doc.get("hoja") or data.get("hoja"),
         "pk": (doc.get("columna_identificacion_aliases") or [data.get("pk_sugerida")])[0],
-        "columnas_usadas": usados,
+        "columnas_usadas": usados_doc,
     }
     return data
 
@@ -763,6 +828,136 @@ def guardar_documento_adicional(
     return {"ok": True, "id": nuevo_id, "titulo": titulo}
 
 
+def guardar_documentos_adicionales_lote(
+    *,
+    hojas: list[dict[str, Any]],
+    contenido: bytes | None = None,
+    nombre_archivo: str = "",
+    origen_doc_id: str | None = None,
+) -> dict[str, Any]:
+    """Crea o actualiza un documento adicional por cada pestaña incluida."""
+    cfg = cfg_actual()
+    items: list[dict[str, Any]] = []
+    for raw in hojas or []:
+        if not isinstance(raw, dict):
+            continue
+        hoja = str(raw.get("hoja") or "").strip()
+        titulo = str(raw.get("titulo") or hoja or "").strip()
+        grupo = canonizar_grupo_encabezado(str(raw.get("grupo") or "").strip() or titulo or "Extra")
+        pk = str(raw.get("pk") or "").strip()
+        cols_in = raw.get("columnas") if isinstance(raw.get("columnas"), list) else []
+        if not hoja or not titulo or not pk:
+            continue
+        cols = columnas_config_documento(
+            [c for c in cols_in if isinstance(c, dict)],
+            pk=pk,
+        )
+        if not cols:
+            continue
+        items.append(
+            {
+                "doc_id": str(raw.get("doc_id") or "").strip(),
+                "hoja": hoja,
+                "titulo": titulo,
+                "grupo": grupo,
+                "pk": pk,
+                "columnas": cols,
+            }
+        )
+    if not items:
+        raise ValueError(
+            "Marque al menos una pestaña con llave de identificación y una columna de datos."
+        )
+
+    docs = list(cfg.get("documentos_adicionales") or [])
+    origen = next((d for d in docs if d.get("id") == origen_doc_id), None) if origen_doc_id else None
+    nombre_guardado = str((origen or {}).get("nombre_guardado") or "")
+    if contenido:
+        suf = _ext_excel(nombre_archivo or nombre_guardado or "archivo.xlsx")
+        if not nombre_guardado:
+            existentes = {str(d.get("id") or "") for d in docs}
+            usados_archivo = {str(d.get("nombre_guardado") or "") for d in docs}
+            nombre_guardado = f"{slug_documento_id(Path(nombre_archivo).stem, existentes)}{suf}"
+            n = 1
+            while nombre_guardado in usados_archivo:
+                nombre_guardado = (
+                    f"{slug_documento_id(Path(nombre_archivo).stem, existentes)}_{n}{suf}"
+                )
+                n += 1
+        elif Path(nombre_guardado).suffix.lower() != suf:
+            nombre_guardado = f"{Path(nombre_guardado).stem}{suf}"
+        carpeta = carpeta_excels(cfg, PROJECT_ROOT)
+        carpeta.mkdir(parents=True, exist_ok=True)
+        (carpeta / nombre_guardado).write_bytes(contenido)
+    elif not nombre_guardado:
+        raise ValueError("Seleccione un Excel para el documento nuevo.")
+
+    existentes = {str(d.get("id") or "") for d in docs}
+    por_id = {str(d.get("id") or ""): d for d in docs}
+    creados: list[str] = []
+    actualizados: list[str] = []
+    for item in items:
+        doc = por_id.get(item["doc_id"]) if item["doc_id"] else None
+        if doc is None:
+            doc = next(
+                (
+                    d
+                    for d in docs
+                    if d.get("nombre_guardado") == nombre_guardado
+                    and str(d.get("hoja") or "") == item["hoja"]
+                ),
+                None,
+            )
+        payload = {
+            "titulo": item["titulo"],
+            "grupo_encabezado": item["grupo"],
+            "categoria": item["grupo"],
+            "nombre_guardado": nombre_guardado,
+            "hoja": item["hoja"],
+            "filtrar_programas": False,
+            "columna_identificacion_aliases": [item["pk"]],
+            "columnas": item["columnas"],
+        }
+        if doc is not None:
+            doc.update(payload)
+            actualizados.append(item["titulo"])
+            continue
+        nuevo_id = slug_documento_id(item["titulo"], existentes)
+        existentes.add(nuevo_id)
+        nuevo = {"id": nuevo_id, **payload}
+        docs.append(nuevo)
+        por_id[nuevo_id] = nuevo
+        creados.append(item["titulo"])
+    cfg["documentos_adicionales"] = docs
+    guardar_config(cfg, PROJECT_ROOT)
+    aplicar_config(cfg, PROJECT_ROOT)
+    partes = []
+    if creados:
+        partes.append(
+            f"añadió {len(creados)} pestaña{'s' if len(creados) != 1 else ''}"
+        )
+    if actualizados:
+        partes.append(
+            f"actualizó {len(actualizados)} pestaña{'s' if len(actualizados) != 1 else ''}"
+        )
+    resumen = " y ".join(partes).capitalize() if partes else "Guardó documentos adicionales"
+    if nombre_archivo:
+        resumen = f"{resumen} de «{Path(nombre_archivo).name}»"
+    registrar_modificacion(
+        accion="documento",
+        resumen=resumen[:180],
+        entidad="documento",
+        identificacion=(origen_doc_id or (creados[0] if creados else "")),
+    )
+    return {
+        "ok": True,
+        "titulos": creados + actualizados,
+        "creados": creados,
+        "actualizados": actualizados,
+        "archivo": nombre_guardado,
+    }
+
+
 def eliminar_documento_adicional(doc_id: str) -> dict[str, Any]:
     cfg = cfg_actual()
     docs = list(cfg.get("documentos_adicionales") or [])
@@ -773,8 +968,13 @@ def eliminar_documento_adicional(doc_id: str) -> dict[str, Any]:
     guardar_config(cfg, PROJECT_ROOT)
     aplicar_config(cfg, PROJECT_ROOT)
     nombre = doc.get("nombre_guardado") or ""
+    sigue_en_uso = any(
+        d.get("nombre_guardado") == nombre
+        for d in cfg["documentos_adicionales"]
+        if nombre
+    )
     ruta = carpeta_excels(cfg, PROJECT_ROOT) / nombre
-    if nombre and ruta.is_file():
+    if nombre and ruta.is_file() and not sigue_en_uso:
         try:
             ruta.unlink()
         except OSError:
@@ -1078,7 +1278,38 @@ def conteo_parcializado(
     return aplicar_filtros_parcializado(df, programas=programas, filtros=filtros).height
 
 
+_bloqueo_parcializado = threading.Lock()
+
+
+@contextmanager
+def _ocupar_parcializado() -> Iterator[None]:
+    if not _bloqueo_parcializado.acquire(blocking=False):
+        raise ValueError(
+            "Ya se está armando un Excel parcializado. Espere a que termine; no pulse el botón otra vez."
+        )
+    try:
+        yield
+    finally:
+        _bloqueo_parcializado.release()
+
+
 def excel_parcializado(
+    version_id: int,
+    *,
+    columnas: list[str],
+    programas: list[str] | None,
+    filtros: dict[str, list[str]] | None = None,
+) -> tuple[bytes, str]:
+    with _ocupar_parcializado():
+        return _excel_parcializado(
+            version_id,
+            columnas=columnas,
+            programas=programas,
+            filtros=filtros,
+        )
+
+
+def _excel_parcializado(
     version_id: int,
     *,
     columnas: list[str],

@@ -337,10 +337,7 @@ class AppConsolidado(ctk.CTk):
         cab = EncabezadoPagina(
             pagina,
             titulo="Alertas propias",
-            subtitulo=(
-                "Marcaciones manuales (Alerta Propia / Detalle Propio). "
-                "No sustituyen las alertas de los Excels de alertas."
-            ),
+            subtitulo="Marcaciones manuales (Alerta Propia / Detalle Propio).",
         )
         cab.pack(fill="x", pady=(0, 14))
         BotonIconoTexto(

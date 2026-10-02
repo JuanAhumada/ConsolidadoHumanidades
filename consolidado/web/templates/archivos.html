@@ -17,13 +17,13 @@
 <div class="card" id="generar">
   <h3>Generar nuevo consolidado</h3>
   <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Cruza los Excel cargados, calcula prioridad y guarda una versión nueva. El periodo sale de los estudiantes, no de la fecha que elija aquí.</p>
-  <form method="post" action="/generar" class="form-row" style="align-items:end;flex-wrap:wrap;gap:.7rem;">
+  <form method="post" action="/generar" data-carga="generar" class="form-row" style="align-items:end;flex-wrap:wrap;gap:.7rem;">
     <div class="field">
       <label for="fecha-gen">Fecha de la versión</label>
       <input id="fecha-gen" type="date" name="fecha_version" value="{{ hoy }}"/>
     </div>
     <div class="field">
-      <button class="btn" type="submit"
+      <button class="btn" type="submit" id="btn-generar"
               {% if not estado.listo_generar %}disabled title="Faltan archivos obligatorios"{% endif %}>
         Generar nuevo consolidado
       </button>
@@ -63,19 +63,6 @@
     </form>
     {% endif %}
   </div>
-</div>
-
-<div class="card">
-  <h3>Cargar varios por nombre</h3>
-  <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Elija varios Excel o un ZIP. Se asignan solos según el nombre del archivo.</p>
-  <form method="post" action="/upload/varios" enctype="multipart/form-data" class="file-row" style="padding:.2rem 0 0;border:0;">
-    <label class="file-pick">
-      <input type="file" name="archivos" accept=".xlsx,.xlsm,.xls,.zip" multiple required/>
-      <span class="file-pick-btn">Elegir varios Excel o un ZIP</span>
-      <span class="file-pick-name">Ningún archivo</span>
-    </label>
-    <button class="btn" type="submit">Cargar por nombre</button>
-  </form>
 </div>
 
 <form method="post" action="/upload/lote" enctype="multipart/form-data" id="form-lote">
@@ -122,7 +109,7 @@
       <button class="btn secondary" type="button" id="btn-encabezados">Editar encabezados</button>
     </div>
   </div>
-  <p class="muted" style="margin-top:-.2rem;margin-bottom:.7rem;">Opcional: otras hojas que se unen al consolidado por <strong>identificación</strong> (llave foránea). Al abrir el Excel elija esa columna, las demás a usar y si van a una categoría existente de la ficha o a una nueva.</p>
+  <p class="muted" style="margin-top:-.2rem;margin-bottom:.7rem;">Opcional: otras hojas que se unen al consolidado por <strong>identificación</strong> (llave foránea). Al abrir el Excel verá todas las pestañas: marque las que quiera añadir, la llave, las columnas y si van a una categoría existente de la ficha o a una nueva. No hace falta volver a cargar el archivo.</p>
   {% if estado.documentos %}
     {% for doc in estado.documentos %}
     <div class="file-row">
@@ -151,11 +138,13 @@
   <form method="post" action="/archivos/documento" enctype="multipart/form-data" id="form-doc">
     <input type="hidden" name="doc_id" id="doc-id" value=""/>
     <input type="hidden" name="columnas" id="doc-columnas" value="[]"/>
+    <input type="hidden" name="hojas" id="doc-hojas" value=""/>
     <input type="file" name="archivo" id="doc-archivo-hidden" hidden/>
+    <div id="doc-config-simple">
     <div class="form-row doc-config-fields">
       <div class="field">
         <label for="doc-titulo">Nombre</label>
-        <input id="doc-titulo" type="text" name="titulo" required placeholder="Nombre sugerido del documento"/>
+        <input id="doc-titulo" type="text" name="titulo" placeholder="Nombre sugerido del documento"/>
       </div>
       <div class="field">
         <label for="doc-hoja">Hoja</label>
@@ -163,7 +152,7 @@
       </div>
       <div class="field">
         <label for="doc-pk">Llave foránea (identificación)</label>
-        <select id="doc-pk" name="pk" required></select>
+        <select id="doc-pk" name="pk"></select>
         <p class="muted" style="margin:.35rem 0 0;font-size:.78rem;">Columna de este Excel que coincide con <strong>Identificación</strong> del consolidado. Con esa clave se busca al estudiante y se añaden los datos a su fila; no se crean personas nuevas.</p>
       </div>
     </div>
@@ -201,6 +190,8 @@
       <button class="btn sm secondary" type="button" id="doc-cols-ninguna">Ninguna</button>
     </div>
     <div class="doc-cols" id="doc-cols"></div>
+    </div>
+    <div id="doc-hojas-lote" hidden></div>
     <div class="form-actions-row doc-config-actions">
       <label class="file-pick">
         <input type="file" id="doc-cambiar-file" accept=".xlsx,.xlsm,.xls"/>
@@ -272,10 +263,19 @@
   const selPk = document.getElementById("doc-pk");
   const colsBox = document.getElementById("doc-cols");
   const encabezados = document.getElementById("encabezados");
+  const simpleBox = document.getElementById("doc-config-simple");
+  const loteBox = document.getElementById("doc-hojas-lote");
   let previewFile = null;
   let currentCols = [];
   let usedMap = {};
   let ignoreHoja = false;
+
+  function setModoLote(on) {
+    simpleBox.hidden = !!on;
+    loteBox.hidden = !on;
+    if (!on) loteBox.innerHTML = "";
+    document.getElementById("doc-hojas").value = "";
+  }
 
   function setStatus(msg, isError) {
     statusEl.textContent = msg || "";
@@ -336,6 +336,325 @@
       return document.getElementById("doc-grupo-nueva").value.trim();
     }
     return document.getElementById("doc-grupo-existente").value.trim() || "Extra";
+  }
+
+  function fillPreviewTable(table, data) {
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
+    thead.innerHTML = "";
+    tbody.innerHTML = "";
+    const cols = data.columnas || [];
+    const trh = document.createElement("tr");
+    cols.forEach((c) => {
+      const th = document.createElement("th");
+      th.textContent = c;
+      trh.appendChild(th);
+    });
+    thead.appendChild(trh);
+    (data.filas || []).forEach((row) => {
+      const tr = document.createElement("tr");
+      cols.forEach((c) => {
+        const td = document.createElement("td");
+        td.textContent = row[c] || "";
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderColsInto(container, cols, pk, usados) {
+    container.innerHTML = "";
+    usados = usados || {};
+    const hayUsados = Object.keys(usados).length > 0;
+    (cols || []).forEach((c) => {
+      const row = document.createElement("label");
+      row.className = "doc-col-row";
+      const chk = document.createElement("input");
+      chk.type = "checkbox";
+      chk.dataset.origen = c;
+      chk.checked = hayUsados
+        ? Object.prototype.hasOwnProperty.call(usados, c) && c !== pk
+        : c !== pk;
+      if (c === pk) {
+        chk.disabled = true;
+        chk.title = "Esta columna es la llave (identificación); no se copia como dato.";
+      }
+      const origen = document.createElement("span");
+      origen.className = "doc-col-origen";
+      origen.title = c;
+      origen.textContent = c;
+      const out = document.createElement("input");
+      out.type = "text";
+      out.className = "doc-col-salida";
+      out.value = usados[c] || c;
+      out.setAttribute("aria-label", "Encabezado de " + c);
+      row.appendChild(chk);
+      row.appendChild(origen);
+      row.appendChild(out);
+      container.appendChild(row);
+    });
+  }
+
+  function fillGruposEn(sel, nueva, radioEx, radioNueva, cats, selected) {
+    sel.innerHTML = "";
+    (cats || []).forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      sel.appendChild(opt);
+    });
+    const etiqueta = (selected || "").trim();
+    const esExistente = etiqueta && (cats || []).some((c) => c.toLowerCase() === etiqueta.toLowerCase());
+    if (esExistente) {
+      sel.value = (cats || []).find((c) => c.toLowerCase() === etiqueta.toLowerCase());
+      nueva.value = "";
+      radioEx.checked = true;
+    } else if (etiqueta) {
+      nueva.value = etiqueta;
+      radioNueva.checked = true;
+      if (cats && cats.length) sel.value = cats[0];
+    } else if (cats && cats.length) {
+      sel.value = cats[0];
+      nueva.value = "";
+      radioEx.checked = true;
+    }
+    sel.disabled = radioNueva.checked;
+    nueva.disabled = !radioNueva.checked;
+  }
+
+  function syncHojaCard(card) {
+    const on = card.querySelector(".doc-hoja-incluir").checked;
+    const body = card.querySelector(".doc-hoja-body");
+    body.querySelectorAll("input, select, button").forEach((el) => {
+      if (el.classList.contains("doc-hoja-incluir")) return;
+      el.disabled = !on;
+    });
+    const radioNueva = card.querySelector(".doc-hoja-destino-nueva");
+    if (on) {
+      card.querySelector(".doc-hoja-grupo-existente").disabled = radioNueva.checked;
+      card.querySelector(".doc-hoja-grupo-nueva").disabled = !radioNueva.checked;
+    }
+  }
+
+  function buildHojaCard(h, i, cats, { isEdit } = {}) {
+    const card = document.createElement("details");
+    card.className = "doc-hoja-card";
+    card.open = i === 0;
+    card.dataset.hoja = h.hoja;
+    const doc = h.documento || null;
+    if (doc && doc.id) card.dataset.docId = doc.id;
+    const ok = !!h.ok;
+    const sum = document.createElement("summary");
+    const incluir = document.createElement("input");
+    incluir.type = "checkbox";
+    incluir.className = "doc-hoja-incluir";
+    incluir.checked = ok && (!isEdit || !!(doc && doc.id));
+    incluir.disabled = !ok;
+    const label = document.createElement("span");
+    label.textContent = !ok
+      ? `${h.hoja} · no se pudo leer`
+      : doc && doc.id
+        ? `${h.hoja} · ${h.total_filas || 0} filas · ya en la ficha`
+        : `${h.hoja} · ${h.total_filas || 0} filas`;
+    card.open = !!(doc && doc.id) || i === 0;
+    sum.appendChild(incluir);
+    sum.appendChild(label);
+    sum.addEventListener("click", (ev) => {
+      if (ev.target === incluir) ev.stopPropagation();
+    });
+    incluir.addEventListener("click", (ev) => ev.stopPropagation());
+    incluir.addEventListener("change", () => syncHojaCard(card));
+    card.appendChild(sum);
+
+    const body = document.createElement("div");
+    body.className = "doc-hoja-body";
+    if (!ok) {
+      const err = document.createElement("p");
+      err.className = "muted";
+      err.textContent = h.error || "Esta pestaña no tiene columnas.";
+      body.appendChild(err);
+      card.appendChild(body);
+      return card;
+    }
+
+    const titulo = document.createElement("input");
+    titulo.type = "text";
+    titulo.className = "doc-hoja-titulo";
+    titulo.value = (doc && doc.titulo) || h.hoja;
+    titulo.placeholder = "Nombre del documento";
+    const tituloLab = document.createElement("label");
+    tituloLab.className = "field";
+    const tituloL = document.createElement("span");
+    tituloL.textContent = "Nombre";
+    tituloLab.appendChild(tituloL);
+    tituloLab.appendChild(titulo);
+
+    const pk = document.createElement("select");
+    pk.className = "doc-hoja-pk";
+    (h.columnas || []).forEach((c) => {
+      const opt = document.createElement("option");
+      opt.value = c;
+      opt.textContent = c;
+      pk.appendChild(opt);
+    });
+    if ((doc && doc.pk) || h.pk_sugerida) pk.value = (doc && doc.pk) || h.pk_sugerida;
+    const pkLab = document.createElement("label");
+    pkLab.className = "field";
+    const pkL = document.createElement("span");
+    pkL.textContent = "Llave foránea (identificación)";
+    pkLab.appendChild(pkL);
+    pkLab.appendChild(pk);
+
+    const fields = document.createElement("div");
+    fields.className = "form-row doc-config-fields";
+    fields.appendChild(tituloLab);
+    fields.appendChild(pkLab);
+    body.appendChild(fields);
+
+    const dest = document.createElement("fieldset");
+    dest.className = "doc-destino";
+    const legend = document.createElement("legend");
+    legend.textContent = "Categoría en la ficha";
+    dest.appendChild(legend);
+    const radioEx = document.createElement("input");
+    radioEx.type = "radio";
+    radioEx.name = "destino_hoja_" + i;
+    radioEx.className = "doc-hoja-destino-existente";
+    radioEx.value = "existente";
+    const labEx = document.createElement("label");
+    labEx.className = "doc-destino-opt";
+    labEx.appendChild(radioEx);
+    labEx.appendChild(document.createTextNode(" Añadir a una categoría existente"));
+    const selGrupo = document.createElement("select");
+    selGrupo.className = "doc-hoja-grupo-existente";
+    const radioNueva = document.createElement("input");
+    radioNueva.type = "radio";
+    radioNueva.name = "destino_hoja_" + i;
+    radioNueva.className = "doc-hoja-destino-nueva";
+    radioNueva.value = "nueva";
+    const labNueva = document.createElement("label");
+    labNueva.className = "doc-destino-opt";
+    labNueva.appendChild(radioNueva);
+    labNueva.appendChild(document.createTextNode(" Crear una categoría nueva"));
+    const inpNueva = document.createElement("input");
+    inpNueva.type = "text";
+    inpNueva.className = "doc-hoja-grupo-nueva";
+    inpNueva.placeholder = "Ej. Bienestar, Prácticas…";
+    dest.appendChild(labEx);
+    dest.appendChild(selGrupo);
+    dest.appendChild(labNueva);
+    dest.appendChild(inpNueva);
+    fillGruposEn(selGrupo, inpNueva, radioEx, radioNueva, cats, (doc && (doc.grupo_etiqueta || doc.grupo_encabezado)) || h.hoja);
+    radioEx.addEventListener("change", () => syncHojaCard(card));
+    radioNueva.addEventListener("change", () => syncHojaCard(card));
+    body.appendChild(dest);
+
+    const meta = document.createElement("p");
+    meta.className = "muted";
+    meta.textContent = `${h.total_filas || 0} filas · mostrando ${(h.filas || []).length} muestras`;
+    body.appendChild(meta);
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap doc-preview-wrap";
+    const table = document.createElement("table");
+    table.className = "doc-preview";
+    table.appendChild(document.createElement("thead"));
+    table.appendChild(document.createElement("tbody"));
+    wrap.appendChild(table);
+    fillPreviewTable(table, h);
+    body.appendChild(wrap);
+
+    const colsTitle = document.createElement("h4");
+    colsTitle.className = "doc-cols-title";
+    colsTitle.textContent = "Campo de entrada → campo de salida";
+    body.appendChild(colsTitle);
+    const toolbar = document.createElement("div");
+    toolbar.className = "doc-cols-toolbar";
+    const btnAll = document.createElement("button");
+    btnAll.type = "button";
+    btnAll.className = "btn sm secondary";
+    btnAll.textContent = "Todas";
+    const btnNone = document.createElement("button");
+    btnNone.type = "button";
+    btnNone.className = "btn sm secondary";
+    btnNone.textContent = "Ninguna";
+    toolbar.appendChild(btnAll);
+    toolbar.appendChild(btnNone);
+    body.appendChild(toolbar);
+    const cols = document.createElement("div");
+    cols.className = "doc-cols";
+    renderColsInto(cols, h.columnas || [], pk.value, (doc && doc.columnas_usadas) || {});
+    pk.addEventListener("change", () => renderColsInto(cols, h.columnas || [], pk.value, (doc && doc.columnas_usadas) || {}));
+    btnAll.addEventListener("click", () => {
+      cols.querySelectorAll('input[type="checkbox"]').forEach((c) => {
+        if (!c.disabled) c.checked = true;
+      });
+    });
+    btnNone.addEventListener("click", () => {
+      cols.querySelectorAll('input[type="checkbox"]').forEach((c) => { c.checked = false; });
+    });
+    body.appendChild(cols);
+    card.appendChild(body);
+    syncHojaCard(card);
+    return card;
+  }
+
+  function applyLote(data, { isEdit } = {}) {
+    setModoLote(true);
+    loteBox.innerHTML = "";
+    const intro = document.createElement("p");
+    intro.className = "muted";
+    const n = (data.por_hoja || []).length;
+    intro.textContent = n === 1
+      ? "Marque columnas y categoría, y guarde."
+      : isEdit
+        ? `Este Excel tiene ${n} pestañas. Las ya guardadas vienen rellenas; marque las demás si quiere añadirlas ahora, sin volver a cargar el archivo.`
+        : `Este Excel tiene ${n} pestañas. Marque las que quiera y pulse guardar. No hace falta volver a cargar el archivo.`;
+    loteBox.appendChild(intro);
+    const cats = data.categorias || [];
+    (data.por_hoja || []).forEach((h, i) => {
+      loteBox.appendChild(buildHojaCard(h, i, cats, { isEdit }));
+    });
+    document.getElementById("doc-guardar").textContent =
+      n > 1 ? "Guardar pestañas" : "Guardar documento";
+    panel.hidden = false;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function collectHojasLote() {
+    const out = [];
+    loteBox.querySelectorAll(".doc-hoja-card").forEach((card) => {
+      const incluir = card.querySelector(".doc-hoja-incluir");
+      if (!incluir || !incluir.checked || incluir.disabled) return;
+      const pkEl = card.querySelector(".doc-hoja-pk");
+      const tituloEl = card.querySelector(".doc-hoja-titulo");
+      const radioNueva = card.querySelector(".doc-hoja-destino-nueva");
+      const grupo = radioNueva && radioNueva.checked
+        ? (card.querySelector(".doc-hoja-grupo-nueva").value || "").trim()
+        : (card.querySelector(".doc-hoja-grupo-existente").value || "").trim();
+      const pk = pkEl ? pkEl.value : "";
+      const titulo = (tituloEl && tituloEl.value.trim()) || card.dataset.hoja;
+      if (!grupo || !pk) return;
+      const cols = [];
+      card.querySelectorAll(".doc-col-row").forEach((row) => {
+        const chk = row.querySelector('input[type="checkbox"]');
+        const salida = row.querySelector(".doc-col-salida");
+        if (!chk || !chk.checked || chk.disabled) return;
+        cols.push({
+          origen: chk.dataset.origen,
+          salida: (salida && salida.value.trim()) || chk.dataset.origen,
+        });
+      });
+      if (!cols.length) return;
+      out.push({
+        hoja: card.dataset.hoja,
+        titulo,
+        grupo,
+        pk,
+        columnas: cols,
+        doc_id: card.dataset.docId || "",
+      });
+    });
+    return out;
   }
 
   function renderPreview(data) {
@@ -400,6 +719,8 @@
   }
 
   function applyPreview(data, { isEdit, keepTitle } = {}) {
+    setModoLote(false);
+    document.getElementById("doc-guardar").textContent = "Guardar documento";
     ignoreHoja = true;
     fillSelect(selHoja, data.hojas || [], data.hoja);
     fillSelect(selPk, data.columnas || [], (data.documento && data.documento.pk) || data.pk_sugerida);
@@ -442,10 +763,15 @@
     const dt = new DataTransfer();
     dt.items.add(file);
     hiddenFile.files = dt.files;
-    applyPreview(data, {
-      isEdit: !!document.getElementById("doc-id").value,
-      keepTitle: !!hoja || !!keepTitle,
-    });
+    const esNuevo = !document.getElementById("doc-id").value;
+    if ((data.por_hoja || []).length) {
+      applyLote(data);
+    } else {
+      applyPreview(data, {
+        isEdit: !esNuevo,
+        keepTitle: !!hoja || !!keepTitle,
+      });
+    }
     setStatus(`Archivo: ${file.name}`);
   }
 
@@ -459,7 +785,11 @@
     hiddenFile.value = "";
     titleEl.textContent = "Editar archivo adicional";
     document.getElementById("doc-id").value = docId;
-    applyPreview(data, { isEdit: true, keepTitle: !!hoja });
+    if ((data.por_hoja || []).length) {
+      applyLote(data, { isEdit: true });
+    } else {
+      applyPreview(data, { isEdit: true, keepTitle: !!hoja });
+    }
     setStatus(`Guardado: ${data.nombre_archivo || ""}`);
   }
 
@@ -478,7 +808,7 @@
   });
 
   selHoja.addEventListener("change", async () => {
-    if (ignoreHoja) return;
+    if (ignoreHoja || !loteBox.hidden) return;
     try {
       if (previewFile) await previewFromFile(previewFile, selHoja.value, true);
       else if (document.getElementById("doc-id").value) {
@@ -519,6 +849,7 @@
     fileInput.value = "";
     hiddenFile.value = "";
     previewFile = null;
+    setModoLote(false);
   });
   document.getElementById("btn-encabezados").addEventListener("click", () => {
     const open = encabezados.hidden;
@@ -540,6 +871,21 @@
   });
 
   form.addEventListener("submit", (ev) => {
+    const esLote = !loteBox.hidden;
+    if (esLote) {
+      const hojas = collectHojasLote();
+      if (!hojas.length) {
+        ev.preventDefault();
+        setStatus("Marque al menos una pestaña con identificación y una columna de datos.", true);
+        return;
+      }
+      document.getElementById("doc-hojas").value = JSON.stringify(hojas);
+      document.getElementById("doc-columnas").value = "[]";
+      document.getElementById("doc-grupo").value = hojas[0].grupo || "";
+      document.getElementById("doc-titulo").value = hojas[0].titulo || "";
+      return;
+    }
+    document.getElementById("doc-hojas").value = "";
     const grupo = grupoElegido();
     if (!grupo) {
       ev.preventDefault();
