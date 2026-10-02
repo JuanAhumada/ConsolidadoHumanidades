@@ -112,7 +112,17 @@ CATEGORIAS_FUENTE_DEFAULT: dict[str, str] = {
 
 ORDEN_CATEGORIAS_FUENTE = ["base", "priorizado", "rendimiento", "alertas"]
 
-ARCHIVOS_FUENTE_REQUERIDOS = {"bd1", "bd12", "bd2", "bd3"}
+ARCHIVOS_FUENTE_REQUERIDOS = {"bd1", "bd2", "bd3"}
+
+ARCHIVOS_FUENTE_RETIRADOS = {
+    "bd_rep",
+    "bd_alertas_com",
+    "bd_alertas_com_1",
+    "bd_alertas_com_2",
+    "bd_alertas_psi",
+    "bd_alertas_psi_1",
+    "bd_alertas_psi_2",
+}
 
 _COLUMNAS_ALERTAS_LEGACY = frozenset({"Num Alertas", "Tipos de Alerta"})
 
@@ -291,6 +301,7 @@ ARCHIVOS_FUENTE_DEFAULT = [
         "titulo": "Matriculados activos (entrenamiento)",
         "tipo": "bd12",
         "nombre_guardado": "bd12.xlsx",
+        "requerido": False,
     },
     {
         "id": "bd2",
@@ -324,14 +335,6 @@ ARCHIVOS_FUENTE_DEFAULT = [
         "hoja": "BECAS Y CRÉDITOS",
     },
     {
-        "id": "bd_rep",
-        "categoria": "rendimiento",
-        "titulo": "Asignaturas repetidas",
-        "tipo": "bd_rep",
-        "nombre_guardado": "bd_rep.xlsx",
-        "hoja": "Hoja1",
-    },
-    {
         "id": "bd_permanencia",
         "categoria": "rendimiento",
         "titulo": "Permanencia y ruta de grado",
@@ -346,40 +349,6 @@ ARCHIVOS_FUENTE_DEFAULT = [
         "tipo": "bd_graduacion",
         "nombre_guardado": "bd_graduacion.xlsx",
         "requerido": False,
-    },
-    {
-        "id": "bd_alertas_com_1",
-        "categoria": "alertas",
-        "titulo": "Alertas Comunicación — inicial",
-        "tipo": "bd_alertas_com",
-        "fase": "inicial",
-        "nombre_guardado": "bd_alertas_com_1.xlsx",
-    },
-    {
-        "id": "bd_alertas_com_2",
-        "categoria": "alertas",
-        "titulo": "Alertas Comunicación — final",
-        "tipo": "bd_alertas_com",
-        "fase": "final",
-        "requerido": False,
-        "nombre_guardado": "bd_alertas_com_2.xlsx",
-    },
-    {
-        "id": "bd_alertas_psi_1",
-        "categoria": "alertas",
-        "titulo": "Alertas Psicología — inicial",
-        "tipo": "bd_alertas_psi",
-        "fase": "inicial",
-        "nombre_guardado": "bd_alertas_psi_1.xlsx",
-    },
-    {
-        "id": "bd_alertas_psi_2",
-        "categoria": "alertas",
-        "titulo": "Alertas Psicología — final",
-        "tipo": "bd_alertas_psi",
-        "fase": "final",
-        "requerido": False,
-        "nombre_guardado": "bd_alertas_psi_2.xlsx",
     },
 ]
 
@@ -514,20 +483,27 @@ def _fusionar_archivos_fuente(
     vistos: set[str] = set()
     for slot in default:
         sid = slot.get("id")
-        if not sid:
+        if not sid or sid in ARCHIVOS_FUENTE_RETIRADOS:
             continue
         if sid in por_id:
             actual = deepcopy(por_id[sid])
-            for clave in ("categoria", "fase", "tipo", "hoja", "requerido"):
+            for clave in ("categoria", "fase", "tipo", "hoja"):
                 if clave not in actual and clave in slot:
                     actual[clave] = slot[clave]
+            if "requerido" in slot:
+                actual["requerido"] = slot["requerido"]
             merged.append(actual)
         else:
             merged.append(deepcopy(slot))
         vistos.add(sid)
     for slot in val:
         sid = slot.get("id")
-        if sid and sid not in vistos and sid not in _MIGRACION_IDS_ARCHIVO:
+        if (
+            sid
+            and sid not in vistos
+            and sid not in _MIGRACION_IDS_ARCHIVO
+            and sid not in ARCHIVOS_FUENTE_RETIRADOS
+        ):
             merged.append(deepcopy(slot))
     return merged
 

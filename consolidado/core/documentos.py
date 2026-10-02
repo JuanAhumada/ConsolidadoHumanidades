@@ -195,6 +195,55 @@ def vista_previa_excel(
     }
 
 
+def vista_previa_todas_las_hojas(
+    ruta: Path,
+    *,
+    n: int = MUESTRAS_PREVIA,
+    cfg: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Previa de todas las pestañas de un Excel adicional."""
+    hojas = _nombres_hojas_excel(ruta)
+    if not hojas:
+        raise ValueError(f"El Excel no tiene hojas: {ruta.name}")
+    por_hoja: list[dict[str, Any]] = []
+    for nombre in hojas:
+        try:
+            data = vista_previa_excel(ruta, hoja=nombre, n=n, cfg=cfg)
+            por_hoja.append(
+                {
+                    "hoja": nombre,
+                    "ok": True,
+                    "columnas": data["columnas"],
+                    "filas": data["filas"],
+                    "total_filas": data["total_filas"],
+                    "pk_sugerida": data["pk_sugerida"],
+                }
+            )
+        except Exception as exc:
+            por_hoja.append(
+                {
+                    "hoja": nombre,
+                    "ok": False,
+                    "error": str(exc),
+                    "columnas": [],
+                    "filas": [],
+                    "total_filas": 0,
+                    "pk_sugerida": None,
+                }
+            )
+    usable = next((h for h in por_hoja if h.get("ok")), None)
+    base = usable or por_hoja[0]
+    return {
+        "hojas": hojas,
+        "hoja": base.get("hoja"),
+        "columnas": base.get("columnas") or [],
+        "filas": base.get("filas") or [],
+        "total_filas": int(base.get("total_filas") or 0),
+        "pk_sugerida": base.get("pk_sugerida"),
+        "por_hoja": por_hoja,
+    }
+
+
 def columnas_config_documento(
     seleccion: list[dict[str, Any]],
     *,

@@ -218,6 +218,7 @@ def _ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "app_version": APP_VERSION,
         "app_version_label": APP_VERSION_LABEL,
         "css_rev": _css_rev(),
+        "es_paquete": _es_instalacion_local(),
     }
     data.update(extra)
     data["ayuda_clave"] = data.get("ayuda_clave") or data.get("nav") or "inicio"
@@ -404,30 +405,6 @@ def _redir_carga_fuentes(resultado: dict[str, Any]) -> RedirectResponse:
     return _redir("/archivos", msg=texto)
 
 
-@app.post("/upload/varios")
-async def upload_varios(archivos: list[UploadFile] = File(...)) -> RedirectResponse:
-    lote: list[tuple[str, bytes]] = []
-    for archivo in archivos:
-        nombre = archivo.filename or "archivo.xlsx"
-        if nombre.startswith("."):
-            continue
-        contenido = await archivo.read()
-        lote.append((nombre, contenido))
-    if not lote:
-        return _redir("/archivos", err="No se eligió ningún Excel.")
-    if len(lote) == 1 and Path(lote[0][0]).suffix.lower() == ".zip":
-        try:
-            resultado = services.importar_paquete_fuentes(lote[0][1], nombre_zip=lote[0][0])
-        except Exception as exc:
-            return _redir("/archivos", err=str(exc))
-        return _redir_carga_fuentes(resultado)
-    try:
-        resultado = services.subir_varios(lote)
-    except Exception as exc:
-        return _redir("/archivos", err=str(exc))
-    return _redir_carga_fuentes(resultado)
-
-
 @app.post("/upload/paquete")
 async def upload_paquete(archivo: UploadFile = File(...)) -> RedirectResponse:
     nombre = archivo.filename or "paquete.zip"
@@ -573,6 +550,7 @@ async def guardar_documento_web(
     pk: str = Form(""),
     hoja: str = Form(""),
     columnas: str = Form("[]"),
+    hojas: str = Form(""),
     doc_id: str = Form(""),
     archivo: UploadFile | None = File(default=None),
 ) -> RedirectResponse:
@@ -584,6 +562,28 @@ async def guardar_documento_web(
             nombre = archivo.filename
             if not contenido:
                 contenido = None
+        lote = (hojas or "").strip()
+        if lote and lote not in {"[]", ""}:
+            if not contenido and not doc_id:
+                raise ValueError("Seleccione un Excel para el documento nuevo.")
+            info = services.guardar_documentos_adicionales_lote(
+                hojas=_columnas_desde_form(lote),
+                contenido=contenido,
+                nombre_archivo=nombre,
+                origen_doc_id=doc_id or None,
+            )
+            n = len(info.get("titulos") or [])
+            creados = len(info.get("creados") or [])
+            actualizados = len(info.get("actualizados") or [])
+            if creados and actualizados:
+                msg = f"Se guardaron {n} pestañas ({creados} nuevas, {actualizados} actualizadas)."
+            elif actualizados:
+                msg = f"Se actualizó {'la pestaña' if actualizados == 1 else f'{actualizados} pestañas'}."
+            elif n == 1:
+                msg = f"Se añadió «{(info.get('titulos') or [''])[0]}»."
+            else:
+                msg = f"Se añadieron {n} pestañas."
+            return _redir("/archivos", msg=msg)
         info = services.guardar_documento_adicional(
             titulo=titulo,
             grupo=grupo,
@@ -1889,11 +1889,72 @@ async def api_apagar() -> JSONResponse:
     return JSONResponse({"ok": True})
 
 
+@app.get("/api/actualizacion")
+async def api_consultar_actualizacion() -> JSONResponse:
+    from consolidado.core.actualizacion import consultar_actualizacion
+
+    try:
+        return JSONResponse(consultar_actualizacion())
+    except Exception as exc:
+        raise HTTPException(400, str(exc) or "No se pudo consultar la versión publicada.") from exc
+
+
+@app.post("/api/actualizacion/aplicar")
+async def api_aplicar_actualizacion() -> JSONResponse:
+    from consolidado.core.actualizacion import aplicar_actualizacion
+
+    try:
+        data = aplicar_actualizacion()
+    except Exception as exc:
+        raise HTTPException(400, str(exc) or "No se pudo instalar la actualización.") from exc
+    if data.get("reinicia"):
+        import threading
+
+        threading.Timer(1.2, _pedir_apagar).start()
+    return JSONResponse(data)
+
+
 def _es_instalacion_local() -> bool:
-    if getattr(sys, "frozen", False):
-        return True
-    marca = (os.environ.get("CONSOLIDADO_LOCAL") or "").strip().lower()
-    return marca in {"1", "true", "yes", "si", "sí"}
+    from consolidado.core.actualizacion import es_paquete_actualizable
+
+    return es_paquete_actualizable()
+
+
+def _abrir_navegador(url: str) -> None:
+    """Abre el navegador sin bloquear el arranque del servidor."""
+    try:
+        if sys.platform == "darwin":
+            import subprocess
+
+            subprocess.Popen(
+                ["open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            return
+        if sys.platform == "win32":
+            import subprocess
+
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            subprocess.Popen(
+                ["cmd", "/c", "start", "", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=flags,
+            )
+            return
+        webbrowser.open(url)
+    except Exception:
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+
+def _programar_navegador(url: str, delay: float = 0.8) -> None:
+    import threading
+
+    threading.Timer(delay, lambda: _abrir_navegador(url)).start()
 
 
 def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:
@@ -1901,7 +1962,7 @@ def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True
         _run_empaquetado(host, port, open_browser=open_browser)
         return
     if open_browser:
-        webbrowser.open(f"http://{host}:{port}/")
+        _programar_navegador(f"http://{host}:{port}/")
     uvicorn.run(
         "consolidado.web.app:app",
         host=host,
@@ -1932,7 +1993,6 @@ def _run_empaquetado(host: str, port: int, *, open_browser: bool) -> None:
     global _SERVIDOR
     import logging
     import os
-    import threading
 
     from consolidado.web.avisos import mostrar_tarjeta
 
@@ -1961,7 +2021,7 @@ def _run_empaquetado(host: str, port: int, *, open_browser: bool) -> None:
     )
 
     if open_browser:
-        threading.Timer(0.7, lambda: webbrowser.open(f"http://{host}:{elegido}/")).start()
+        _programar_navegador(f"http://{host}:{elegido}/")
     try:
         config = uvicorn.Config(
             app,

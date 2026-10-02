@@ -123,6 +123,10 @@
       <div class="cta">
         {% if usuario %}
         <p class="sidebar-user">{{ usuario.nombre }}{% if es_admin %} · admin{% endif %}</p>
+        {% if es_paquete %}
+        <button type="button" class="btn secondary" id="btn-actualizacion" style="width:100%;margin-bottom:.45rem;">Buscar actualización</button>
+        <p class="muted" id="estado-actualizacion" style="font-size:.75rem;margin:0 0 .55rem;line-height:1.35;"></p>
+        {% endif %}
         <form method="post" action="/logout">
           <button class="btn secondary" type="submit" style="width:100%;">Cerrar sesión</button>
         </form>
@@ -150,6 +154,13 @@
       {% endif %}
       {% block content %}{% endblock %}
     </main>
+  </div>
+  <div id="carga-generar" class="carga-overlay" hidden>
+    <div class="carga-panel" role="alertdialog" aria-modal="true" aria-labelledby="carga-generar-titulo" aria-describedby="carga-generar-texto">
+      <div class="carga-spinner" aria-hidden="true"></div>
+      <h3 id="carga-generar-titulo">Generando</h3>
+      <p id="carga-generar-texto">Espere a que termine. No cierre esta pestaña ni pulse otra vez: un solo clic basta.</p>
+    </div>
   </div>
   <script>
   document.querySelectorAll(".file-pick input[type=file]").forEach((input) => {
@@ -184,6 +195,156 @@
       const open = !group.classList.contains("is-open");
       group.classList.toggle("is-open", open);
       btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  })();
+  (function () {
+    const btn = document.getElementById("btn-actualizacion");
+    const estado = document.getElementById("estado-actualizacion");
+    if (!btn || !estado) return;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      estado.textContent = "Consultando la versión publicada…";
+      try {
+        const res = await fetch("/api/actualizacion");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "No se pudo consultar.");
+        if (!data.paquete) {
+          estado.textContent = "Esto solo aplica a los instalables, no al código en desarrollo.";
+          return;
+        }
+        if (!data.disponible) {
+          estado.textContent = "Ya está en la última versión (" + (data.actual || "") + ").";
+          return;
+        }
+        const ok = confirm(
+          "Hay una versión nueva (" + data.remota + ", ahora " + data.actual + ").\n\n" +
+          "Se descargará el paquete de " + data.plataforma + ", se instalará sin borrar sus datos y la aplicación se reiniciará. ¿Continuar?"
+        );
+        if (!ok) {
+          estado.textContent = "Hay una versión nueva: " + data.remota + ".";
+          return;
+        }
+        estado.textContent = "Descargando e instalando " + data.remota + "… puede tardar unos minutos.";
+        if (window.marcarNavegacionInterna) window.marcarNavegacionInterna();
+        const r2 = await fetch("/api/actualizacion/aplicar", { method: "POST" });
+        const info = await r2.json().catch(() => ({}));
+        if (!r2.ok) throw new Error(info.detail || "No se pudo instalar.");
+        estado.textContent = info.mensaje || "Actualización lista.";
+        if (info.reinicia) {
+          estado.textContent = (info.mensaje || "Reiniciando…") + " Espere a que vuelva a abrir el navegador.";
+        }
+      } catch (e) {
+        estado.textContent = e.message || String(e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  })();
+  (function () {
+    const overlay = document.getElementById("carga-generar");
+    if (!overlay) return;
+    const titulos = {
+      generar: {
+        titulo: "Generando el consolidado",
+        texto: "Cruce de archivos y cálculo de prioridad. Puede tardar un minuto. No cierre esta pestaña ni pulse otra vez: un solo clic basta.",
+      },
+      parcializado: {
+        titulo: "Generando el Excel parcializado",
+        texto: "Armando el recorte con filtros y columnas. Espere; no pulse otra vez. El archivo se descargará al terminar.",
+      },
+    };
+    function mostrarCarga(tipo) {
+      const t = titulos[tipo] || titulos.generar;
+      const h = document.getElementById("carga-generar-titulo");
+      const p = document.getElementById("carga-generar-texto");
+      if (h) h.textContent = t.titulo;
+      if (p) p.textContent = t.texto;
+      overlay.hidden = false;
+      document.body.classList.add("esta-generando");
+      document.body.setAttribute("aria-busy", "true");
+    }
+    function ocultarCarga() {
+      overlay.hidden = true;
+      document.body.classList.remove("esta-generando");
+      document.body.removeAttribute("aria-busy");
+      document.querySelectorAll("form[data-carga]").forEach((form) => {
+        delete form.dataset.enviando;
+        form.querySelectorAll("button[type=submit]").forEach((btn) => {
+          if (btn.id === "btn-generar" && btn.getAttribute("title") === "Faltan archivos obligatorios") {
+            return;
+          }
+          if (!btn.disabled) return;
+          btn.disabled = false;
+        });
+      });
+    }
+    function nombreDesdeCabecera(res, fallback) {
+      const raw = res.headers.get("Content-Disposition") || "";
+      const star = /filename\*=UTF-8''([^;]+)/i.exec(raw);
+      if (star) {
+        try { return decodeURIComponent(star[1].trim()); } catch (e) {}
+      }
+      const plain = /filename="([^"]+)"/i.exec(raw) || /filename=([^;]+)/i.exec(raw);
+      return plain ? plain[1].trim() : fallback;
+    }
+    async function descargarArchivoForm(form) {
+      const res = await fetch(form.getAttribute("action") || form.action, {
+        method: (form.getAttribute("method") || "post").toUpperCase(),
+        body: new FormData(form),
+      });
+      const ctype = (res.headers.get("content-type") || "").toLowerCase();
+      if (ctype.includes("text/html")) {
+        window.location.assign(res.url || form.getAttribute("action") || "/");
+        return true;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || "No se pudo generar el archivo.");
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nombreDesdeCabecera(res, "descarga.xlsx");
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2500);
+      return false;
+    }
+    document.addEventListener("submit", (ev) => {
+      const form = ev.target;
+      if (!(form instanceof HTMLFormElement) || !form.getAttribute("data-carga")) return;
+      if (form.dataset.enviando === "1") {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+      }
+    }, true);
+    document.addEventListener("submit", (ev) => {
+      const form = ev.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      const tipo = form.getAttribute("data-carga");
+      if (!tipo || ev.defaultPrevented) return;
+      if (form.dataset.enviando === "1") {
+        ev.preventDefault();
+        return;
+      }
+      form.dataset.enviando = "1";
+      form.querySelectorAll("button[type=submit]").forEach((btn) => { btn.disabled = true; });
+      mostrarCarga(tipo);
+      if (!form.hasAttribute("data-carga-archivo")) return;
+      ev.preventDefault();
+      descargarArchivoForm(form).then((navega) => {
+        if (!navega) ocultarCarga();
+      }).catch((err) => {
+        ocultarCarga();
+        const resumen = document.getElementById("parc-resumen");
+        if (resumen) resumen.textContent = err.message || String(err);
+        else alert(err.message || String(err));
+      });
+    });
+    window.addEventListener("pageshow", (ev) => {
+      if (ev.persisted) ocultarCarga();
     });
   })();
   </script>

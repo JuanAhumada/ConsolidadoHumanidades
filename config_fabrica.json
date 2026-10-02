@@ -13,7 +13,8 @@
       "categoria": "base",
       "titulo": "Matriculados activos (entrenamiento)",
       "tipo": "bd12",
-      "nombre_guardado": "bd12.xlsx"
+      "nombre_guardado": "bd12.xlsx",
+      "requerido": false
     },
     {
       "id": "bd2",
@@ -47,14 +48,6 @@
       "hoja": "BECAS Y CRÉDITOS"
     },
     {
-      "id": "bd_rep",
-      "categoria": "rendimiento",
-      "titulo": "Asignaturas repetidas",
-      "tipo": "bd_rep",
-      "nombre_guardado": "bd_rep.xlsx",
-      "hoja": "Hoja1"
-    },
-    {
       "id": "bd_permanencia",
       "categoria": "rendimiento",
       "titulo": "Permanencia y ruta de grado",
@@ -69,40 +62,6 @@
       "tipo": "bd_graduacion",
       "nombre_guardado": "bd_graduacion.xlsx",
       "requerido": false
-    },
-    {
-      "id": "bd_alertas_com_1",
-      "categoria": "alertas",
-      "titulo": "Alertas Comunicación — inicial",
-      "tipo": "bd_alertas_com",
-      "fase": "inicial",
-      "nombre_guardado": "bd_alertas_com_1.xlsx"
-    },
-    {
-      "id": "bd_alertas_com_2",
-      "categoria": "alertas",
-      "titulo": "Alertas Comunicación — final",
-      "tipo": "bd_alertas_com",
-      "fase": "final",
-      "requerido": false,
-      "nombre_guardado": "bd_alertas_com_2.xlsx"
-    },
-    {
-      "id": "bd_alertas_psi_1",
-      "categoria": "alertas",
-      "titulo": "Alertas Psicología — inicial",
-      "tipo": "bd_alertas_psi",
-      "fase": "inicial",
-      "nombre_guardado": "bd_alertas_psi_1.xlsx"
-    },
-    {
-      "id": "bd_alertas_psi_2",
-      "categoria": "alertas",
-      "titulo": "Alertas Psicología — final",
-      "tipo": "bd_alertas_psi",
-      "fase": "final",
-      "requerido": false,
-      "nombre_guardado": "bd_alertas_psi_2.xlsx"
     }
   ],
   "documentos_adicionales": [],

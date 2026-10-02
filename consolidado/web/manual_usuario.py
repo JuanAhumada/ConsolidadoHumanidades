@@ -10,6 +10,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "A la derecha está el número de estudiantes de la última versión; pulse la tarjeta para abrir el historial.",
             "Arriba a la derecha, «Descargar último consolidado» baja el Excel más reciente.",
             "Si cierra la pestaña, el navegador preguntará; acéptelo para apagar la aplicación y liberar el puerto.",
+            "En el instalable de Windows, Mac o Linux, «Buscar actualización» (barra izquierda) comprueba si hay una versión nueva, la instala sin borrar sus datos y reinicia. En el código de desarrollo ese botón no aparece.",
         ],
     },
     "estudiante": {
@@ -112,7 +113,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "Elija cualquier versión del consolidado (no solo la última).",
             "Marque una carrera, varias o «Todas las carreras». También puede filtrar por tipo de beca, nivel, cohorte y pensum en las listas desplegables.",
             "Marque las columnas. «Datos básicos» deja identificación, nombre y programa.",
-            "Descargue el Excel: hoja principal, hoja Becas (Documento, Nombre, Carrera, Beca 1…), hoja Priorizados (Motivo 1…) y Anotaciones.",
+            "Descargue el Excel: hoja principal, hoja Becas (Documento, Nombre, Carrera, Beca 1…), hoja Priorizados (Motivo 1…) y Anotaciones. Aparece una pantalla de carga; espere y no pulse otra vez.",
         ],
     },
     "datos-antiguos": {
@@ -122,6 +123,7 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
             "Sirve para montar un consolidado con archivos viejos (carpeta histórico).",
             "No reemplaza lo que está en Data / datos de entrada.",
             "Solo el administrador entra aquí.",
+            "Al generar, aparece una pantalla de carga. Espere a que termine; un clic basta.",
         ],
     },
     "modificaciones": {
@@ -137,12 +139,12 @@ MANUAL_USUARIO: dict[str, dict[str, object]] = {
         "resumen": "Carga de los Excel fuente del periodo actual.",
         "pasos": [
             "Arriba verá si ya está listo para generar, o cuántos archivos obligatorios faltan.",
-            "Arriba puede cargar un ZIP de fuentes (paquete inicial) o varios Excel de una vez por el nombre del archivo.",
+            "Arriba puede cargar un ZIP de fuentes (paquete inicial).",
             "En cada fila elija el Excel de ese apartado y, al final, pulse «Cargar seleccionados» para subirlos todos juntos.",
-            "En Archivos adicionales pulse «Añadir Excel». La llave foránea es la columna de ese Excel que coincide con Identificación del consolidado: así se busca al estudiante y se añaden los datos a su fila (no crea personas nuevas). Luego elija si van a una categoría existente de la ficha (Datos, Académico, Priorizado…) o escriba el nombre de una categoría nueva.",
+            "En Archivos adicionales pulse «Añadir Excel» o «Editar» en uno ya cargado. Verá todas las pestañas del libro: marque las que quiera, la llave, las columnas y la categoría. Se guardan de una vez, sin volver a cargar el archivo.",
             "«Editar encabezados» o «Editar datos» abre una base concreta: hojas internas, previa de filas y el campo de entrada (Excel) frente al de salida (consolidado).",
-            "Permanencia, gestión de graduación y algunas alertas son opcionales.",
-            "Cuando estén listos, use «Generar nuevo consolidado» en esta misma pantalla (fecha de versión y botón).",
+            "Permanencia, gestión de graduación y matriculados de entrenamiento son opcionales.",
+            "Cuando estén listos, use «Generar nuevo consolidado» en esta misma pantalla (fecha de versión y botón). Aparece una pantalla de carga: espere; no pulse otra vez.",
             "Los archivos se guardan en la carpeta de entrada de la aplicación.",
         ],
     },
