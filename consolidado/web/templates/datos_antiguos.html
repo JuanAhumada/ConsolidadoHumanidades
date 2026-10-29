@@ -11,7 +11,7 @@
 <div class="card">
   <h3>Importar Excel consolidado</h3>
   <p class="muted" style="margin-top:-.35rem;margin-bottom:.9rem;">Si ya tiene un consolidado generado en otra fecha, súbalo aquí. No modifica la carpeta de entrada.</p>
-  <form method="post" action="/datos-antiguos/importar" enctype="multipart/form-data" class="version-form">
+  <form method="post" action="/datos-antiguos/importar" enctype="multipart/form-data" class="version-form" data-carga="importar">
     <div class="field">
       <label for="imp-fecha">Fecha de la versión</label>
       <input id="imp-fecha" type="date" name="fecha_version" value="{{ hoy }}" required/>

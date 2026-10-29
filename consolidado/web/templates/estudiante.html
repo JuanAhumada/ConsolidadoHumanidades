@@ -11,11 +11,11 @@
   <div>
     <h2>Consulta individual</h2>
     {% if not ficha %}
-    <p class="sub">Busque por cédula o nombre. Si hay varias coincidencias, elija una ficha.</p>
+    <p class="sub">Busque por cédula o nombre. Si hay varias coincidencias, seleccione el nombre.</p>
     {% endif %}
   </div>
   {% if ficha %}
-  <form method="get" action="/estudiante" class="ficha-busca">
+  <form method="get" action="/estudiante" class="ficha-busca" data-carga="buscar">
     <label class="sr-only" for="q">Cédula o nombre</label>
     <input id="q" type="search" name="q" value="{{ q or '' }}" placeholder="Cédula o nombre"/>
     <button class="btn sm" type="submit">Buscar</button>
@@ -27,7 +27,7 @@
 <div class="consulta-inicio" id="consulta-inicio" data-alta="{% if alta %}1{% else %}0{% endif %}">
   <div class="card consulta-barra-card">
     <div class="consulta-barra">
-      <form method="get" action="/estudiante" class="consulta-busca" id="form-buscar-est">
+      <form method="get" action="/estudiante" class="consulta-busca" id="form-buscar-est" data-carga="buscar">
         <div class="field">
           <label for="q">Cédula o nombre</label>
           <input id="q" type="search" name="q" value="{{ q or '' }}" placeholder="Ej. 521725 o Farfan"/>
@@ -46,14 +46,13 @@
   <h3>Resultados</h3>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Identificación</th><th>Nombre</th><th>Programa</th><th></th></tr></thead>
+      <thead><tr><th>Identificación</th><th>Nombre</th><th>Programa</th></tr></thead>
       <tbody>
       {% for r in resultados %}
         <tr style="{{ r.estilo }}">
           <td>{{ r.identificacion }}</td>
-          <td>{{ r.nombre }}</td>
+          <td><a class="consulta-nombre" href="/estudiante/{{ r.identificacion }}" data-carga-nav="ficha">{{ r.nombre }}</a></td>
           <td><span class="seg-prog">{{ r.programa or '—' }}</span></td>
-          <td><a class="btn sm secondary" href="/estudiante/{{ r.identificacion }}">Ver ficha</a></td>
         </tr>
       {% endfor %}
       </tbody>
@@ -314,7 +313,13 @@
                 {% for campo in cat.campos %}
                 <div class="campo">
                   <div class="e">{{ campo.etiqueta }}</div>
-                  <div class="v">{{ campo.valor }}</div>
+                  <div class="v">
+                    {% if campo.columna == 'Repitiendo' and ficha.repitiendo_detalle %}
+                    <button type="button" class="link-repitiendo js-abrir-repitiendo">{{ campo.valor }}</button>
+                    {% else %}
+                    {{ campo.valor }}
+                    {% endif %}
+                  </div>
                 </div>
                 {% endfor %}
               </div>
@@ -441,7 +446,7 @@
                   {% else %}
                   <p class="ficha-clase-hora">{{ m.horario or m.inicio or 'Virtual' }}</p>
                   {% endif %}
-                  <p class="ficha-clase-nom">{{ m.nombre }}</p>
+                  <p class="ficha-clase-nom">{{ m.nombre }}{% if m.repite_veces %} <span class="ficha-clase-repite">{% if m.repite_veces == 1 %}Repite 1 vez{% else %}Repite {{ m.repite_veces }} veces{% endif %}</span>{% endif %}</p>
                   {% if m.modalidad %}<p class="ficha-clase-mod">{{ m.modalidad }}{% if m.codigo %} · {{ m.codigo }}{% endif %}</p>{% endif %}
                   {% if m.profesor != '—' %}<p class="ficha-clase-prof">{{ m.profesor }}</p>{% endif %}
                 </article>
@@ -460,6 +465,22 @@
     </section>
   </div>
 </div>
+{% if ficha.repitiendo_detalle %}
+<dialog id="dlg-repitiendo" class="dlg-repitiendo">
+  <h3>Asignaturas que repite</h3>
+  <ul class="dlg-repitiendo-lista">
+    {% for item in ficha.repitiendo_detalle %}
+    <li>
+      <span>{{ item.materia }}</span>
+      <strong>{% if item.veces == 1 %}1 vez{% else %}{{ item.veces }} veces{% endif %}</strong>
+    </li>
+    {% endfor %}
+  </ul>
+  <form method="dialog">
+    <button class="btn sm" type="submit">Cerrar</button>
+  </form>
+</dialog>
+{% endif %}
 {% endif %}
 {% endblock %}
 
@@ -557,6 +578,9 @@
   });
 
   syncVolver();
+  document.querySelector(".js-abrir-repitiendo")?.addEventListener("click", () => {
+    document.getElementById("dlg-repitiendo")?.showModal();
+  });
 })();
 </script>
 {% endif %}

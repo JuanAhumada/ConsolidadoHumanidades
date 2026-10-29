@@ -1921,29 +1921,33 @@ def _es_instalacion_local() -> bool:
 
 
 def _abrir_navegador(url: str) -> None:
-    """Abre el navegador sin bloquear el arranque del servidor."""
-    try:
-        if sys.platform == "darwin":
-            import subprocess
+    """Abre el navegador sin compartir la consola del servidor.
 
+    En Windows, ``cmd /c start`` hereda el grupo de procesos. Ese arranque
+    entrega Ctrl+C a Uvicorn y el servidor se apaga solo, con código 1.
+    """
+    import subprocess
+
+    try:
+        if sys.platform == "win32":
+            os.startfile(url)  # noqa: S606  # abre la URL con el navegador predeterminado
+            return
+        if sys.platform == "darwin":
             subprocess.Popen(
                 ["open", url],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                start_new_session=True,
             )
             return
-        if sys.platform == "win32":
-            import subprocess
-
-            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            subprocess.Popen(
-                ["cmd", "/c", "start", "", url],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=flags,
-            )
-            return
-        webbrowser.open(url)
+        subprocess.Popen(
+            ["xdg-open", url],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
     except Exception:
         try:
             webbrowser.open(url)
@@ -1954,7 +1958,9 @@ def _abrir_navegador(url: str) -> None:
 def _programar_navegador(url: str, delay: float = 0.8) -> None:
     import threading
 
-    threading.Timer(delay, lambda: _abrir_navegador(url)).start()
+    aviso = threading.Timer(delay, lambda: _abrir_navegador(url))
+    aviso.daemon = True
+    aviso.start()
 
 
 def main(host: str = "127.0.0.1", port: int = 8765, *, open_browser: bool = True) -> None:

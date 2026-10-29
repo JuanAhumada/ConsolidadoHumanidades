@@ -252,6 +252,22 @@
         titulo: "Generando el Excel parcializado",
         texto: "Armando el recorte con filtros y columnas. Espere; no pulse otra vez. El archivo se descargará al terminar.",
       },
+      buscar: {
+        titulo: "Buscando estudiantes",
+        texto: "Consultando el consolidado. Espere un momento.",
+      },
+      ficha: {
+        titulo: "Abriendo la ficha",
+        texto: "Cargando los datos del estudiante. Espere un momento.",
+      },
+      descarga: {
+        titulo: "Preparando el Excel",
+        texto: "Armando el archivo de esta versión. Puede tardar un poco. La descarga empezará al terminar.",
+      },
+      importar: {
+        titulo: "Importando la versión",
+        texto: "Leyendo el Excel antiguo y guardando el corte. No cierre esta pestaña ni pulse otra vez.",
+      },
     };
     function mostrarCarga(tipo) {
       const t = titulos[tipo] || titulos.generar;
@@ -278,6 +294,27 @@
         });
       });
     }
+    function elementoDe(ev) {
+      return ev.target instanceof Element ? ev.target : null;
+    }
+    function mensajeError(data, fallback) {
+      const detalle = data && data.detail;
+      if (typeof detalle === "string" && detalle.trim()) return detalle;
+      return fallback;
+    }
+    function guardarBlob(blob, nombre) {
+      const tipo = blob.type || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const archivo = new File([blob], nombre, { type: tipo });
+      const url = URL.createObjectURL(archivo);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nombre;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+    }
     function nombreDesdeCabecera(res, fallback) {
       const raw = res.headers.get("Content-Disposition") || "";
       const star = /filename\*=UTF-8''([^;]+)/i.exec(raw);
@@ -299,17 +336,10 @@
       }
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.detail || "No se pudo generar el archivo.");
+        throw new Error(mensajeError(data, "No se pudo generar el archivo."));
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = nombreDesdeCabecera(res, "descarga.xlsx");
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2500);
+      guardarBlob(blob, nombreDesdeCabecera(res, "descarga.xlsx"));
       return false;
     }
     document.addEventListener("submit", (ev) => {
@@ -343,8 +373,35 @@
         else alert(err.message || String(err));
       });
     });
-    window.addEventListener("pageshow", (ev) => {
-      if (ev.persisted) ocultarCarga();
+    document.addEventListener("click", (ev) => {
+      const origen = elementoDe(ev);
+      if (!origen) return;
+      const nav = origen.closest("a[data-carga-nav]");
+      if (nav && !ev.defaultPrevented && !ev.metaKey && !ev.ctrlKey && !ev.shiftKey && !ev.altKey && nav.target !== "_blank") {
+        mostrarCarga(nav.getAttribute("data-carga-nav") || "ficha");
+      }
+      const enlace = origen.closest("a[data-carga-enlace]");
+      if (!enlace || ev.defaultPrevented || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey || enlace.target === "_blank") return;
+      ev.preventDefault();
+      mostrarCarga(enlace.getAttribute("data-carga-enlace") || "descarga");
+      fetch(enlace.href)
+        .then(async (res) => {
+          const ctype = (res.headers.get("content-type") || "").toLowerCase();
+          if (!res.ok || ctype.includes("text/html") || ctype.includes("application/json")) {
+            const data = ctype.includes("application/json") ? await res.json().catch(() => ({})) : {};
+            throw new Error(mensajeError(data, "No se pudo descargar el archivo."));
+          }
+          const blob = await res.blob();
+          guardarBlob(blob, nombreDesdeCabecera(res, enlace.getAttribute("download") || "consolidado.xlsx"));
+          ocultarCarga();
+        })
+        .catch((err) => {
+          ocultarCarga();
+          alert(err.message || String(err));
+        });
+    });
+    window.addEventListener("pageshow", () => {
+      ocultarCarga();
     });
   })();
   </script>

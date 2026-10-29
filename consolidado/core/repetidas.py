@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import polars as pl
 
@@ -131,6 +132,81 @@ def procesar_materias_repetidas(ruta: Path, *, hoja: str | None = None) -> dict[
     return mapa
 
 
+def procesar_detalle_repitencia(ruta: Path, *, hoja: str | None = None) -> dict[str, list[dict[str, Any]]]:
+    """Identificación → asignaturas que repite, con el máximo de EST_MATRICULA por materia."""
+    df = _leer_hoja_datos(ruta, tipo="bd_rep", hoja=hoja)
+    cols = list(df.columns)
+    col_id = _buscar_columna_por_aliases(
+        cols,
+        aliases_identificacion_efectivos(
+            ["num identificacion", "cedula", "cédula", "identificacion", "identificación"]
+        ),
+    )
+    col_materia = _buscar_columna_por_aliases(cols, ["nom materia", "materia", "asignatura"])
+    col_estado = _buscar_columna_por_aliases(
+        cols, ["est matricula", "estado matricula", "est_matricula", "estado"]
+    )
+    if not col_id or not col_materia or not col_estado:
+        return {}
+
+    mejor: dict[str, dict[str, dict[str, Any]]] = {}
+    for row in df.iter_rows(named=True):
+        key = normalizar_id(row[col_id])
+        materia = _str_celda(row[col_materia])
+        veces = valor_est_matricula(row[col_estado])
+        if not key or not materia or not veces:
+            continue
+        norm = _normalizar_nombre_materia(materia)
+        if not norm:
+            continue
+        prev = mejor.setdefault(key, {}).get(norm)
+        if prev is None or int(veces) > int(prev["veces"]):
+            mejor[key][norm] = {"materia": materia, "veces": int(veces)}
+
+    out: dict[str, list[dict[str, Any]]] = {}
+    for key, materias in mejor.items():
+        filas = list(materias.values())
+        filas.sort(key=lambda item: (-int(item["veces"]), str(item["materia"])))
+        out[key] = filas
+    return out
+
+
+_CACHE_DETALLE: dict[tuple[str, int, str], dict[str, list[dict[str, Any]]]] = {}
+
+
+def detalle_repitencia_estudiante(
+    identificacion: str,
+    cfg: dict,
+    base: Path,
+    carpeta: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Asignaturas que repite este estudiante, leídas de NOTAS X CORTE (o bd_rep)."""
+    ident = normalizar_id(identificacion)
+    if not ident:
+        return []
+    origen: tuple[Path, str] | None = _notas_de_matriculados(cfg, base, carpeta)
+    if origen is None:
+        slot, ruta = _ruta_slot(cfg, base, carpeta, "bd_rep")
+        if slot is None or ruta is None:
+            return []
+        origen = (ruta, str(slot.get("hoja") or ""))
+    ruta, hoja = origen
+    try:
+        marca = ruta.stat().st_mtime_ns
+    except OSError:
+        return []
+    clave = (str(ruta.resolve()), marca, hoja)
+    mapa = _CACHE_DETALLE.get(clave)
+    if mapa is None:
+        try:
+            mapa = procesar_detalle_repitencia(ruta, hoja=hoja or None)
+        except Exception:
+            mapa = {}
+        _CACHE_DETALLE.clear()
+        _CACHE_DETALLE[clave] = mapa
+    return list(mapa.get(ident) or [])
+
+
 def procesar_repitiendo_estudiantes(ruta: Path, *, hoja: str | None = None) -> dict[str, int]:
     """Devuelve identificación -> máximo valor numérico de EST_MATRICULA."""
     df = _leer_hoja_datos(ruta, tipo="bd_rep", hoja=hoja)
@@ -176,22 +252,52 @@ def aplicar_repitiendo(
             valores.append(repitiendo[key])
         else:
             valores.append(None)
-    return consolidado.with_columns(pl.Series(COL_REPITIENDO, valores, dtype=pl.Int8))
+    return consolidado.with_columns(pl.Series(COL_REPITIENDO, valores, dtype=pl.Int32))
+
+
+def _ruta_slot(cfg: dict, base: Path, carpeta: Path | None, tipo: str) -> tuple[dict | None, Path | None]:
+    carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
+    slot = next((s for s in cfg.get("archivos_fuente", []) if s.get("tipo") == tipo), None)
+    if not slot:
+        return None, None
+    p = carpeta / slot.get("nombre_guardado", "")
+    if not p.is_file():
+        return slot, None
+    return slot, p
+
+
+def _notas_de_matriculados(cfg: dict, base: Path, carpeta: Path | None) -> tuple[Path, str] | None:
+    """Hoja NOTAS X CORTE de bd1, si el libro la trae."""
+    from consolidado.core.archivos import _nombre_hoja_notas_corte
+
+    _slot, ruta = _ruta_slot(cfg, base, carpeta, "bd1")
+    if ruta is None:
+        return None
+    hoja = _nombre_hoja_notas_corte(ruta)
+    if not hoja:
+        return None
+    return ruta, hoja
 
 
 def _cargar_repitiendo_cfg(
     cfg: dict, base: Path, carpeta: Path | None = None
 ) -> dict[str, int]:
-    carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
-    slot = next((s for s in cfg.get("archivos_fuente", []) if s.get("tipo") == "bd_rep"), None)
-    if not slot:
-        return {}
-    p = carpeta / slot.get("nombre_guardado", "")
-    if not p.is_file():
+    """Repitiendo sale de NOTAS X CORTE de matriculados; si no hay, del libro bd_rep."""
+    notas = _notas_de_matriculados(cfg, base, carpeta)
+    if notas:
+        ruta, hoja = notas
+        try:
+            mapa = procesar_repitiendo_estudiantes(ruta, hoja=hoja)
+        except Exception:
+            mapa = {}
+        if mapa:
+            return mapa
+    slot, ruta = _ruta_slot(cfg, base, carpeta, "bd_rep")
+    if slot is None or ruta is None:
         return {}
     try:
         with usando_aliases(aliases_para_slot(slot)):
-            return procesar_repitiendo_estudiantes(p, hoja=slot.get("hoja"))
+            return procesar_repitiendo_estudiantes(ruta, hoja=slot.get("hoja"))
     except Exception:
         return {}
 
@@ -201,16 +307,22 @@ def _cargar_materias_repetidas_cfg(
     base: Path,
     carpeta: Path | None = None,
 ) -> dict[str, set[str]]:
-    carpeta = Path(carpeta) if carpeta is not None else carpeta_excels(cfg, base)
-    slot = next((s for s in cfg.get("archivos_fuente", []) if s.get("tipo") == "bd_rep"), None)
-    if not slot:
-        return {}
-    p = carpeta / slot.get("nombre_guardado", "")
-    if not p.is_file():
+    """Asignaturas que repite: misma hoja de notas de bd1, o bd_rep si no existe."""
+    notas = _notas_de_matriculados(cfg, base, carpeta)
+    if notas:
+        ruta, hoja = notas
+        try:
+            mapa = procesar_materias_repetidas(ruta, hoja=hoja)
+        except Exception:
+            mapa = {}
+        if mapa:
+            return mapa
+    slot, ruta = _ruta_slot(cfg, base, carpeta, "bd_rep")
+    if slot is None or ruta is None:
         return {}
     try:
         with usando_aliases(aliases_para_slot(slot)):
-            return procesar_materias_repetidas(p, hoja=slot.get("hoja"))
+            return procesar_materias_repetidas(ruta, hoja=slot.get("hoja"))
     except Exception:
         return {}
 

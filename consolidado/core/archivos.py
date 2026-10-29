@@ -2,6 +2,8 @@
 Lectura de cada libro fuente.
 
 preparar_archivo: listado + hoja HORARIO (bd1/bd12).
+Si no hay HORARIO, bd1 cruza NOTAS X CORTE por documento
+(periodo, materia y profesor). Las calificaciones no pasan al listado.
 COD_PENSUM en HORARIO solo decide el formato materia/profesor
 (_cod_pensum_es_numero); el periodo del alumno es otra columna.
 """
@@ -192,6 +194,7 @@ def _mapear_columnas_horario(df: pl.DataFrame) -> dict[str, str | None]:
             or _columna_horario(df, "NOMBRE ESTUDIANTE")
             or _columna_horario(df, "NOMBRE COMPLETO")
             or _columna_horario(df, "NOMBRE")
+            or _columna_horario(df, "ALUMNO")
         ),
         "genero": _columna_horario(df, "GENERO"),
         "cod_periodo": _columna_horario(df, "COD_PERIODO"),
@@ -211,6 +214,39 @@ def _mapear_columnas_horario(df: pl.DataFrame) -> dict[str, str | None]:
         "docente": _columna_horario(df, "DOCENTE"),
         "dir_email": _columna_horario(df, "DIR_EMAIL"),
     }
+
+def _nombre_hoja_notas_corte(ruta: Path) -> str | None:
+    """Hoja de calificaciones por corte. No sustituye al listado principal."""
+    suf = ruta.suffix.lower()
+    if suf not in (".xlsx", ".xlsm"):
+        return None
+    nombres = _nombres_hojas_excel(ruta)
+    for sn in nombres:
+        if sn.strip().upper() in ("NOTAS X CORTE", "NOTAS POR CORTE", "NOTAS"):
+            return sn
+    return _hoja_por_subcadena(nombres, "notas x corte")
+
+
+def _filas_unicas_asignatura(df_notas: pl.DataFrame) -> pl.DataFrame:
+    """Una fila por estudiante y asignatura. Los cortes (NOTA) no se copian."""
+    c = _mapear_columnas_horario(df_notas)
+    claves: list[str] = []
+    for clave in (
+        "num_identificacion",
+        "nombre",
+        "num_grupo",
+        "nom_materia",
+        "docente",
+        "cod_periodo",
+        "cod_pensum",
+    ):
+        col = c.get(clave)
+        if col and col not in claves:
+            claves.append(col)
+    if not claves:
+        return df_notas
+    return df_notas.unique(subset=claves, keep="first")
+
 
 def resumir_hoja_horario(df_horario: pl.DataFrame) -> pl.DataFrame:
     """Por identificación o nombre único: Materia/Horario/Profesor 1..n."""
@@ -394,6 +430,13 @@ def _preparar_archivo_interno(
         hoja_hor = _nombre_hoja_horario(ruta)
         if hoja_hor:
             df_horarios = resumir_hoja_horario(_leer_hoja_excel(ruta, hoja_hor))
+        else:
+            hoja_notas = _nombre_hoja_notas_corte(ruta)
+            hoja_listado = hoja or _elegir_hoja_datos(ruta, tipo=tipo)
+            if hoja_notas and hoja_notas != hoja_listado:
+                df_horarios = resumir_hoja_horario(
+                    _filas_unicas_asignatura(_leer_hoja_excel(ruta, hoja_notas))
+                )
     return df_listado, df_horarios
 
 def preparar_archivo(
@@ -489,8 +532,11 @@ def _elegir_hoja_datos(ruta: Path, *, tipo: str | None = None) -> str:
     candidata: str | None = None
 
     if tipo == "bd1":
-        candidata = next((sn for sn in nombres if sn.strip().upper() == "BASE"), None) or _hoja_por_subcadena(
-            nombres, "base"
+        candidata = (
+            next((sn for sn in nombres if sn.strip().upper() == "BASE"), None)
+            or next((sn for sn in nombres if sn.strip().upper() == "MATRICULADOS"), None)
+            or _hoja_por_subcadena(nombres, "matriculad")
+            or _hoja_por_subcadena(nombres, "base")
         )
     elif tipo == "bd12":
         candidata = _hoja_por_subcadena(nombres, "exportar")

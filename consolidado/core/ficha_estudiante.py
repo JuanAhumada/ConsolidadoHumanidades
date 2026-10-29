@@ -53,6 +53,11 @@ from consolidado.storage.db import (
 )
 from consolidado.storage.ediciones import clave_campo_edicion, cargar_ediciones, overlay_ediciones_fila
 from consolidado.storage.graduacion import obtener_marca_gradua
+from consolidado.core.repetidas import (
+    _extraer_nombre_materia_celda,
+    _normalizar_nombre_materia,
+    detalle_repitencia_estudiante,
+)
 from consolidado.storage.notas import listar_notas
 from consolidado.storage.priorizados import es_priorizado_propio
 
@@ -660,6 +665,30 @@ def formulario_alta_estudiante(
     return {"identidad": identidad, "secciones": secciones}
 
 
+def _marcar_materias_que_repite(horario: dict | None, detalle: list[dict]) -> None:
+    if not horario or not detalle:
+        return
+    por_nombre = {
+        _normalizar_nombre_materia(item.get("materia")): int(item["veces"])
+        for item in detalle
+        if item.get("materia") and int(item.get("veces") or 0) > 0
+    }
+    if not por_nombre:
+        return
+
+    def marcar(item: dict) -> None:
+        nombre = item.get("nombre") or _extraer_nombre_materia_celda(item.get("materia") or "")
+        veces = por_nombre.get(_normalizar_nombre_materia(nombre))
+        if veces:
+            item["repite_veces"] = veces
+
+    for item in horario.get("filas") or []:
+        marcar(item)
+    for clases in (horario.get("por_dia") or {}).values():
+        for item in clases:
+            marcar(item)
+
+
 def obtener_ficha_estudiante(
     cfg: dict,
     base: Path,
@@ -712,6 +741,17 @@ def obtener_ficha_estudiante(
     if not periodo:
         ult = ultima_version(base)
         periodo = str((ult or {}).get("periodo") or periodo_desde_fecha())
+    detalle_rep = detalle_repitencia_estudiante(id_key, cfg, base)
+    if detalle_rep:
+        max_veces = max(int(item["veces"]) for item in detalle_rep)
+        for cat in vista.get("categorias") or []:
+            if cat.get("clave") != "academico":
+                continue
+            for campo in cat.get("campos") or []:
+                if campo.get("columna") == "Repitiendo":
+                    campo["valor"] = str(max_veces)
+                    campo["repitiendo_detalle"] = detalle_rep
+        _marcar_materias_que_repite(vista.get("horario"), detalle_rep)
     if vista.get("horario"):
         vista["horario"]["periodo"] = periodo
     nivel = fila.get("Nivel prioridad")
@@ -748,6 +788,7 @@ def obtener_ficha_estudiante(
         "se_gradua": None if marca is None else bool(marca.get("se_gradua")),
         "gradua_en": (marca or {}).get("actualizado_en") or "",
         "gradua_por": (marca or {}).get("usuario") or "",
+        "repitiendo_detalle": detalle_rep,
         "notas": notas,
         "notas_n": notas_n,
         "periodo_notas": periodo_notas,
